@@ -14,7 +14,8 @@ export const CONTRACT_VERSION = "v2" as const;
 
 /** Rig layers of one view. Mouth shapes live in `CharacterView.visemes`. */
 export type LayerName =
-  | "body" | "head" | "hair" | "brows" | "eyes" | "eyes_closed" | "nose" | "accessory"
+  // torso + neck + mouthless head (core v4); "body" is the older single torso layer
+  | "body" | "torso" | "neck" | "head" | "hair" | "brows" | "eyes" | "eyes_closed" | "nose" | "accessory"
   // movable eyes (core v3): sclera without iris, iris discs, the eye opening they are clipped to, half lids
   | "eye_white" | "iris" | "eye_socket" | "eyes_half";
 

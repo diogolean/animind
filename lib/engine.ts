@@ -240,14 +240,14 @@ function drawCharacter(g: CanvasRenderingContext2D, c: Character, img: Images, c
     if ((l.name === "eyes" && lids === "closed") || (l.name === "eyes_closed" && lids !== "closed") || (l.name === "eyes_half" && lids !== "half")) continue;
     const im = img.get(l.url);
     if (!im) continue;
-    const head = l.name !== "body";
-    const dy = (head ? breathe - amp * 4 : breathe * 0.4) + (l.name === "brows" ? -amp * 6 : 0);
+    // The face no longer rides the jaw: only the mouth layer changes with speech.
+    const dy = breathe * (BREATH_SHARE[l.name] ?? 1) + (l.name === "brows" ? -amp * 6 : 0);
     if (l.name === "iris" && socket) {
       const sk = img.get(socket.url);
       if (sk) g.drawImage(movedIris(im, l, sk, socket, eye.gaze[0] * mx, eye.gaze[1] * my), socket.x, socket.y + dy, socket.w, socket.h);
       continue;
     }
-    const lit = l.name === "body" || l.name === "head" || l.name === "hair";
+    const lit = ["body", "torso", "neck", "head", "hair"].includes(l.name);
     const src = l.name === "mouth" || l.name === "iris" || l.name.startsWith("eye") ? im : litLayer(im, l, cw, ch, light, lit);
     g.drawImage(src, l.x, l.y + dy, l.w, l.h);
   }
@@ -265,6 +265,9 @@ function wrap(g: CanvasRenderingContext2D, text: string, maxW: number) {
   if (cur) lines.push(cur);
   return lines;
 }
+
+/** Share of the breath each layer follows (torso least); head, eyes and mouth follow it fully. */
+const BREATH_SHARE: Record<string, number> = { body: 0.4, torso: 0.4, neck: 0.7 };
 
 const cutsCache = new WeakMap<RenderResult, Cut[]>();
 const lineAt = (r: RenderResult, ms: number, grace = 0) => r.script.find((l) => ms >= l.startMs && ms <= l.endMs + grace);
