@@ -16,6 +16,13 @@ PWA (Next.js 16 App Router, React 19, TypeScript, Tailwind 4, shadcn/ui, framer-
 - O mock (`lib/mock.ts`, silhuetas e jobs sem estado) é só fallback explícito de dev: `ANIMIND_CORE_MOCK=1`. Sem URL e sem essa flag, a API responde 503.
 - **Prévia no navegador:** `lib/engine.ts` desenha as camadas no Canvas, sincroniza a boca com o envelope do áudio (TTS do núcleo ou voz placeholder sintetizada) e grava o vídeo com MediaRecorder. O visual cinematográfico (`lib/cinema.ts`) espelha o render do núcleo: cenários em camadas com paralaxe e desfoque de profundidade, luz de recorte e sombra suave nos personagens, câmera com push-in, balanço de mão e cortes por fala (dissolve e chicote), gradação de cor, vinheta, legendas e lower-thirds com nome e fonte.
 
+## Roteiros: citações reais, paráfrases marcadas
+
+- O núcleo escreve debate (gancho, réplicas curtas alternadas, tréplica, fechamento), aula (gancho, 3 pontos, exemplo, resumo) e solo, com limite de palavras e de tempo por fala ajustado ao TTS.
+- Cada `ScriptLine` traz `kind`: `"quote"` é citação literal da ficha da persona (Wikiquote), com `quote.source` e `quote.url`; `"paraphrase"` é fala escrita para a cena e nunca aparece como citação (`basis` aponta a citação que ela parafraseia, se houver). Sem ficha (personagem inventado), tudo é paráfrase.
+- Na tela: selo “CITAÇÃO REAL · fonte · Wikiquote” ou “PARÁFRASE”, citação em itálico entre aspas, legendas em páginas de duas linhas. Abaixo do player, `components/transcript.tsx` lista o roteiro com o link de cada fonte.
+- O composer pede o tema e o nome do rival do debate. O rival fica em cache por nome na sessão, então trocar de cena não cria outro personagem.
+
 ## Regras do modo foto
 
 - O catálogo (`lib/catalog.ts`) tem só retratos em domínio público, cada um com fonte e licença. Pessoas famosas vivas não entram.

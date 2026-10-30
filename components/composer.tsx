@@ -10,6 +10,7 @@ import { createCharacter, startRender, waitJob } from "@/lib/api";
 import { PORTRAITS, portraitImageUrl } from "@/lib/catalog";
 import { Avatar } from "@/components/avatar";
 import { Player } from "@/components/player";
+import { Transcript } from "@/components/transcript";
 import { Checkbox } from "@/components/ui/checkbox";
 
 const SCENES: { id: SceneTemplate; label: string }[] = [
@@ -52,6 +53,10 @@ export function Composer() {
   const [upload, setUpload] = useState<string | null>(null);
   const [rights, setRights] = useState(false);
   const file = useRef<HTMLInputElement>(null);
+  const [topic, setTopic] = useState("");
+  const [rival, setRival] = useState("O cético");
+  // One rival character per name, so a second debate does not pay for a new one.
+  const rivals = useRef(new Map<string, Character>());
 
   const ensureAudio = () => {
     if (audio) return audio;
@@ -82,8 +87,16 @@ export function Composer() {
     setProgress(0);
     try {
       const chars = [char];
-      if (tpl === "debate") chars.push(await createCharacter({ source: { kind: "prompt", prompt: "O cético" } }));
-      const job = await startRender({ characters: chars, template: tpl, scenario: where, lang: "pt-BR" });
+      if (tpl === "debate") {
+        const name = rival.trim() || "O cético";
+        let other = rivals.current.get(name);
+        if (!other) {
+          other = await createCharacter({ source: { kind: "prompt", prompt: name } });
+          rivals.current.set(name, other);
+        }
+        chars.push(other);
+      }
+      const job = await startRender({ characters: chars, template: tpl, scenario: where, topic: topic.trim() || undefined, lang: "pt-BR" });
       const done = await waitJob(job.id, (j) => setProgress(j.progress));
       const r = done.result!;
       // The core may echo characters without heavy fields (photo data URLs); keep our local copies.
@@ -211,9 +224,29 @@ export function Composer() {
             {result && audio && (
               <div className="mb-8">
                 <Player result={result} audioCtx={audio} fileName={`animind-${char.name.toLowerCase().replace(/\W+/g, "-")}`} />
+                <Transcript result={result} />
               </div>
             )}
             <div className="flex flex-col items-center gap-3">
+              <div className="flex w-full max-w-md flex-col gap-2 sm:flex-row">
+                <input
+                  data-testid="topic"
+                  value={topic}
+                  onChange={(e) => setTopic(e.target.value)}
+                  maxLength={120}
+                  placeholder="Tema (ex.: a verdade)"
+                  className="h-9 flex-1 rounded-full border bg-transparent px-4 text-sm outline-none focus:border-foreground/40"
+                />
+                <input
+                  data-testid="rival"
+                  value={rival}
+                  onChange={(e) => setRival(e.target.value)}
+                  maxLength={60}
+                  placeholder="Rival no debate"
+                  title="Rival no debate"
+                  className="h-9 rounded-full border bg-transparent px-4 text-sm outline-none focus:border-foreground/40 sm:w-44"
+                />
+              </div>
               <div className="flex flex-wrap justify-center gap-2">
                 {SCENES.map((s) => (
                   <Chip key={s.id} data-testid={`tpl-${s.id}`} active={scene === s.id} disabled={!!scene && !result} onClick={() => render(s.id)}>
