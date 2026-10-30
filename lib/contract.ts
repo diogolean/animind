@@ -12,24 +12,19 @@
  */
 export const CONTRACT_VERSION = "v1" as const;
 
-export type LayerName =
-  | "body"
-  | "head"
-  | "brows"
-  | "eyes"
-  | "eyes_closed"
-  | "mouth_rest"
-  | "mouth_A"
-  | "mouth_E"
-  | "mouth_O"
-  | "mouth_M";
+/** Rig layers of one view. Mouth shapes live in `CharacterView.visemes`. */
+export type LayerName = "body" | "head" | "hair" | "brows" | "eyes" | "eyes_closed" | "nose" | "accessory";
 
-export const VISEMES = ["mouth_rest", "mouth_A", "mouth_E", "mouth_O", "mouth_M"] as const;
+/** Rhubarb Lip Sync mouth shapes (A–H + X = rest), as emitted by the core. */
+export const VISEMES = ["X", "A", "B", "C", "D", "E", "F", "G", "H"] as const;
 export type Viseme = (typeof VISEMES)[number];
 
-/** One cut-out layer, positioned in the character's own canvas space. */
+export const VIEWS = ["front", "left", "right"] as const;
+export type ViewName = (typeof VIEWS)[number];
+
+/** One cut-out image, positioned in the view's own canvas space. */
 export interface Layer {
-  name: LayerName;
+  name: LayerName | string;
   /** PNG/SVG URL (absolute, relative or data:). */
   url: string;
   x: number;
@@ -37,6 +32,14 @@ export interface Layer {
   w: number;
   h: number;
   z: number;
+}
+
+/** One camera angle of the character: its layers plus the full viseme set. */
+export interface CharacterView {
+  canvas: { w: number; h: number };
+  layers: Layer[];
+  /** Mouth sprite per viseme, drawn at its own box (z above head). Missing -> falls back to "X". */
+  visemes: Partial<Record<Viseme, Layer>>;
 }
 
 export interface Attribution {
@@ -61,18 +64,18 @@ export type CharacterSource =
 
 export interface CreateCharacterRequest {
   source: CharacterSource;
-  style?: "cartoon" | "cutout";
 }
 
 export interface Character {
   id: string;
   name: string;
-  style: "cartoon" | "cutout";
-  canvas: { w: number; h: number };
-  /** Cartoon rig layers (empty for pure photo cut-outs). */
-  layers: Layer[];
+  /** "placeholder": the core has not produced the rig yet (or the app runs on the mock). */
+  status: "ready" | "placeholder";
+  style: "rig" | "cutout";
+  /** Real core format: front, left and right views, each with layers + visemes. */
+  views: Record<ViewName, CharacterView>;
+  /** Photo cut-out (Monty-Python style); used instead of views when present. */
   photo?: PhotoRig;
-  palette?: { primary: string; accent: string };
   createdAt: string;
 }
 
@@ -94,8 +97,10 @@ export interface ScriptLine {
   text: string;
   startMs: number;
   endMs: number;
-  /** Optional Rhubarb-style visemes; absent -> client derives from audio. */
+  /** Rhubarb visemes, `t` in seconds from the start of the track; absent -> derived from audio. */
   visemes?: { t: number; v: Viseme }[];
+  /** Camera view for the speaker during this line; absent -> renderer picks one. */
+  view?: ViewName;
 }
 
 export interface RenderResult {

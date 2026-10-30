@@ -5,9 +5,21 @@ import {
   type RenderJob,
   type RenderRequest,
   type ScriptLine,
+  type ViewName,
 } from "./contract";
 import { portraitById, portraitImageUrl } from "./catalog";
-import { cartoonLayers, hash } from "./cartoon";
+
+const hash = (s: string) => {
+  let h = 2166136261;
+  for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 16777619);
+  return h >>> 0;
+};
+
+/** The mock never fakes a rig: views are empty and the UI shows a neutral placeholder. */
+const emptyViews = (): Character["views"] => {
+  const v = () => ({ canvas: { w: 512, h: 640 }, layers: [], visemes: {} });
+  return { front: v(), left: v(), right: v() };
+};
 
 /* Self-contained mock of the Omni-Engine core, used when CORE_URL is unset.
  * Characters are procedural SVG cut-outs; jobs are stateless (state is encoded
@@ -22,33 +34,24 @@ const titleCase = (s: string) =>
 export function mockCreateCharacter(req: CreateCharacterRequest): Character {
   const now = new Date().toISOString();
   const src = req.source;
+  const base = { views: emptyViews(), createdAt: now };
   if (src.kind === "catalog") {
     const p = portraitById(src.portraitId);
     if (!p) throw new Error("Retrato não encontrado no catálogo");
-    return {
-      id: `mock_cat_${p.id}`,
-      name: p.name,
-      style: "cutout",
-      canvas: { w: 512, h: 640 },
-      layers: [],
-      photo: { url: portraitImageUrl(p.id), jaw: p.jaw, attribution: p.attribution },
-      createdAt: now,
-    };
+    return { ...base, id: `mock_cat_${p.id}`, name: p.name, status: "ready", style: "cutout", photo: { url: portraitImageUrl(p.id), jaw: p.jaw, attribution: p.attribution } };
   }
   if (src.kind === "upload") {
     return {
+      ...base,
       id: `mock_up_${hash(src.imageDataUrl.slice(0, 4096)).toString(36)}`,
       name: titleCase(src.name || "Sua foto"),
+      status: "ready",
       style: "cutout",
-      canvas: { w: 512, h: 640 },
-      layers: [],
       photo: { url: src.imageDataUrl, jaw: { x: 0.36, y: 0.55, w: 0.28, h: 0.14 } },
-      createdAt: now,
     };
   }
   const name = titleCase(src.prompt) || "Personagem";
-  const { layers, palette } = cartoonLayers(name);
-  return { id: `mock_${hash(name).toString(36)}`, name, style: "cartoon", canvas: { w: 512, h: 640 }, layers, palette, createdAt: now };
+  return { ...base, id: `mock_${hash(name).toString(36)}`, name, status: "placeholder", style: "rig" };
 }
 
 function script(req: RenderRequest): ScriptLine[] {
@@ -75,9 +78,11 @@ function script(req: RenderRequest): ScriptLine[] {
             [0, `Curtiu? Então compartilha com alguém!`],
           ];
   let t0 = 400;
-  return lines.map(([speaker, text]) => {
+  const view = (speaker: number, i: number): ViewName =>
+    req.template === "debate" ? (speaker === 0 ? "right" : "left") : i === 1 ? (req.template === "lesson" ? "right" : "left") : "front";
+  return lines.map(([speaker, text], i) => {
     const dur = Math.max(1400, text.length * 62);
-    const line = { speaker, text, startMs: t0, endMs: t0 + dur };
+    const line: ScriptLine = { speaker, text, startMs: t0, endMs: t0 + dur, view: view(speaker, i) };
     t0 += dur + 350;
     return line;
   });
@@ -90,7 +95,7 @@ export function mockCreateJob(req: RenderRequest): RenderJob {
   // Strip heavy fields (uploaded data URLs) from the stateless id.
   const lite: RenderRequest = {
     ...req,
-    characters: req.characters.map((c) => ({ ...c, layers: [], photo: c.photo && { ...c.photo, url: "" } })),
+    characters: req.characters.map((c) => ({ ...c, views: emptyViews(), photo: c.photo && { ...c.photo, url: "" } })),
   };
   return { id: `mock_${b64({ r: lite, c: Date.now() } satisfies MockJobState)}`, status: "queued", progress: 0 };
 }
