@@ -1,5 +1,5 @@
 import type { CreateCharacterRequest } from "@/lib/contract";
-import { coreFetch, coreUrl, json } from "@/lib/core";
+import { coreMode, coreOff, json, proxyJson } from "@/lib/core";
 import { mockCreateCharacter } from "@/lib/mock";
 
 const MAX_UPLOAD = 6 * 1024 * 1024;
@@ -19,10 +19,10 @@ export async function POST(req: Request) {
     if (!/^data:image\/(png|jpe?g|webp);base64,/.test(s.imageDataUrl ?? "")) return json({ error: "Imagem inválida" }, 400);
     if (s.imageDataUrl.length > MAX_UPLOAD * 1.37) return json({ error: "Imagem grande demais (máx. 6 MB)" }, 413);
   }
-  if (coreUrl()) {
-    const r = await coreFetch("/characters", { method: "POST", body: JSON.stringify(body) });
-    return new Response(r.body, { status: r.status, headers: { "content-type": "application/json" } });
-  }
+  const mode = coreMode();
+  if (mode === "off") return coreOff();
+  // Prompt characters are cut by the core. Catalog/upload are photo rigs the app builds itself.
+  if (mode === "core" && s.kind === "prompt") return proxyJson("/characters", { method: "POST", body: JSON.stringify(body) });
   try {
     return json(mockCreateCharacter(body), 201);
   } catch (e) {

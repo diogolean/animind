@@ -1,5 +1,5 @@
 import type { RenderRequest } from "@/lib/contract";
-import { coreFetch, coreUrl, json } from "@/lib/core";
+import { coreMode, coreOff, json, proxyJson } from "@/lib/core";
 import { mockCreateJob } from "@/lib/mock";
 
 const TEMPLATES = ["debate", "lesson", "solo"];
@@ -16,9 +16,8 @@ export async function POST(req: Request) {
     return json({ error: "Envie 1 ou 2 personagens" }, 400);
   if (!TEMPLATES.includes(body.template) || !SCENARIOS.includes(body.scenario))
     return json({ error: "Modelo de cena ou cenário inválido" }, 400);
-  if (coreUrl()) {
-    const r = await coreFetch("/render", { method: "POST", body: JSON.stringify(body) });
-    return new Response(r.body, { status: r.status, headers: { "content-type": "application/json" } });
-  }
+  const mode = coreMode();
+  if (mode === "off") return coreOff();
+  if (mode === "core") return proxyJson("/render", { method: "POST", body: JSON.stringify(body) });
   return json(mockCreateJob(body), 202);
 }
