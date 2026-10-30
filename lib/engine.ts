@@ -167,6 +167,18 @@ export function viewFor(r: RenderResult, speaker: number, idx: number, tMs: numb
   return "front";
 }
 
+/** Mouth crossfade (mirrors scene.viseme_mix in the core): the newest viseme fades in over
+ *  XFADE_MS so shapes do not pop. Set per frame for the speaking character. */
+const XFADE_MS = 60;
+let speakingFade: { cur: Viseme; prev: Viseme; w: number } | null = null;
+export function visemeFade(vis: Viseme[], k: number): { cur: Viseme; prev: Viseme; w: number } {
+  const cur = vis[k] ?? "X";
+  let j = k;
+  while (j > 0 && vis[j - 1] === cur) j--;
+  const prev = j > 0 ? vis[j - 1] : cur;
+  return { cur, prev, w: prev === cur ? 1 : Math.min(1, ((k - j) * 10) / XFADE_MS) };
+}
+
 let irisCanvas: HTMLCanvasElement | null = null;
 /** The iris layer moved by the gaze and clipped to the eye opening (socket), in canvas space. */
 function movedIris(iris: HTMLImageElement, l: Layer, sock: HTMLImageElement, s: Layer, dx: number, dy: number) {
@@ -244,12 +256,21 @@ function drawCharacter(g: CanvasRenderingContext2D, c: Character, img: Images, c
     const dy = breathe * (BREATH_SHARE[l.name] ?? 1) + (l.name === "brows" ? -amp * 6 : 0);
     if (l.name === "iris" && socket) {
       const sk = img.get(socket.url);
-      if (sk) g.drawImage(movedIris(im, l, sk, socket, eye.gaze[0] * mx, eye.gaze[1] * my), socket.x, socket.y + dy, socket.w, socket.h);
+      const gx = Math.max(-1, Math.min(1, eye.gaze[0])), gy = Math.max(-1, Math.min(1, eye.gaze[1]));  // iris never leaves the socket
+      if (sk) g.drawImage(movedIris(im, l, sk, socket, gx * mx, gy * my), socket.x, socket.y + dy, socket.w, socket.h);
       continue;
     }
     const lit = ["body", "torso", "neck", "head", "hair"].includes(l.name);
     const src = l.name === "mouth" || l.name === "iris" || l.name.startsWith("eye") ? im : litLayer(im, l, cw, ch, light, lit);
+    const fade = l.name === "mouth" && speakingFade && speakingFade.cur === vis ? speakingFade : null;
+    const prevMouth = fade && fade.w < 1 ? v.visemes[fade.prev] : undefined;
+    const prevIm = prevMouth ? img.get(prevMouth.url) : undefined;
+    if (prevMouth && prevIm) {
+      g.drawImage(prevIm, prevMouth.x, prevMouth.y + dy, prevMouth.w, prevMouth.h);
+      g.globalAlpha = fade!.w;
+    }
     g.drawImage(src, l.x, l.y + dy, l.w, l.h);
+    g.globalAlpha = 1;
   }
   g.restore();
 }
@@ -529,6 +550,7 @@ export function drawFrame(g: CanvasRenderingContext2D, r: RenderResult, img: Ima
   const speaker = track ? track.who[Math.max(0, k)] : -1;
   const amp = track ? track.env[Math.max(0, k)] : 0;
   const vis = track ? track.vis[Math.max(0, k)] : "X";
+  speakingFade = track ? visemeFade(track.vis, Math.max(0, k)) : null;
   let cuts = cutsCache.get(r);
   if (!cuts) cutsCache.set(r, (cuts = planShots(r.template, r.script, r.format === "9:16")));
   const vert = r.format === "9:16";
