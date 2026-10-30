@@ -101,6 +101,32 @@ export interface ScriptLine {
   visemes?: { t: number; v: Viseme }[];
   /** Camera view for the speaker during this line; absent -> renderer picks one. */
   view?: ViewName;
+  /** "quote": `text` is a real quote copied from the persona sheet (see `quote`). "paraphrase": written for the scene. */
+  kind?: "quote" | "paraphrase";
+  /** Script beat: gancho, tese, réplica, tréplica, fechamento; lesson: ponto 1..3, exemplo, resumo. */
+  beat?: string;
+  quote?: QuoteRef;
+  /** The quote a paraphrase restates, when the writer said so. */
+  basis?: { id: string; source: string; url: string };
+}
+
+/** A literal quote with its source (Wikiquote page; Wikisource when the page links one). */
+export interface QuoteRef {
+  id: string;
+  text: string;
+  source: string;
+  url: string;
+  site?: string;
+  wikisource?: string;
+}
+
+export interface PersonaSheet {
+  name: string;
+  found: boolean;
+  wikiquote?: string | null;
+  wikipedia?: string | null;
+  quotes: number;
+  license?: string | null;
 }
 
 export interface RenderResult {
@@ -114,6 +140,10 @@ export interface RenderResult {
   /** Server "high quality" render (optional, from the VM worker). */
   videoUrl: string | null;
   disclaimer: string;
+  /** Who wrote the lines: "gemini" (picks quote ids + writes paraphrases) or "template". */
+  writer?: "gemini" | "template";
+  topic?: string;
+  personas?: PersonaSheet[];
 }
 
 export type JobStatus = "queued" | "running" | "done" | "failed";

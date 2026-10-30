@@ -58,31 +58,35 @@ function script(req: RenderRequest): ScriptLine[] {
   const a = req.characters[0]?.name ?? "Personagem";
   const b = req.characters[1]?.name ?? "Rival";
   const t = req.topic?.trim() || "o futuro da animação";
-  const lines: [number, string][] =
+  // The mock has no persona sheets, so every line is a marked paraphrase (never a fake quote).
+  const lines: [number, string, string][] =
     req.template === "debate"
       ? [
-          [0, `Eu sou ${a}, e digo: ${t} vai mudar tudo!`],
-          [1, `Mudar tudo? ${b} discorda totalmente, meu caro.`],
-          [0, `Os fatos estão do meu lado. Pergunte a qualquer um!`],
-          [1, `Fatos? Eu trouxe argumentos. E bigode.`],
+          [0, "gancho", `${b}, e se tudo o que você pensa sobre ${t} estiver errado?`],
+          [1, "réplica", `Errado? Mostre um fato, ${a}, não uma frase de efeito.`],
+          [0, "réplica", "Os fatos estão do meu lado. Pergunte a qualquer um!"],
+          [1, "tréplica", "Qualquer um não é prova. E eu trouxe argumentos."],
+          [0, "fechamento", "Então que o público decida."],
         ]
       : req.template === "lesson"
         ? [
-            [0, `Olá, turma! Hoje o assunto é ${t}.`],
-            [0, `Primeiro ponto: entender o básico, sem pressa.`],
-            [0, `Segundo: praticar. E lembrem, isso cai na prova!`],
+            [0, "gancho", `Turma, o que vocês sabem de verdade sobre ${t}?`],
+            [0, "ponto 1", "Primeiro: entender o básico, sem pressa."],
+            [0, "ponto 2", "Segundo: praticar um pouco todo dia."],
+            [0, "ponto 3", "Terceiro: explicar para alguém. Quem ensina aprende duas vezes."],
+            [0, "resumo", "Resumo: entender, praticar, explicar."],
           ]
         : [
-            [0, `Oi! Eu sou ${a}.`],
-            [0, `Hoje eu quero falar sobre ${t}.`],
-            [0, `Curtiu? Então compartilha com alguém!`],
+            [0, "gancho", `Oi! Eu sou ${a}.`],
+            [0, "tese", `Hoje eu quero falar sobre ${t}.`],
+            [0, "fechamento", "Curtiu? Então compartilha com alguém!"],
           ];
   let t0 = 400;
   const view = (speaker: number, i: number): ViewName =>
     req.template === "debate" ? (speaker === 0 ? "right" : "left") : i === 1 ? (req.template === "lesson" ? "right" : "left") : "front";
-  return lines.map(([speaker, text], i) => {
+  return lines.map(([speaker, beat, text], i) => {
     const dur = Math.max(1400, text.length * 62);
-    const line: ScriptLine = { speaker, text, startMs: t0, endMs: t0 + dur, view: view(speaker, i) };
+    const line: ScriptLine = { speaker, text, beat, kind: "paraphrase", startMs: t0, endMs: t0 + dur, view: view(speaker, i) };
     t0 += dur + 350;
     return line;
   });
@@ -118,6 +122,8 @@ export function mockGetJob(id: string): RenderJob {
       audioUrl: null,
       videoUrl: null,
       disclaimer: PARODY_DISCLAIMER,
+      writer: "template",
+      topic: r.topic?.trim() || "o futuro da animação",
     },
   };
 }
