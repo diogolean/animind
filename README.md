@@ -38,6 +38,8 @@ npm install
 npm run dev                  # sem núcleo: ANIMIND_CORE_MOCK=1 npm run dev
 ```
 
+Testes E2E (Playwright, projeto `mock` sem chaves e `core` contra o núcleo real): veja [`e2e/README.md`](e2e/README.md).
+
 Com o núcleo, o player oferece dois downloads: a gravação do Canvas (WebM/MP4 do navegador) e o “MP4 do núcleo” (H.264 1280×720 renderizado pelo Rigly).
 
 ## Contrato v2 (formato do core)
