@@ -10,7 +10,7 @@
  *   POST /api/render       RenderRequest          -> RenderJob (status "queued")
  *   GET  /api/jobs/:id                            -> RenderJob
  */
-export const CONTRACT_VERSION = "v1" as const;
+export const CONTRACT_VERSION = "v2" as const;
 
 /** Rig layers of one view. Mouth shapes live in `CharacterView.visemes`. */
 export type LayerName = "body" | "head" | "hair" | "brows" | "eyes" | "eyes_closed" | "nose" | "accessory";
