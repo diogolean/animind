@@ -11,6 +11,8 @@ import type { Scenario, SceneTemplate, ScriptLine } from "./contract";
 
 export const W = 1280;
 export const H = 720;
+/** Vertical 9:16 output (as in the core): a VWIN-wide window of the same 16:9 set, shot at OW x OH. */
+export const VW = 1080, VH = 1920, VWIN = (H * 9) / 16;
 const MARGIN = 1.3;
 const PW = Math.round(W * MARGIN), PH = Math.round(H * MARGIN);
 const OX = (PW - W) / 2, OY = (PH - H) / 2;
@@ -549,19 +551,19 @@ export function grade(g: CanvasRenderingContext2D, s: Scenario) {
   g.globalCompositeOperation = "soft-light";
   g.globalAlpha = a;
   g.fillStyle = tint;
-  g.fillRect(0, 0, W, H);
+  g.fillRect(0, 0, g.canvas.width, g.canvas.height);
   g.globalAlpha = 0.18; // S-curve-ish contrast
   g.globalCompositeOperation = "overlay";
   g.fillStyle = "#808080";
-  g.fillRect(0, 0, W, H);
+  g.fillRect(0, 0, g.canvas.width, g.canvas.height);
   g.globalAlpha = 1;
   g.globalCompositeOperation = "multiply";
-  g.drawImage(vignette(), 0, 0);
+  g.drawImage(vignette(), 0, 0, g.canvas.width, g.canvas.height);
   g.restore();
 }
 
 // ------------------------------------------------------------------ camera
-export type ShotKind = "wide" | "two" | "ots" | "cu" | "mcu" | "board";
+export type ShotKind = "wide" | "two" | "ots" | "cu" | "mcu" | "board" | "single" | "react";
 export interface Shot { cx: number; cy: number; zoom: number; kind?: ShotKind }
 
 export function handheld(t: number): [number, number, number] {
@@ -577,21 +579,25 @@ export const ease = (x: number) => {
   return v * v * (3 - 2 * v);
 };
 
-function clampShot(s: Shot): Shot {
+function clampShot(s: Shot, win = W): Shot {
   const z = Math.max(1.04, s.zoom);
-  const hw = W / (2 * z) + 8, hh = H / (2 * z) + 8;
+  const hw = win / (2 * z) + 8, hh = H / (2 * z) + 8;
   return { cx: Math.min(Math.max(s.cx, hw), W - hw), cy: Math.min(Math.max(s.cy, hh), H - hh), zoom: z, kind: s.kind };
 }
 
 /** Shot grammar per line, as in scene.py: wide establishing shot, over-the-shoulder singles, a
  *  close-up cutaway on every real quote and a closing two-shot; the lesson cuts to the board for quotes. */
-export function shotFor(template: SceneTemplate, speaker: number, i: number, script: ScriptLine[] = []): Shot {
+export function shotFor(template: SceneTemplate, speaker: number, i: number, script: ScriptLine[] = [], vertical = false): Shot {
   const quote = script[i]?.kind === "quote";
   const last = i === script.length - 1 && script.length >= 4;
   if (speaker < 0) return { cx: W / 2, cy: H * 0.5, zoom: 1, kind: "wide" };
   const places = PLACES[template] ?? PLACES.solo;
   const x = places[Math.min(speaker, places.length - 1)][0];
   const toward = x < 0.5 ? 1 : -1;
+  if (vertical) { // singles only: the window is too narrow for a two-shot
+    if (quote) return { cx: W * (x + 0.01 * toward), cy: H * FACE_Y, zoom: 1.75, kind: "cu" };
+    return { cx: W * (x + 0.02 * toward), cy: H * 0.5, zoom: 1.22, kind: "single" };
+  }
   if (template === "debate") {
     if (last) return { cx: W / 2, cy: H * 0.47, zoom: 1.24, kind: "two" };
     if (quote) return { cx: W * (x + 0.035 * toward), cy: H * FACE_Y, zoom: 2.1, kind: "cu" };
@@ -612,7 +618,8 @@ const same = (a: Shot, b: Shot) => a.cx === b.cx && a.cy === b.cy && a.zoom === 
 
 /** Opens wide, then cuts to the first speaker; hard cuts between singles, a dissolve into
  *  wide/two/board shots and a whip pan when a quote close-up answers the other side. */
-export function planShots(template: SceneTemplate, script: ScriptLine[]): Cut[] {
+export function planShots(template: SceneTemplate, script: ScriptLine[], vertical = false): Cut[] {
+  if (vertical) return planVertical(template, script);
   const cuts: Cut[] = [{ start: 0, shot: clampShot(shotFor(template, -1, 0, script)), kind: "cut" }];
   script.forEach((l, i) => {
     let start = l.startMs / 1000;
@@ -623,6 +630,26 @@ export function planShots(template: SceneTemplate, script: ScriptLine[]): Cut[] 
     const kind = ["wide", "two", "board"].includes(shot.kind ?? "") || ["wide", "board"].includes(prev.shot.kind ?? "")
       ? "dissolve" : shot.kind === "cu" && Math.abs(shot.cx - prev.shot.cx) > W * 0.25 ? "whip" : "cut";
     cuts.push({ start: Math.max(start - 0.12, prev.start + 0.5), shot, kind });
+  });
+  return cuts;
+}
+
+/** 9:16 shot/countershot (mirrors Scene._plan_vertical): open on the first speaker, hard cuts, and a
+ *  1.3 s reaction cutaway to the listener on long debate lines. */
+function planVertical(template: SceneTemplate, script: ScriptLine[]): Cut[] {
+  const c = (s: Shot) => clampShot(s, VWIN);
+  const first = script[0]?.speaker ?? 0;
+  const cuts: Cut[] = [{ start: 0, shot: c(shotFor(template, Math.max(0, first), 0, script, true)), kind: "cut" }];
+  script.forEach((l, i) => {
+    const start = l.startMs / 1000, end = l.endMs / 1000;
+    const shot = c(shotFor(template, l.speaker, i, script, true));
+    const prev = cuts[cuts.length - 1];
+    if (!same(shot, prev.shot)) cuts.push({ start: Math.max(start - 0.1, prev.start + 0.5), shot, kind: "cut" });
+    if (template === "debate" && end - start > 5.5) {
+      const mid = start + (end - start) * 0.55;
+      cuts.push({ start: mid, shot: c({ ...shotFor(template, 1 - l.speaker, i, script, true), kind: "react" }), kind: "cut" });
+      cuts.push({ start: mid + 1.3, shot, kind: "cut" });
+    }
   });
   return cuts;
 }
@@ -651,7 +678,7 @@ export function camera(cuts: Cut[], t: number): [number, Shot, number][] {
 }
 
 /** Canvas transform for a parallax depth: maps that depth's own pixels to the frame. */
-export function depthTransform(g: CanvasRenderingContext2D, s: Shot, depth: keyof typeof PARALLAX, drift: [number, number, number]) {
+export function depthTransform(g: CanvasRenderingContext2D, s: Shot, depth: keyof typeof PARALLAX, drift: [number, number, number], vertical = false) {
   const p = PARALLAX[depth];
   const z = 1 + (s.zoom - 1) * p;
   const plate = depth !== "stage";
@@ -659,5 +686,9 @@ export function depthTransform(g: CanvasRenderingContext2D, s: Shot, depth: keyo
   const cy = (plate ? H / 2 + (s.cy - H / 2) * p : s.cy) + (plate ? OY : 0);
   const [dx, dy, roll] = drift.map((v) => v * p);
   const a = z * Math.cos(roll), b = z * Math.sin(roll), c = -b, d = a;
-  g.setTransform(a, b, c, d, W / 2 + dx - a * cx - c * cy, H / 2 + dy - b * cx - d * cy);
+  const e = W / 2 + dx - a * cx - c * cy, f = H / 2 + dy - b * cx - d * cy;
+  if (!vertical) return g.setTransform(a, b, c, d, e, f);
+  // frame px of a centred VWIN-wide window -> VW x VH output
+  const k = VH / H, ox = (W - VWIN) / 2;
+  g.setTransform(a * k, b * k, c * k, d * k, (e - ox) * k, f * k);
 }

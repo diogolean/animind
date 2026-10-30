@@ -5,7 +5,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { ArrowUp, Loader2, Plus, X } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "cn";
-import type { Character, CharacterSource, RenderResult, Scenario, SceneTemplate } from "@/lib/contract";
+import type { Character, CharacterSource, RenderResult, Scenario, SceneTemplate, VideoFormat } from "@/lib/contract";
 import { createCharacter, startRender, waitJob } from "@/lib/api";
 import { PORTRAITS, portraitImageUrl } from "@/lib/catalog";
 import { Avatar } from "@/components/avatar";
@@ -18,6 +18,19 @@ const SCENES: { id: SceneTemplate; label: string }[] = [
   { id: "lesson", label: "Aula" },
   { id: "solo", label: "Solo" },
 ];
+const FORMATS: { id: VideoFormat; label: string }[] = [
+  { id: "16:9", label: "16:9" },
+  { id: "9:16", label: "9:16 vertical" },
+];
+
+/** "auto" lets the core cast a voice from the persona (gender, age, temper). */
+const VOICES = [
+  { id: "auto", label: "Voz automática" },
+  { id: "pt-BR-AntonioNeural", label: "Antonio" },
+  { id: "pt-BR-FranciscaNeural", label: "Francisca" },
+  { id: "pt-BR-ThalitaMultilingualNeural", label: "Thalita" },
+];
+
 const PLACES: { id: Scenario; label: string }[] = [
   { id: "studio", label: "Estúdio" },
   { id: "classroom", label: "Sala" },
@@ -46,6 +59,8 @@ export function Composer() {
   const [char, setChar] = useState<Character | null>(null);
   const [scene, setScene] = useState<SceneTemplate | null>(null);
   const [place, setPlace] = useState<Scenario>("studio");
+  const [format, setFormat] = useState<VideoFormat>("16:9");
+  const [voice, setVoice] = useState("auto");
   const [result, setResult] = useState<RenderResult | null>(null);
   const [progress, setProgress] = useState(0);
   const [audio, setAudio] = useState<AudioContext | null>(null);
@@ -96,7 +111,7 @@ export function Composer() {
         }
         chars.push(other);
       }
-      const job = await startRender({ characters: chars, template: tpl, scenario: where, topic: topic.trim() || undefined, lang: "pt-BR" });
+      const job = await startRender({ characters: chars, template: tpl, scenario: where, topic: topic.trim() || undefined, lang: "pt-BR", format, voices: [voice === "auto" ? null : { voice }] });
       const done = await waitJob(job.id, (j) => setProgress(j.progress));
       const r = done.result!;
       // The core may echo characters without heavy fields (photo data URLs); keep our local copies.
@@ -214,6 +229,11 @@ export function Composer() {
                     <X className="size-3.5" />
                   </button>
                 </div>
+                {char.reviewSheetUrl && (
+                  <a data-testid="review-sheet" href={char.reviewSheetUrl} target="_blank" rel="noreferrer" className="mt-1 block text-center text-[11px] text-muted-foreground hover:underline">
+                    Folha de revisão (bocas e olhos)
+                  </a>
+                )}
                 {char.photo?.attribution && (
                   <a href={char.photo.attribution.sourceUrl} target="_blank" rel="noreferrer" className="block text-center text-[11px] text-muted-foreground hover:underline">
                     {char.photo.attribution.author} · {char.photo.attribution.license}
@@ -225,6 +245,12 @@ export function Composer() {
               <div className="mb-8">
                 <Player result={result} audioCtx={audio} fileName={`animind-${char.name.toLowerCase().replace(/\W+/g, "-")}`} />
                 <Transcript result={result} />
+                {char.reviewSheetUrl && (
+                  <details className="mt-4 text-xs text-muted-foreground">
+                    <summary className="cursor-pointer">Folha de revisão do personagem</summary>
+                    <img data-testid="review-sheet-img" src={char.reviewSheetUrl} alt={`Folha de revisão: ${char.name}`} className="mt-2 w-full rounded-lg border" />
+                  </details>
+                )}
               </div>
             )}
             <div className="flex flex-col items-center gap-3">
@@ -270,6 +296,34 @@ export function Composer() {
                   </button>
                 ))}
               </div>
+              <div className="flex flex-wrap items-center justify-center gap-1">
+                {FORMATS.map((f) => (
+                  <button
+                    key={f.id}
+                    data-testid={`format-${f.id.replace(":", "x")}`}
+                    onClick={() => setFormat(f.id)}
+                    className={cn("h-7 rounded-full px-3 text-xs transition-colors", format === f.id ? "bg-muted text-foreground" : "text-muted-foreground hover:text-foreground")}
+                  >
+                    {f.label}
+                  </button>
+                ))}
+                <select
+                  data-testid="voice"
+                  value={voice}
+                  onChange={(e) => setVoice(e.target.value)}
+                  title="Voz do personagem"
+                  className="ml-2 h-7 rounded-full border bg-transparent px-2 text-xs text-muted-foreground outline-none"
+                >
+                  {VOICES.map((v) => (
+                    <option key={v.id} value={v.id}>{v.label}</option>
+                  ))}
+                </select>
+              </div>
+              {result?.voices?.length ? (
+                <div className="text-[11px] text-muted-foreground">
+                  Vozes: {result.voices.map((v, i) => `${result.characters[i]?.name ?? i + 1}: ${v.voice.replace(/^pt-BR-|Neural$/g, "")}${v.auto ? " (auto)" : ""}`).join(" · ")}
+                </div>
+              ) : null}
               {scene && !result && <div className="mt-2 text-xs text-muted-foreground tabular-nums">{Math.round(progress * 100)}%</div>}
             </div>
           </motion.section>

@@ -115,6 +115,9 @@ export function mockGetJob(id: string): RenderJob {
     progress: 1,
     result: {
       template: r.template,
+      format: r.format ?? "16:9",
+      width: r.format === "9:16" ? 1080 : 1280,
+      height: r.format === "9:16" ? 1920 : 720,
       scenario: r.scenario,
       characters: r.characters,
       script: lines,

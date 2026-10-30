@@ -2,10 +2,11 @@
 /* Browser-side preview renderer (Canvas 2D + Web Audio + MediaRecorder).
  * Mirrors what the Rigly engine does server-side: layered rig + mouth driven
  * by the audio envelope. Pure client code, no keys involved. */
-import { PARODY_DISCLAIMER, type Character, type RenderResult, type ScriptLine, type ViewName, type Viseme } from "./contract";
-import { ACCENT, BOARD, BUST_BOTTOM, BUST_H, camera, contactShadow, depthTransform, ease, FADE_IN_S, FADE_OUT_S, grade, H, lectern, LECTERN_BASE, LECTERN_TOP, LECTERN_W, lightFor, litLayer, PLACES, planShots, plates, soft, blurNow, W, handheld, type Cut, type Light, type Shot } from "./cinema";
+import { PARODY_DISCLAIMER, type Character, type Layer, type RenderResult, type ScriptLine, type ViewName, type Viseme } from "./contract";
+import { ACCENT, BOARD, BUST_BOTTOM, BUST_H, camera, contactShadow, depthTransform, ease, FADE_IN_S, FADE_OUT_S, grade, H, lectern, LECTERN_BASE, LECTERN_TOP, LECTERN_W, lightFor, litLayer, PLACES, planShots, plates, soft, blurNow, W, VW, VH, handheld, type Cut, type Light, type Shot } from "./cinema";
+import { blink, gaze, type Lids } from "./eyes";
 
-export { H, W };
+export { H, VH, VW, W };
 export const FPS_ENV = 100; // envelope samples per second
 
 export interface Track {
@@ -166,7 +167,34 @@ export function viewFor(r: RenderResult, speaker: number, idx: number, tMs: numb
   return "front";
 }
 
-function drawCharacter(g: CanvasRenderingContext2D, c: Character, img: Images, cx: number, scale: number, amp: number, vis: Viseme, t: number, view: ViewName, seed: number, light: Light) {
+let irisCanvas: HTMLCanvasElement | null = null;
+/** The iris layer moved by the gaze and clipped to the eye opening (socket), in canvas space. */
+function movedIris(iris: HTMLImageElement, l: Layer, sock: HTMLImageElement, s: Layer, dx: number, dy: number) {
+  irisCanvas ??= document.createElement("canvas");
+  irisCanvas.width = s.w;
+  irisCanvas.height = s.h;
+  const o = irisCanvas.getContext("2d")!;
+  o.clearRect(0, 0, s.w, s.h);
+  o.drawImage(iris, l.x - s.x + dx, l.y - s.y + dy, l.w, l.h);
+  o.globalCompositeOperation = "destination-in";
+  o.drawImage(sock, 0, 0, s.w, s.h);
+  o.globalCompositeOperation = "source-over";
+  return irisCanvas;
+}
+
+/** Where character idx looks (mirrors Scene.gaze in the core). */
+function gazeFor(r: RenderResult, idx: number, speaker: number, kind: string | undefined, view: ViewName, t: number) {
+  const place = PLACES[r.template] ?? PLACES.solo;
+  const toward = r.template === "debate" ? (place[Math.min(idx, place.length - 1)][0] < 0.5 ? 1 : -1) : r.template === "lesson" ? 1 : 0;
+  let bias = speaker === idx ? (kind === "cu" ? 0.3 : 0.08) : 0;
+  if (r.template === "solo") bias += 0.35;
+  const facing = view === "left" ? -1 : view === "right" ? 1 : 0;
+  return { lids: blink(t, 7 + idx * 13), gaze: gaze(t, 101 + idx * 57, { toward, view, facing, cameraBias: bias }) };
+}
+
+type EyeState = { lids: Lids; gaze: [number, number] };
+
+function drawCharacter(g: CanvasRenderingContext2D, c: Character, img: Images, cx: number, scale: number, amp: number, vis: Viseme, t: number, view: ViewName, seed: number, light: Light, eye: EyeState = { lids: "open", gaze: [0, 0] }) {
   const v = c.views[view] ?? c.views.front;
   const cw = v?.canvas.w ?? 512, ch = v?.canvas.h ?? 640;
   // Fit any core canvas to the same bust height; the bust stands behind a lectern that hides the cut.
@@ -201,17 +229,27 @@ function drawCharacter(g: CanvasRenderingContext2D, c: Character, img: Images, c
     g.restore();
     return;
   }
-  const blink = (t + seed) % 3.6 < 0.12;
+  const lids = eye.lids;
   const mouth = v.visemes[vis] ?? v.visemes.X;
   const parts = [...v.layers, ...(mouth ? [{ ...mouth, name: "mouth", z: mouth.z ?? 99 }] : [])].sort((a, b) => a.z - b.z);
+  const socket = v.layers.find((l) => l.name === "eye_socket");
+  const movable = !!socket && v.layers.some((l) => l.name === "iris") && v.layers.some((l) => l.name === "eye_white");
+  const [mx, my] = v.eyeRig?.maxShift ?? [0, 0];
   for (const l of parts) {
-    if (l.name === "eyes" && blink) continue;
-    if (l.name === "eyes_closed" && !blink) continue;
+    if (l.name === "eye_socket" || (movable && l.name === "eyes")) continue;
+    if ((l.name === "eyes" && lids === "closed") || (l.name === "eyes_closed" && lids !== "closed") || (l.name === "eyes_half" && lids !== "half")) continue;
     const im = img.get(l.url);
     if (!im) continue;
     const head = l.name !== "body";
-    const src = l.name === "mouth" ? im : litLayer(im, l, cw, ch, light, l.name === "body" || l.name === "head" || l.name === "hair");
-    g.drawImage(src, l.x, l.y + (head ? breathe - amp * 4 : breathe * 0.4) + (l.name === "brows" ? -amp * 6 : 0), l.w, l.h);
+    const dy = (head ? breathe - amp * 4 : breathe * 0.4) + (l.name === "brows" ? -amp * 6 : 0);
+    if (l.name === "iris" && socket) {
+      const sk = img.get(socket.url);
+      if (sk) g.drawImage(movedIris(im, l, sk, socket, eye.gaze[0] * mx, eye.gaze[1] * my), socket.x, socket.y + dy, socket.w, socket.h);
+      continue;
+    }
+    const lit = l.name === "body" || l.name === "head" || l.name === "hair";
+    const src = l.name === "mouth" || l.name === "iris" || l.name.startsWith("eye") ? im : litLayer(im, l, cw, ch, light, lit);
+    g.drawImage(src, l.x, l.y + dy, l.w, l.h);
   }
   g.restore();
 }
@@ -376,12 +414,13 @@ let charCanvas: HTMLCanvasElement | null = null;
  *  through one camera shot. In a single (over-the-shoulder / close-up) the listener is out of focus. */
 function drawWorld(g: CanvasRenderingContext2D, r: RenderResult, img: Images, shot: Shot, drift: [number, number, number], t: number, tMs: number, speaker: number, amp: number, vis: Viseme) {
   const p = plates(r.scenario, r.template);
+  const vert = r.format === "9:16";
   g.save();
-  depthTransform(g, shot, "far", drift);
+  depthTransform(g, shot, "far", drift, vert);
   g.drawImage(p.far, 0, 0);
-  depthTransform(g, shot, "mid", drift);
+  depthTransform(g, shot, "mid", drift, vert);
   g.drawImage(p.mid, 0, 0);
-  depthTransform(g, shot, "stage", drift);
+  depthTransform(g, shot, "stage", drift, vert);
   const chars = r.characters;
   const say = (i: number) => (speaker === i ? [amp, vis] : [0, "X"]) as [number, Viseme];
   const place = PLACES[r.template] ?? PLACES.solo;
@@ -392,7 +431,7 @@ function drawWorld(g: CanvasRenderingContext2D, r: RenderResult, img: Images, sh
     const side = lightFor(r.scenario, r.template, i).side;
     g.drawImage(sh, W * place[i][0] - sh.width / 2 + side * W * 0.012, H * LECTERN_BASE - sh.height * 0.55);
   }
-  const single = n > 1 && (shot.kind === "ots" || shot.kind === "cu");
+  const single = n > 1 && ["ots", "cu", "single", "react"].includes(shot.kind ?? "");
   // the speaker is drawn last (in front)
   const order = [...Array(n).keys()].sort((a, b) => (a === speaker ? 1 : 0) - (b === speaker ? 1 : 0));
   for (const i of order) {
@@ -407,7 +446,8 @@ function drawWorld(g: CanvasRenderingContext2D, r: RenderResult, img: Images, sh
       const o = charCanvas.getContext("2d")!;
       o.setTransform(1, 0, 0, 1, 0, 0);
       o.clearRect(0, 0, W, H);
-      drawCharacter(o, c, img, cx, place[i][1], 0, "X", t, viewFor(r, speaker, i, tMs), i * 1.3, light);
+      const lv = viewFor(r, speaker, i, tMs);
+      drawCharacter(o, c, img, cx, place[i][1], 0, "X", t, lv, i * 1.3, light, gazeFor(r, i, speaker, shot.kind, lv, t));
       o.drawImage(lec, lx, ly);
       o.globalCompositeOperation = "source-atop";
       o.fillStyle = "rgba(0,0,0,.38)";
@@ -415,12 +455,13 @@ function drawWorld(g: CanvasRenderingContext2D, r: RenderResult, img: Images, sh
       o.globalCompositeOperation = "source-over";
       g.save();
       g.setTransform(1, 0, 0, 1, 0, 0);
-      depthTransform(g, shot, "stage", drift);
+      depthTransform(g, shot, "stage", drift, vert);
       g.drawImage(blurNow(charCanvas), 0, 0);
       g.restore();
       continue;
     }
-    drawCharacter(g, c, img, cx, place[i][1], ...say(i), t, viewFor(r, speaker, i, tMs), i * 1.3, light);
+    const view = viewFor(r, speaker, i, tMs);
+    drawCharacter(g, c, img, cx, place[i][1], ...say(i), t, view, i * 1.3, light, gazeFor(r, i, speaker, shot.kind, view, t));
     g.drawImage(lec, lx, ly);
   }
   g.restore();
@@ -486,7 +527,9 @@ export function drawFrame(g: CanvasRenderingContext2D, r: RenderResult, img: Ima
   const amp = track ? track.env[Math.max(0, k)] : 0;
   const vis = track ? track.vis[Math.max(0, k)] : "X";
   let cuts = cutsCache.get(r);
-  if (!cuts) cutsCache.set(r, (cuts = planShots(r.template, r.script)));
+  if (!cuts) cutsCache.set(r, (cuts = planShots(r.template, r.script, r.format === "9:16")));
+  const vert = r.format === "9:16";
+  const FW = vert ? VW : W, FH = vert ? VH : H, ks = vert ? 1.45 : 1;
   const drift = handheld(t);
   const takes = camera(cuts, t);
   g.save();
@@ -494,7 +537,7 @@ export function drawFrame(g: CanvasRenderingContext2D, r: RenderResult, img: Ima
   takes.forEach(([weight, shot, blur], i) => {
     if (i === 0 && blur < 0.05) return drawWorld(g, r, img, shot, drift, t, tMs, speaker, amp, vis);
     // dissolve (second take) or whip pan: draw the take off-screen, then blend it in
-    shotCanvas ??= Object.assign(document.createElement("canvas"), { width: W, height: H });
+    if (!shotCanvas || shotCanvas.width !== FW) shotCanvas = Object.assign(document.createElement("canvas"), { width: FW, height: FH });
     const s = shotCanvas.getContext("2d")!;
     drawWorld(s, r, img, shot, drift, t, tMs, speaker, amp, vis);
     if (blur >= 0.05) {
@@ -515,46 +558,57 @@ export function drawFrame(g: CanvasRenderingContext2D, r: RenderResult, img: Ima
   const fade = ease(t / FADE_IN_S) * ease((r.durationMs / 1000 - t) / FADE_OUT_S);
   if (fade < 0.999) {
     g.fillStyle = `rgba(0,0,0,${1 - fade})`;
-    g.fillRect(0, 0, W, H);
+    g.fillRect(0, 0, FW, FH);
   }
   // bottom scrim that seats the captions
-  const sc = g.createLinearGradient(0, H * 0.68, 0, H);
+  const s0 = vert ? 0.62 : 0.68;
+  const sc = g.createLinearGradient(0, FH * s0, 0, FH);
   sc.addColorStop(0, "rgba(0,0,0,0)");
   sc.addColorStop(1, "rgba(0,0,0,.6)");
   g.fillStyle = sc;
-  g.fillRect(0, H * 0.68, W, H * 0.32);
+  g.fillRect(0, FH * s0, FW, FH * (1 - s0));
   const line = lineAt(r, tMs);
   const kind = takes[takes.length - 1][1].kind;
-  if (line) lowerThird(g, r, line, t, kind);
-  if (line) sourceChip(g, r, line, t);
+  // vertical: the 16:9 chip and lower third, scaled to the narrower frame (chip below the top chrome)
+  const fit = (y: number, f: () => void) => {
+    g.save();
+    if (vert) g.setTransform(FW / W, 0, 0, FW / W, 0, y);
+    f();
+    g.restore();
+  };
+  if (line) fit(FH * 0.58 - (H - 262) * (FW / W), () => lowerThird(g, r, line, t, vert ? "cu" : kind));
+  if (line) fit(90, () => sourceChip(g, r, line, t));
   const onBoard = r.template === "lesson" && (kind === "board" || kind === "wide");
   if (line && !onBoard) { // the lesson reads the board; captions only when it is out of frame
     const a = ease((t - line.startMs / 1000) / 0.18);
     g.globalAlpha = a;
-    g.font = `${line.kind === "quote" ? "italic " : ""}600 34px Geist, ui-sans-serif, system-ui`;
+    const cap = `${line.kind === "quote" ? "italic " : ""}600 ${Math.round(34 * ks)}px Geist, ui-sans-serif, system-ui`;
+    g.font = cap;
     g.textAlign = "center";
     g.textBaseline = "top";
-    const ls = captionPage(g, line, tMs, W * 0.72);
-    const y0 = H - 22 - ls.length * 44 + Math.round(6 * (1 - a));
+    const ls = captionPage(g, line, tMs, FW * (vert ? 0.86 : 0.72));
+    const lh = Math.round(44 * ks);
+    const y0 = (vert ? FH * 0.7 + 40 : H - 22 - ls.length * lh) + Math.round(6 * (1 - a));
     g.shadowColor = "rgba(0,0,0,.9)";
     g.shadowBlur = 10;
     g.shadowOffsetY = 2;
     const who = r.characters[line.speaker];
     if (who) { // tracked speaker label in the accent colour, above the rows
-      g.font = "700 16px Geist, ui-sans-serif, system-ui";
+      g.font = `700 ${Math.round(16 * ks)}px Geist, ui-sans-serif, system-ui`;
       g.letterSpacing = "2.6px";
       g.fillStyle = ACCENT[r.scenario];
-      g.fillText(prettyName(who.name).toUpperCase(), W / 2, y0 - 26);
+      g.fillText(prettyName(who.name).toUpperCase(), FW / 2, y0 - 26 * ks);
       g.letterSpacing = "0px";
-      g.font = `${line.kind === "quote" ? "italic " : ""}600 34px Geist, ui-sans-serif, system-ui`;
+      g.font = cap;
     }
     g.fillStyle = "#fff";
-    ls.forEach((s, i) => g.fillText(s, W / 2, y0 + i * 44));
+    ls.forEach((s, i) => g.fillText(s, FW / 2, y0 + i * lh));
     g.shadowColor = "transparent";
     g.globalAlpha = 1;
   }
   g.textBaseline = "alphabetic";
-  // parody disclaimer (always visible, baked into the video)
+  // parody disclaimer (always visible, baked into the video); larger and below the top chrome in 9:16
+  if (vert) g.setTransform(ks, 0, 0, ks, 0, 40);
   g.font = "600 18px Geist, ui-sans-serif, system-ui";
   g.textAlign = "left";
   const label = r.disclaimer || PARODY_DISCLAIMER;
@@ -568,7 +622,7 @@ export function drawFrame(g: CanvasRenderingContext2D, r: RenderResult, img: Ima
   g.font = "500 16px Geist, ui-sans-serif, system-ui";
   g.textAlign = "right";
   g.fillStyle = "rgba(255,255,255,.43)";
-  g.fillText("animind", W - 28, 46);
+  g.fillText("animind", FW / ks - 28, 46);
   g.restore();
 }
 

@@ -13,7 +13,10 @@
 export const CONTRACT_VERSION = "v2" as const;
 
 /** Rig layers of one view. Mouth shapes live in `CharacterView.visemes`. */
-export type LayerName = "body" | "head" | "hair" | "brows" | "eyes" | "eyes_closed" | "nose" | "accessory";
+export type LayerName =
+  | "body" | "head" | "hair" | "brows" | "eyes" | "eyes_closed" | "nose" | "accessory"
+  // movable eyes (core v3): sclera without iris, iris discs, the eye opening they are clipped to, half lids
+  | "eye_white" | "iris" | "eye_socket" | "eyes_half";
 
 /** Rhubarb Lip Sync mouth shapes (A–H + X = rest), as emitted by the core. */
 export const VISEMES = ["X", "A", "B", "C", "D", "E", "F", "G", "H"] as const;
@@ -40,6 +43,8 @@ export interface CharacterView {
   layers: Layer[];
   /** Mouth sprite per viseme, drawn at its own box (z above head). Missing -> falls back to "X". */
   visemes: Partial<Record<Viseme, Layer>>;
+  /** Movable eyes: max iris travel (canvas px) and iris circles [cx, cy, r]. */
+  eyeRig?: { maxShift: [number, number]; irises: [number, number, number][] };
 }
 
 export interface Attribution {
@@ -76,7 +81,23 @@ export interface Character {
   views: Record<ViewName, CharacterView>;
   /** Photo cut-out (Monty-Python style); used instead of views when present. */
   photo?: PhotoRig;
+  /** One image with every viseme (X, A–H + phonemes) and eye state per view, for a human check. */
+  reviewSheetUrl?: string;
+  /** Voice override for this character (else the core casts one from the persona). */
+  voice?: VoicePick;
   createdAt: string;
+}
+
+/** Output frame: 16:9 (1280x720) or vertical 9:16 (1080x1920, shot/countershot). */
+export type VideoFormat = "16:9" | "9:16";
+
+export interface VoicePick {
+  voice: string;
+  pitchHz?: number;
+  ratePct?: number;
+  /** true when the core picked it from the persona. */
+  auto?: boolean;
+  traits?: { gender: "m" | "f"; born?: number | null; age: string; temper: string };
 }
 
 export type SceneTemplate = "debate" | "lesson" | "solo";
@@ -89,6 +110,9 @@ export interface RenderRequest {
   scenario: Scenario;
   topic?: string;
   lang?: "pt-BR" | "en-US";
+  format?: VideoFormat;
+  /** Per-speaker voice override; null/absent entries are cast automatically. */
+  voices?: (VoicePick | null)[];
 }
 
 export interface ScriptLine {
@@ -144,6 +168,11 @@ export interface RenderResult {
   writer?: "gemini" | "template";
   topic?: string;
   personas?: PersonaSheet[];
+  format?: VideoFormat;
+  width?: number;
+  height?: number;
+  /** Voice used per speaker. */
+  voices?: VoicePick[];
 }
 
 export type JobStatus = "queued" | "running" | "done" | "failed";

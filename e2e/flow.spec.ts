@@ -100,6 +100,16 @@ test("debate and lesson from 'Quem vai falar?'", async ({ page }, info) => {
     await expect(transcript).toContainText(RIVAL.split(/[ ,]/)[0]);
   });
 
+  await test.step("vertical 9:16 debate", async () => {
+    await page.getByTestId("format-9x16").click();
+    await page.getByTestId("tpl-debate").click();
+    await waitForPreview(page, slow * 2);
+    await expect(page.getByTestId("preview-canvas")).toHaveAttribute("width", "1080");
+    await expectCanvasMoves(page);
+    await snap(page, info, "debate-vertical");
+    await page.getByTestId("format-16x9").click();
+  });
+
   await test.step("debate transcript sources", async () => {
     await checkTranscript(page, core);
     await snap(page, info, "debate-transcricao");

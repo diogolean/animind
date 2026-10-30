@@ -3,11 +3,12 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Download, Film, Loader2, Play, RotateCcw } from "lucide-react";
 import { motion } from "framer-motion";
 import type { RenderResult } from "@/lib/contract";
-import { drawFrame, H, loadImages, pickMime, synthTrack, trackFromUrl, W, type Images, type Track } from "@/lib/engine";
+import { drawFrame, H, loadImages, pickMime, synthTrack, trackFromUrl, VH, VW, W, type Images, type Track } from "@/lib/engine";
 import { Button } from "@/components/ui/button";
 
 export function Player({ result, audioCtx, fileName }: { result: RenderResult; audioCtx: AudioContext; fileName: string }) {
   const canvas = useRef<HTMLCanvasElement>(null);
+  const vertical = result.format === "9:16";
   const [state, setState] = useState<"loading" | "recording" | "ready" | "playing">("loading");
   const [progress, setProgress] = useState(0);
   const [video, setVideo] = useState<{ url: string; ext: string } | null>(null);
@@ -76,7 +77,13 @@ export function Player({ result, audioCtx, fileName }: { result: RenderResult; a
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.4 }} className="space-y-3">
       <div className="relative overflow-hidden rounded-2xl bg-black">
-        <canvas data-testid="preview-canvas" ref={canvas} width={W} height={H} className="block aspect-video w-full" />
+        <canvas
+          data-testid="preview-canvas"
+          ref={canvas}
+          width={vertical ? VW : W}
+          height={vertical ? VH : H}
+          className={vertical ? "mx-auto block aspect-[9/16] w-full max-w-xs" : "block aspect-video w-full"}
+        />
         {state === "loading" && (
           <div className="absolute inset-0 grid place-items-center bg-black/60 text-sm text-white/80">
             <Loader2 className="size-6 animate-spin" />
