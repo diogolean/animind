@@ -74,37 +74,36 @@ export function Player({ result, audioCtx, fileName }: { result: RenderResult; a
   }, [result, audioCtx, run]);
 
   return (
-    <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} className="space-y-3">
-      <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-black shadow-[0_30px_80px_-30px] shadow-violet-500/40">
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.4 }} className="space-y-3">
+      <div className="relative overflow-hidden rounded-2xl bg-black">
         <canvas data-testid="preview-canvas" ref={canvas} width={W} height={H} className="block aspect-video w-full" />
         {state === "loading" && (
           <div className="absolute inset-0 grid place-items-center bg-black/60 text-sm text-white/80">
             <Loader2 className="size-6 animate-spin" />
           </div>
         )}
-        <div className="absolute inset-x-0 bottom-0 h-1 bg-white/10">
-          <div className="h-full bg-gradient-to-r from-violet-500 to-cyan-400 transition-[width] duration-100" style={{ width: `${progress * 100}%` }} />
+        <div className="absolute inset-x-0 bottom-0 h-0.5 bg-white/10">
+          <div className="h-full bg-[var(--accent-brand)] transition-[width] duration-100" style={{ width: `${progress * 100}%` }} />
         </div>
       </div>
-      <div className="flex flex-wrap items-center gap-2">
-        <Button variant="outline" onClick={() => run(false)} disabled={state === "loading" || state === "recording" || state === "playing"}>
-          {state === "ready" ? <RotateCcw /> : <Play />} Assistir de novo
+      <div className="flex items-center justify-center gap-2">
+        <Button variant="ghost" size="sm" className="rounded-full" onClick={() => run(false)} disabled={state === "loading" || state === "recording" || state === "playing"}>
+          {state === "ready" ? <RotateCcw /> : <Play />} Repetir
         </Button>
         {video ? (
           <a
             data-testid="download"
             href={video.url}
             download={`${fileName}.${video.ext}`}
-            className="inline-flex h-9 items-center gap-2 rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground shadow-lg shadow-violet-500/30 transition hover:brightness-110"
+            className="inline-flex h-8 items-center gap-1.5 rounded-full bg-foreground px-4 text-sm font-medium text-background transition-opacity hover:opacity-90"
           >
-            <Download className="size-4" /> Baixar vídeo
+            <Download className="size-3.5" /> Baixar
           </a>
         ) : (
-          <Button disabled data-testid="download-pending">
-            <Loader2 className="animate-spin" /> {state === "recording" ? `Renderizando ${Math.round(progress * 100)}%` : "Preparando"}
-          </Button>
+          <span data-testid="download-pending" className="inline-flex h-8 items-center gap-1.5 px-4 text-sm text-muted-foreground tabular-nums">
+            <Loader2 className="size-3.5 animate-spin" /> {state === "recording" ? `${Math.round(progress * 100)}%` : "Preparando"}
+          </span>
         )}
-        <span className="ml-auto text-xs text-muted-foreground">Renderizado no seu navegador · aviso de paródia gravado no vídeo</span>
       </div>
     </motion.div>
   );
