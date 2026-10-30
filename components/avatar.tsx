@@ -2,6 +2,15 @@
 import type { Character } from "@/lib/contract";
 import { cn } from "cn";
 
+/** Open-eyes still, same rule as the core's scene: blink lids never show, the socket is only a
+ *  clip mask, and with movable eyes (white + iris + socket) the baked "eyes" layer is replaced. */
+function hiddenEyeLayers(layers: { name: string }[]): Set<string> {
+  const names = new Set(layers.map((l) => l.name));
+  const hidden = new Set(["eyes_closed", "eyes_half", "eye_socket"]);
+  if (names.has("eye_white") && names.has("iris") && names.has("eye_socket")) hidden.add("eyes");
+  return hidden;
+}
+
 /** Neutral stand-in until the core delivers the rig: a silhouette over a soft skeleton shimmer. */
 export function Avatar({ character, loading, className }: { character?: Character | null; loading?: boolean; className?: string }) {
   const front = character?.views.front;
@@ -13,7 +22,7 @@ export function Avatar({ character, loading, className }: { character?: Characte
       ) : ready && front && front.layers.length ? (
         <div className="relative size-full">
           {[...front.layers, ...(front.visemes.X ? [front.visemes.X] : [])]
-            .filter((l) => l.name !== "eyes_closed")
+            .filter((l) => !hiddenEyeLayers(front.layers).has(l.name))
             .sort((a, b) => a.z - b.z)
             .map((l, i) => (
               <img
