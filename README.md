@@ -23,6 +23,15 @@ PWA (Next.js 16 App Router, React 19, TypeScript, Tailwind 4, shadcn/ui, framer-
 - Na tela: selo “CITAÇÃO REAL · fonte · Wikiquote” ou “PARÁFRASE”, citação em itálico entre aspas, legendas em páginas de duas linhas. Abaixo do player, `components/transcript.tsx` lista o roteiro com o link de cada fonte.
 - O composer pede o tema e o nome do rival do debate. O rival fica em cache por nome na sessão, então trocar de cena não cria outro personagem.
 
+## Modos de persona: Rápido x Profundo
+
+O composer tem o seletor **Rápido / Profundo**, que é enviado como `personaMode` em `POST /api/render`.
+
+- **Rápido** (padrão): o personagem é inferido de poucos termos-chave. Usa uma base rasa (Wikiquote + resumo da Wikipedia), que fica em cache junto com a persona.
+- **Profundo**: dispara um job em segundo plano no núcleo (`POST /api/personas/deep`, com o status em `GET /api/personas/deep?name=`). O job indexa os textos completos da Wikipedia, Wikiquote e Wikisource, em trechos com embeddings locais, sem custo de API. A UI mostra "Base profunda: pronta · N trechos". Se a base ainda não estiver pronta, o render usa o modo rápido.
+
+Nos dois modos, os trechos servem só de contexto para as falas escritas. Citações continuam literais e com fonte, e falas que copiam trechos são rejeitadas.
+
 ## Regras do modo foto
 
 - O catálogo (`lib/catalog.ts`) tem só retratos em domínio público, cada um com fonte e licença. Pessoas famosas vivas não entram.
@@ -30,6 +39,8 @@ PWA (Next.js 16 App Router, React 19, TypeScript, Tailwind 4, shadcn/ui, framer-
 - Todo vídeo sai com o aviso visível “Paródia • Gerado por IA”, gravado no próprio quadro.
 
 ## Rodar
+
+Para usar o núcleo real, crie o `.env.local` (ignorado pelo git) com `ANIMIND_CORE_URL=http://127.0.0.1:8787` e `ANIMIND_CORE_KEY=<chave do núcleo>`. O E2E contra o núcleo roda com `E2E_CORE_URL=... E2E_CORE_KEY=... npx playwright test --project=core`.
 
 ```bash
 # núcleo (no Omni-Engine): CORE_API_KEY=... uvicorn products.animind_core.app:app --port 8787

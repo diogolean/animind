@@ -102,12 +102,15 @@ test("debate and lesson from 'Quem vai falar?'", async ({ page }, info) => {
 
   await test.step("vertical 9:16 debate", async () => {
     await page.getByTestId("format-9x16").click();
+    await page.getByTestId("persona-deep").click();
+    await expect(page.getByTestId("deep-status")).toContainText(/pronta/, { timeout: slow });
     await page.getByTestId("tpl-debate").click();
     await waitForPreview(page, slow * 2);
     await expect(page.getByTestId("preview-canvas")).toHaveAttribute("width", "1080");
     await expectCanvasMoves(page);
-    await snap(page, info, "debate-vertical");
+    await snap(page, info, "debate-vertical-profundo");
     await page.getByTestId("format-16x9").click();
+    await page.getByTestId("persona-quick").click();
   });
 
   await test.step("debate transcript sources", async () => {

@@ -91,6 +91,18 @@ export interface Character {
 /** Output frame: 16:9 (1280x720) or vertical 9:16 (1080x1920, shot/countershot). */
 export type VideoFormat = "16:9" | "9:16";
 
+/** quick: key-term inference + shallow cached RAG; deep: background per-character RAG over full texts. */
+export type PersonaMode = "quick" | "deep";
+
+export interface DeepStatus {
+  name: string;
+  lang: string;
+  status: "ready" | "building" | "failed" | "missing";
+  chunks?: number;
+  counts?: Record<string, number>;
+  error?: string;
+}
+
 export interface VoicePick {
   voice: string;
   pitchHz?: number;
@@ -113,6 +125,8 @@ export interface RenderRequest {
   format?: VideoFormat;
   /** Per-speaker voice override; null/absent entries are cast automatically. */
   voices?: (VoicePick | null)[];
+  /** Knowledge depth behind written lines (quotes stay verbatim either way). Default quick. */
+  personaMode?: PersonaMode;
 }
 
 export interface ScriptLine {

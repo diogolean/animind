@@ -1,4 +1,4 @@
-import type { Character, CreateCharacterRequest, RenderJob, RenderRequest } from "./contract";
+import type { Character, CreateCharacterRequest, DeepStatus, RenderJob, RenderRequest } from "./contract";
 
 async function call<T>(url: string, init?: RequestInit): Promise<T> {
   const r = await fetch(url, { ...init, headers: { "content-type": "application/json", ...init?.headers } });
@@ -11,6 +11,10 @@ export const createCharacter = (body: CreateCharacterRequest) =>
   call<Character>("/api/characters", { method: "POST", body: JSON.stringify(body) });
 
 export const startRender = (body: RenderRequest) => call<RenderJob>("/api/render", { method: "POST", body: JSON.stringify(body) });
+
+export const deepStatus = (name: string) => call<DeepStatus>(`/api/personas/deep?${new URLSearchParams({ name, lang: "pt-BR" })}`);
+
+export const startDeep = (name: string) => call<DeepStatus>("/api/personas/deep", { method: "POST", body: JSON.stringify({ name, lang: "pt-BR" }) });
 
 export const getJob = (id: string) => call<RenderJob>(`/api/jobs/${encodeURIComponent(id)}`);
 

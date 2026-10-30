@@ -5,8 +5,8 @@ import { AnimatePresence, motion } from "framer-motion";
 import { ArrowUp, Loader2, Plus, X } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "cn";
-import type { Character, CharacterSource, RenderResult, Scenario, SceneTemplate, VideoFormat } from "@/lib/contract";
-import { createCharacter, startRender, waitJob } from "@/lib/api";
+import type { Character, CharacterSource, RenderResult, Scenario, SceneTemplate, VideoFormat, PersonaMode, DeepStatus } from "@/lib/contract";
+import { createCharacter, deepStatus, startDeep, startRender, waitJob } from "@/lib/api";
 import { PORTRAITS, portraitImageUrl } from "@/lib/catalog";
 import { Avatar } from "@/components/avatar";
 import { Player } from "@/components/player";
@@ -61,6 +61,24 @@ export function Composer() {
   const [place, setPlace] = useState<Scenario>("studio");
   const [format, setFormat] = useState<VideoFormat>("16:9");
   const [voice, setVoice] = useState("auto");
+  const [pmode, setPmode] = useState<PersonaMode>("quick");
+  const [deep, setDeep] = useState<DeepStatus | null>(null);
+
+  async function chooseDeep() {
+    setPmode("deep");
+    if (!char) return;
+    try {
+      let st = await startDeep(char.name);
+      setDeep(st);
+      for (let i = 0; i < 150 && st.status === "building"; i++) {
+        await new Promise((r) => setTimeout(r, 2000));
+        st = await deepStatus(char.name);
+        setDeep(st);
+      }
+    } catch (e) {
+      setDeep({ name: char.name, lang: "pt-BR", status: "failed", error: (e as Error).message });
+    }
+  }
   const [result, setResult] = useState<RenderResult | null>(null);
   const [progress, setProgress] = useState(0);
   const [audio, setAudio] = useState<AudioContext | null>(null);
@@ -111,7 +129,7 @@ export function Composer() {
         }
         chars.push(other);
       }
-      const job = await startRender({ characters: chars, template: tpl, scenario: where, topic: topic.trim() || undefined, lang: "pt-BR", format, voices: [voice === "auto" ? null : { voice }] });
+      const job = await startRender({ characters: chars, template: tpl, scenario: where, topic: topic.trim() || undefined, lang: "pt-BR", format, voices: [voice === "auto" ? null : { voice }], personaMode: pmode });
       const done = await waitJob(job.id, (j) => setProgress(j.progress));
       const r = done.result!;
       // The core may echo characters without heavy fields (photo data URLs); keep our local copies.
@@ -318,7 +336,25 @@ export function Composer() {
                     <option key={v.id} value={v.id}>{v.label}</option>
                   ))}
                 </select>
+                <div className="ml-2 flex items-center gap-1" title="Rápido: termos-chave. Profundo: base de textos completos (Wikipedia/Wikiquote/Wikisource)">
+                  {(["quick", "deep"] as const).map((m) => (
+                    <button
+                      key={m}
+                      data-testid={`persona-${m}`}
+                      onClick={() => (m === "deep" ? chooseDeep() : setPmode("quick"))}
+                      className={cn("h-7 rounded-full px-3 text-xs transition-colors", pmode === m ? "bg-muted text-foreground" : "text-muted-foreground hover:text-foreground")}
+                    >
+                      {m === "quick" ? "Rápido" : "Profundo"}
+                    </button>
+                  ))}
+                </div>
               </div>
+              {pmode === "deep" && deep ? (
+                <div data-testid="deep-status" className="text-[11px] text-muted-foreground">
+                  Base profunda: {{ ready: "pronta", building: "construindo…", failed: "falhou (usando rápido)", missing: "ainda não criada" }[deep.status]}
+                  {deep.chunks ? ` · ${deep.chunks} trechos` : ""}
+                </div>
+              ) : null}
               {result?.voices?.length ? (
                 <div className="text-[11px] text-muted-foreground">
                   Vozes: {result.voices.map((v, i) => `${result.characters[i]?.name ?? i + 1}: ${v.voice.replace(/^pt-BR-|Neural$/g, "")}${v.auto ? " (auto)" : ""}`).join(" · ")}
