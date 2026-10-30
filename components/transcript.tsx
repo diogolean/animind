@@ -8,7 +8,7 @@ const pretty = (s: string) => {
 
 /** The script under the player: each real quote with its source link, each paraphrase marked as such. */
 export function Transcript({ result }: { result: RenderResult }) {
-  const names = result.characters.map((c) => pretty(c.name));
+  const names = result.characters.map((c, i) => pretty(result.personas?.[i]?.name || c.name.split(/[,(:;]| - /)[0].trim()));
   return (
     <div data-testid="transcript" className="mt-6 space-y-3 text-sm">
       <ol className="space-y-2.5">
