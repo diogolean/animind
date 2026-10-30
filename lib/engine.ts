@@ -259,11 +259,95 @@ function drawBoard(g: CanvasRenderingContext2D, r: RenderResult, tMs: number) {
     g.stroke();
   }
   const cur = lineAt(r, tMs, 350) ?? r.script[0];
-  g.fillStyle = r.scenario === "classroom" ? "rgba(236,238,228,.92)" : "rgba(255,255,255,.88)";
-  g.font = "500 30px Geist, ui-sans-serif, system-ui";
+  const ink = r.scenario === "classroom" ? "rgba(236,238,228,.92)" : "rgba(255,255,255,.88)";
+  const quote = cur?.kind === "quote";
+  const tx = x + W * 0.03, top = y + H * 0.05;
   g.textAlign = "left";
   g.textBaseline = "alphabetic";
-  wrap(g, cur?.text ?? "", W * 0.38).forEach((ln, i) => g.fillText(ln, x + W * 0.03, y + H * 0.08 + 24 + i * 44));
+  if (cur?.beat) {
+    g.font = "700 18px Geist, ui-sans-serif, system-ui";
+    g.fillStyle = ACCENT[r.scenario];
+    g.letterSpacing = "3px";
+    g.fillText(cur.beat.toUpperCase(), tx, top + 18);
+    g.letterSpacing = "0px";
+  }
+  const text = quote ? `“${cur!.text}”` : cur?.text ?? "";
+  const src = quote ? cur!.quote?.source ?? "" : "";
+  const room = bh - H * 0.05 - H * (src ? 0.16 : 0.08);
+  let rows: string[] = [], step = 44;
+  for (const size of [30, 27, 24, 21]) {
+    g.font = `${quote ? "italic " : ""}500 ${size}px Geist, ui-sans-serif, system-ui`;
+    rows = wrap(g, text, W * 0.38);
+    step = size * 1.42;
+    if (rows.length * step <= room) break;
+  }
+  g.fillStyle = ink;
+  rows.forEach((ln, i) => g.fillText(ln, tx, top + H * 0.07 + 24 + i * step));
+  if (src) {
+    g.font = "500 16px Geist, ui-sans-serif, system-ui";
+    g.globalAlpha = 0.7;
+    g.fillText(fit(g, `— ${src}`, W * 0.38), tx, y + bh - H * 0.05);
+    g.globalAlpha = 1;
+  }
+}
+
+/** Trim `text` with an ellipsis until it fits `maxW`. */
+function fit(g: CanvasRenderingContext2D, text: string, maxW: number) {
+  let t = text;
+  while (g.measureText(t).width > maxW && t.length > 8) t = `${t.replace(/…$/, "").slice(0, -2).replace(/[\s,·]+$/, "")}…`;
+  return t;
+}
+
+/** Caption rows in pages of two; pages advance in proportion to their words, like cinema subtitles. */
+export function captionPage(g: CanvasRenderingContext2D, line: ScriptLine, tMs: number, maxW: number) {
+  const text = line.kind === "quote" ? `“${line.text}”` : line.text;
+  const rows = wrap(g, text, maxW);
+  const pages: string[][] = [];
+  for (let i = 0; i < rows.length; i += 2) pages.push(rows.slice(i, i + 2));
+  if (pages.length < 2) return pages[0] ?? [];
+  const frac = (tMs - line.startMs) / Math.max(100, line.endMs - line.startMs);
+  const sizes = pages.map((p) => p.join(" ").split(" ").length);
+  const total = sizes.reduce((a, b) => a + b, 0);
+  let acc = 0;
+  for (let i = 0; i < pages.length; i++) {
+    acc += sizes[i] / total;
+    if (frac < acc) return pages[i];
+  }
+  return pages[pages.length - 1];
+}
+
+/** Top-center chip: "CITAÇÃO REAL · source · Wikiquote" for a real quote, "PARÁFRASE" for written lines. */
+function sourceChip(g: CanvasRenderingContext2D, r: RenderResult, line: ScriptLine, t: number) {
+  if (line.kind !== "quote" && line.kind !== "paraphrase") return;
+  const head = line.kind === "quote" ? "CITAÇÃO REAL" : "PARÁFRASE";
+  const basis = line.basis?.source;
+  g.font = "500 17px Geist, ui-sans-serif, system-ui";
+  const src = fit(g, line.kind === "quote" ? `${line.quote?.source ?? ""} · ${line.quote?.site ?? "Wikiquote"}` : basis ? `inspirada em ${basis}` : "fala escrita para a cena", 560);
+  const sw = g.measureText(src).width;
+  g.font = "700 15px Geist, ui-sans-serif, system-ui";
+  const hw = g.measureText(head).width + head.length * 2;
+  const w = hw + sw + 66, a = ease((t - line.startMs / 1000) / 0.25);
+  const x = (W - w) / 2, y = 22 - Math.round(8 * (1 - a));
+  g.save();
+  g.globalAlpha = a;
+  g.fillStyle = "rgba(8,8,10,.69)";
+  g.beginPath();
+  g.roundRect(x, y, w, 40, 20);
+  g.fill();
+  const dot = line.kind === "quote" ? ACCENT[r.scenario] : "rgb(200,200,205)";
+  g.fillStyle = dot;
+  g.beginPath();
+  g.arc(x + 21, y + 20, 5, 0, Math.PI * 2);
+  g.fill();
+  g.textAlign = "left";
+  g.textBaseline = "middle";
+  g.letterSpacing = "2px";
+  g.fillText(head, x + 36, y + 21);
+  g.letterSpacing = "0px";
+  g.font = "500 17px Geist, ui-sans-serif, system-ui";
+  g.fillStyle = "rgba(255,255,255,.86)";
+  g.fillText(src, x + 36 + hw + 12, y + 21);
+  g.restore();
 }
 
 /** Plates (parallax + depth of field), then the characters, through one camera shot. */
@@ -386,13 +470,14 @@ export function drawFrame(g: CanvasRenderingContext2D, r: RenderResult, img: Ima
   g.fillRect(0, H * 0.68, W, H * 0.32);
   const line = lineAt(r, tMs);
   if (line) lowerThird(g, r, line, t);
+  if (line) sourceChip(g, r, line, t);
   if (line && r.template !== "lesson") {
     const a = ease((t - line.startMs / 1000) / 0.18);
     g.globalAlpha = a;
-    g.font = "600 34px Geist, ui-sans-serif, system-ui";
+    g.font = `${line.kind === "quote" ? "italic " : ""}600 34px Geist, ui-sans-serif, system-ui`;
     g.textAlign = "center";
     g.textBaseline = "top";
-    const ls = wrap(g, line.text, W * 0.7).slice(0, 3);
+    const ls = captionPage(g, line, tMs, W * 0.72);
     const y0 = H - 20 - ls.length * 44 + Math.round(6 * (1 - a));
     g.shadowColor = "rgba(0,0,0,.9)";
     g.shadowBlur = 10;
