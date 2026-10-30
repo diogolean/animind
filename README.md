@@ -26,3 +26,7 @@ cp .env.example .env.local   # opcional
 npm install
 npm run dev
 ```
+
+## Contrato v2 (formato do core)
+
+`Character.views` traz três vistas, `front`, `left` e `right`. Cada uma tem `canvas`, `layers` e `visemes`, o conjunto Rhubarb `X A B C D E F G H`, com um sprite de boca por visema. Cada `ScriptLine` pode trazer `view` e `visemes` (`t` em segundos). O renderer (`lib/engine.ts`) troca de vista por fala e de boca por visema. Enquanto o core não entrega o rig (`status: "placeholder"`, ou no mock), a UI e o vídeo mostram uma silhueta neutra.
