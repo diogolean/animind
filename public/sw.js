@@ -1,7 +1,7 @@
 /* Minimal offline shell for the Animind PWA. API calls always hit the network. */
-const CACHE = "animind-v1";
+const CACHE = "animind-v2";
 self.addEventListener("install", (e) => {
-  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(["/", "/photo"])).then(() => self.skipWaiting()));
+  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(["/"])).then(() => self.skipWaiting()));
 });
 self.addEventListener("activate", (e) => {
   e.waitUntil(

@@ -7,8 +7,8 @@ export default function manifest(): MetadataRoute.Manifest {
     description: "Personagens falantes animados em 3 cliques.",
     start_url: "/",
     display: "standalone",
-    background_color: "#0d0b14",
-    theme_color: "#0d0b14",
+    background_color: "#0a0a0a",
+    theme_color: "#0a0a0a",
     lang: "pt-BR",
     categories: ["entertainment", "education", "productivity"],
     icons: [
