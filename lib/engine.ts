@@ -200,9 +200,11 @@ export function viewFor(r: RenderResult, speaker: number, idx: number, tMs: numb
 function drawCharacter(g: CanvasRenderingContext2D, c: Character, img: Images, cx: number, scale: number, amp: number, vis: Viseme, t: number, view: ViewName, seed: number) {
   const v = c.views[view] ?? c.views.front;
   const cw = v?.canvas.w ?? 512, ch = v?.canvas.h ?? 640;
+  // Fit any core canvas to the same on-screen height (the mock's 640px canvas keeps ~its old size).
+  const fit = (scale * H * 0.92) / ch;
   g.save();
   g.translate(cx, H * 0.98);
-  g.scale(scale, scale);
+  g.scale(fit, fit);
   g.translate(-cw / 2, -ch);
   const breathe = Math.sin(t * 1.6 + seed) * 2;
   if (c.photo) {

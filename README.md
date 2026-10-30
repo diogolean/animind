@@ -6,11 +6,14 @@ PWA (Next.js 16 App Router, React 19, TypeScript, Tailwind 4, shadcn/ui, framer-
 ## Arquitetura
 
 - **Núcleo** (factory do Aiwake + motor Rigly) vive em [`diogolean/Omni-Engine`](https://github.com/diogolean/Omni-Engine) e é consumido só por HTTP. Nenhuma lógica dele é copiada aqui.
-- **Contrato v1:** `lib/contract.ts`
+- **Contrato:** `lib/contract.ts` (v2, rotas em `/v1`)
   - `POST /api/characters` → `Character` (camadas: cabeça, olhos, sobrancelhas, visemas da boca, corpo; ou rig de foto com mandíbula)
   - `POST /api/render` → `RenderJob`
   - `GET /api/jobs/:id` → `RenderJob` (com `result.script`, `audioUrl`, `videoUrl`)
-- Com `CORE_URL` definido, as rotas fazem proxy para `${CORE_URL}/v1/*` com `CORE_API_KEY` (só no servidor). Sem `CORE_URL`, usam o mock em `lib/mock.ts` (personagens SVG gerados por código, jobs sem estado), então o app roda sozinho.
+- Com `ANIMIND_CORE_URL` definido, as rotas fazem proxy para `${ANIMIND_CORE_URL}/v1/*` com `ANIMIND_CORE_KEY` (só no servidor). Personagens por descrição são recortados pelo núcleo; catálogo e upload continuam como rig de foto feito no app.
+  - `GET /api/files/*` repassa as camadas PNG, a voz e o `preview.mp4` do núcleo pela mesma origem (o Canvas não fica “tainted” e o MediaRecorder grava).
+  - `GET /api/health` diz o modo (`core`, `mock` ou `off`); o cabeçalho mostra “núcleo real”, “mock de dev” ou “núcleo não configurado”.
+- O mock (`lib/mock.ts`, silhuetas e jobs sem estado) é só fallback explícito de dev: `ANIMIND_CORE_MOCK=1`. Sem URL e sem essa flag, a API responde 503.
 - **Prévia no navegador:** `lib/engine.ts` desenha as camadas no Canvas, sincroniza a boca com o envelope do áudio (TTS do núcleo ou voz placeholder sintetizada) e grava o vídeo com MediaRecorder.
 
 ## Regras do modo foto
@@ -22,10 +25,13 @@ PWA (Next.js 16 App Router, React 19, TypeScript, Tailwind 4, shadcn/ui, framer-
 ## Rodar
 
 ```bash
-cp .env.example .env.local   # opcional
+# núcleo (no Omni-Engine): CORE_API_KEY=... uvicorn products.animind_core.app:app --port 8787
+cp .env.example .env.local   # ANIMIND_CORE_URL=http://127.0.0.1:8787 e ANIMIND_CORE_KEY=...
 npm install
-npm run dev
+npm run dev                  # sem núcleo: ANIMIND_CORE_MOCK=1 npm run dev
 ```
+
+Com o núcleo, o player oferece dois downloads: a gravação do Canvas (WebM/MP4 do navegador) e o “MP4 do núcleo” (H.264 1280×720 renderizado pelo Rigly).
 
 ## Contrato v2 (formato do core)
 

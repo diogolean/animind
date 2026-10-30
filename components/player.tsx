@@ -1,6 +1,6 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Download, Loader2, Play, RotateCcw } from "lucide-react";
+import { Download, Film, Loader2, Play, RotateCcw } from "lucide-react";
 import { motion } from "framer-motion";
 import type { RenderResult } from "@/lib/contract";
 import { drawFrame, H, loadImages, pickMime, synthTrack, trackFromUrl, W, type Images, type Track } from "@/lib/engine";
@@ -103,6 +103,16 @@ export function Player({ result, audioCtx, fileName }: { result: RenderResult; a
           <span data-testid="download-pending" className="inline-flex h-8 items-center gap-1.5 px-4 text-sm text-muted-foreground tabular-nums">
             <Loader2 className="size-3.5 animate-spin" /> {state === "recording" ? `${Math.round(progress * 100)}%` : "Preparando"}
           </span>
+        )}
+        {result.videoUrl && (
+          <a
+            data-testid="download-core"
+            href={result.videoUrl}
+            download={`${fileName}-hd.mp4`}
+            className="inline-flex h-8 items-center gap-1.5 rounded-full border px-4 text-sm font-medium transition-colors hover:bg-muted"
+          >
+            <Film className="size-3.5" /> MP4 do núcleo
+          </a>
         )}
       </div>
     </motion.div>
