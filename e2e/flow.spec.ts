@@ -27,14 +27,19 @@ async function snap(page: Page, info: TestInfo, name: string) {
   }
 }
 
-/** The preview canvas is animating: two frames a moment apart differ. */
+/**
+ * The preview canvas is animating: two frames a moment apart differ. The canvas is
+ * visible while the art and voice still load, so allow playback a few seconds to start.
+ */
 async function expectCanvasMoves(page: Page) {
   const canvas = page.getByTestId("preview-canvas");
   await expect(canvas).toBeVisible();
-  const a = await canvas.screenshot();
-  await page.waitForTimeout(700);
-  const b = await canvas.screenshot();
-  expect(Buffer.compare(a, b), "preview frames should change while playing").not.toBe(0);
+  await expect(async () => {
+    const a = await canvas.screenshot();
+    await page.waitForTimeout(700);
+    const b = await canvas.screenshot();
+    expect(Buffer.compare(a, b), "preview frames should change while playing").not.toBe(0);
+  }).toPass({ timeout: 15_000 });
 }
 
 /** Wait for a finished render while checking the progress label never leaves 0..100%. */
