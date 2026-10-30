@@ -67,8 +67,22 @@ export type CharacterSource =
   | { kind: "catalog"; portraitId: string }
   | { kind: "upload"; imageDataUrl: string; name?: string; rightsConfirmed: true };
 
+/** Animation style: feeds the Gemini character prompt and the scene look (palette, grade, backgrounds). */
+export type ArtStyle = "cartoon" | "anime" | "retro" | "realista" | "cyberpunk" | "aquarela";
+
+export const ART_STYLES: { id: ArtStyle; label: string }[] = [
+  { id: "cartoon", label: "Cartoon" },
+  { id: "anime", label: "Anime" },
+  { id: "retro", label: "Retrô" },
+  { id: "realista", label: "Realista" },
+  { id: "cyberpunk", label: "Cyberpunk" },
+  { id: "aquarela", label: "Aquarela" },
+];
+
 export interface CreateCharacterRequest {
   source: CharacterSource;
+  /** Drawing style for generated (prompt) characters. Default cartoon. */
+  artStyle?: ArtStyle;
 }
 
 export interface Character {
@@ -83,6 +97,11 @@ export interface Character {
   photo?: PhotoRig;
   /** One image with every viseme (X, A–H + phonemes) and eye state per view, for a human check. */
   reviewSheetUrl?: string;
+  /** Style the character was drawn in (core rigs). */
+  artStyle?: ArtStyle;
+  /** Side (3/4) art and the real front view (Gemini, side as reference), when the core drew one. */
+  imageUrl?: string;
+  frontImageUrl?: string | null;
   /** Voice override for this character (else the core casts one from the persona). */
   voice?: VoicePick;
   createdAt: string;
@@ -127,6 +146,8 @@ export interface RenderRequest {
   voices?: (VoicePick | null)[];
   /** Knowledge depth behind written lines (quotes stay verbatim either way). Default quick. */
   personaMode?: PersonaMode;
+  /** Scene look; defaults to the first character's artStyle. */
+  style?: ArtStyle;
 }
 
 export interface ScriptLine {

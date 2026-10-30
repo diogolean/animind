@@ -32,6 +32,17 @@ O composer tem o seletor **Rápido / Profundo**, que é enviado como `personaMod
 
 Nos dois modos, os trechos servem só de contexto para as falas escritas. Citações continuam literais e com fonte, e falas que copiam trechos são rejeitadas.
 
+## Estilos de arte e vista frontal
+
+Abaixo do campo de prompt há um seletor de estilo: Cartoon, Anime, Retrô, Realista, Cyberpunk e
+Aquarela (`ART_STYLES` em `lib/contract.ts`). O estilo vai como `artStyle` no `POST /api/characters`
+(entra no prompt do Gemini) e como `style` no render (visual da cena: paleta, LUT, textura). No mock o
+estilo é só ecoado.
+
+Personagens do core real trazem `imageUrl` (perfil) e `frontImageUrl` (vista frontal gerada pelo
+Gemini com o perfil como referência). O card mostra as duas (`data-testid="front-view"`); o core usa a
+frontal nas falas para a câmera (gancho, fechamento, resumo).
+
 ## Regras do modo foto
 
 - O catálogo (`lib/catalog.ts`) tem só retratos em domínio público, cada um com fonte e licença. Pessoas famosas vivas não entram.

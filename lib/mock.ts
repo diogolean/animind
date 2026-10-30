@@ -51,7 +51,7 @@ export function mockCreateCharacter(req: CreateCharacterRequest): Character {
     };
   }
   const name = titleCase(src.prompt) || "Personagem";
-  return { ...base, id: `mock_${hash(name).toString(36)}`, name, status: "placeholder", style: "rig" };
+  return { ...base, id: `mock_${hash(name).toString(36)}`, name, status: "placeholder", style: "rig", artStyle: req.artStyle ?? "cartoon" };
 }
 
 function script(req: RenderRequest): ScriptLine[] {

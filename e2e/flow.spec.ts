@@ -70,6 +70,13 @@ test("debate and lesson from 'Quem vai falar?'", async ({ page }, info) => {
     await snap(page, info, "landing");
   });
 
+  await test.step("art style", async () => {
+    for (const id of ["cartoon", "anime", "retro", "realista", "cyberpunk", "aquarela"]) await expect(page.getByTestId(`art-${id}`)).toBeVisible();
+    await page.getByTestId("art-anime").click();
+    await expect(page.getByTestId("art-anime")).toHaveClass(/bg-muted/);
+    await snap(page, info, "estilo-anime");
+  });
+
   await test.step("persona", async () => {
     await page.getByTestId("prompt").fill(PERSONA);
     await expect(page.getByTestId("create")).toBeEnabled();
@@ -77,6 +84,8 @@ test("debate and lesson from 'Quem vai falar?'", async ({ page }, info) => {
     // The character card shows its name and the scene controls appear.
     await expect(page.getByTestId("tpl-debate")).toBeVisible({ timeout: slow });
     await expect(page.getByText(PERSONA, { exact: false }).first()).toBeVisible();
+    // A real core rig ships the Gemini front view next to the side view.
+    if (core && (await page.getByTestId("core-mode").textContent())?.includes("real")) await expect(page.getByTestId("front-view")).toBeVisible({ timeout: slow });
     await snap(page, info, "persona");
   });
 

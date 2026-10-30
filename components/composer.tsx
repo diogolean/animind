@@ -5,7 +5,8 @@ import { AnimatePresence, motion } from "framer-motion";
 import { ArrowUp, Loader2, Plus, X } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "cn";
-import type { Character, CharacterSource, RenderResult, Scenario, SceneTemplate, VideoFormat, PersonaMode, DeepStatus } from "@/lib/contract";
+import { ART_STYLES } from "@/lib/contract";
+import type { ArtStyle, Character, CharacterSource, RenderResult, Scenario, SceneTemplate, VideoFormat, PersonaMode, DeepStatus } from "@/lib/contract";
 import { createCharacter, deepStatus, startDeep, startRender, waitJob } from "@/lib/api";
 import { PORTRAITS, portraitImageUrl } from "@/lib/catalog";
 import { Avatar } from "@/components/avatar";
@@ -61,6 +62,7 @@ export function Composer() {
   const [place, setPlace] = useState<Scenario>("studio");
   const [format, setFormat] = useState<VideoFormat>("16:9");
   const [voice, setVoice] = useState("auto");
+  const [art, setArt] = useState<ArtStyle>("cartoon");
   const [pmode, setPmode] = useState<PersonaMode>("quick");
   const [deep, setDeep] = useState<DeepStatus | null>(null);
 
@@ -104,7 +106,7 @@ export function Composer() {
     setScene(null);
     setPortraits(false);
     try {
-      setChar(await createCharacter({ source }));
+      setChar(await createCharacter({ source, artStyle: art }));
     } catch (e) {
       toast.error((e as Error).message);
     } finally {
@@ -124,12 +126,12 @@ export function Composer() {
         const name = rival.trim() || "O cético";
         let other = rivals.current.get(name);
         if (!other) {
-          other = await createCharacter({ source: { kind: "prompt", prompt: name } });
+          other = await createCharacter({ source: { kind: "prompt", prompt: name }, artStyle: art });
           rivals.current.set(name, other);
         }
         chars.push(other);
       }
-      const job = await startRender({ characters: chars, template: tpl, scenario: where, topic: topic.trim() || undefined, lang: "pt-BR", format, voices: [voice === "auto" ? null : { voice }], personaMode: pmode });
+      const job = await startRender({ characters: chars, template: tpl, scenario: where, topic: topic.trim() || undefined, lang: "pt-BR", format, voices: [voice === "auto" ? null : { voice }], personaMode: pmode, style: art });
       const done = await waitJob(job.id, (j) => setProgress(j.progress));
       const r = done.result!;
       // The core may echo characters without heavy fields (photo data URLs); keep our local copies.
@@ -179,6 +181,19 @@ export function Composer() {
             {busy ? <Loader2 className="size-4 animate-spin" /> : <ArrowUp className="size-4" />}
           </button>
         </form>
+        <div className="mt-3 flex flex-wrap items-center justify-center gap-1" title="Estilo de animação: desenho do personagem e visual da cena">
+          {ART_STYLES.map((s) => (
+            <button
+              key={s.id}
+              type="button"
+              data-testid={`art-${s.id}`}
+              onClick={() => setArt(s.id)}
+              className={cn("h-7 rounded-full px-3 text-xs transition-colors", art === s.id ? "bg-muted text-foreground" : "text-muted-foreground hover:text-foreground")}
+            >
+              {s.label}
+            </button>
+          ))}
+        </div>
         {!char && (
           <button onClick={() => setPortraits((v) => !v)} className="mx-auto mt-5 text-sm text-muted-foreground transition-colors hover:text-foreground">
             {portraits ? "Fechar" : "ou use um retrato"}
@@ -247,6 +262,14 @@ export function Composer() {
                     <X className="size-3.5" />
                   </button>
                 </div>
+                {char.frontImageUrl && char.imageUrl && (
+                  <div data-testid="front-view" className="mt-2 grid grid-cols-2 gap-1">
+                    <img src={char.imageUrl} alt={`${char.name} de perfil`} className="rounded-md bg-muted" />
+                    <img src={char.frontImageUrl} alt={`${char.name} de frente`} className="rounded-md bg-muted" />
+                    <div className="text-center text-[10px] text-muted-foreground">perfil</div>
+                    <div className="text-center text-[10px] text-muted-foreground">frente</div>
+                  </div>
+                )}
                 {char.reviewSheetUrl && (
                   <a data-testid="review-sheet" href={char.reviewSheetUrl} target="_blank" rel="noreferrer" className="mt-1 block text-center text-[11px] text-muted-foreground hover:underline">
                     Folha de revisão (bocas e olhos)
