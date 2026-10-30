@@ -14,7 +14,7 @@ PWA (Next.js 16 App Router, React 19, TypeScript, Tailwind 4, shadcn/ui, framer-
   - `GET /api/files/*` repassa as camadas PNG, a voz e o `preview.mp4` do núcleo pela mesma origem (o Canvas não fica “tainted” e o MediaRecorder grava).
   - `GET /api/health` diz o modo (`core`, `mock` ou `off`); o cabeçalho mostra “núcleo real”, “mock de dev” ou “núcleo não configurado”.
 - O mock (`lib/mock.ts`, silhuetas e jobs sem estado) é só fallback explícito de dev: `ANIMIND_CORE_MOCK=1`. Sem URL e sem essa flag, a API responde 503.
-- **Prévia no navegador:** `lib/engine.ts` desenha as camadas no Canvas, sincroniza a boca com o envelope do áudio (TTS do núcleo ou voz placeholder sintetizada) e grava o vídeo com MediaRecorder.
+- **Prévia no navegador:** `lib/engine.ts` desenha as camadas no Canvas, sincroniza a boca com o envelope do áudio (TTS do núcleo ou voz placeholder sintetizada) e grava o vídeo com MediaRecorder. O visual cinematográfico (`lib/cinema.ts`) espelha o render do núcleo: cenários em camadas com paralaxe e desfoque de profundidade, luz de recorte e sombra suave nos personagens, câmera com push-in, balanço de mão e cortes por fala (dissolve e chicote), gradação de cor, vinheta, legendas e lower-thirds com nome e fonte.
 
 ## Regras do modo foto
 

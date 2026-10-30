@@ -2,11 +2,11 @@
 /* Browser-side preview renderer (Canvas 2D + Web Audio + MediaRecorder).
  * Mirrors what the Rigly engine does server-side: layered rig + mouth driven
  * by the audio envelope. Pure client code, no keys involved. */
-import { PARODY_DISCLAIMER, type Character, type RenderResult, type Scenario, type ViewName, type Viseme } from "./contract";
+import { PARODY_DISCLAIMER, type Character, type RenderResult, type ScriptLine, type ViewName, type Viseme } from "./contract";
+import { ACCENT, camera, depthTransform, dropShadow, ease, FADE_IN_S, FADE_OUT_S, grade, H, lightFor, litLayer, PLACES, planShots, plates, W, handheld, type Cut, type Light, type Shot } from "./cinema";
 
+export { H, W };
 export const FPS_ENV = 100; // envelope samples per second
-export const W = 1280;
-export const H = 720;
 
 export interface Track {
   buffer: AudioBuffer;
@@ -135,37 +135,6 @@ export async function loadImages(chars: Character[]): Promise<Images> {
   return m;
 }
 
-const BG: Record<Scenario, [string, string]> = {
-  studio: ["#161616", "#0b0b0b"],
-  classroom: ["#14171a", "#0b0c0d"],
-  arena: ["#1a1414", "#0c0a0a"],
-  space: ["#0d0e14", "#050507"],
-};
-
-function background(g: CanvasRenderingContext2D, s: Scenario, t: number) {
-  const grad = g.createLinearGradient(0, 0, 0, H);
-  grad.addColorStop(0, BG[s][0]);
-  grad.addColorStop(1, BG[s][1]);
-  g.fillStyle = grad;
-  g.fillRect(0, 0, W, H);
-  g.fillStyle = "rgba(255,255,255,.035)";
-  g.fillRect(0, H * 0.82, W, H * 0.18);
-  if (s === "space") {
-    for (let i = 0; i < 90; i++) {
-      g.fillStyle = `rgba(255,255,255,${0.15 + 0.35 * Math.abs(Math.sin(i * 12.9 + t * 0.6 * (i % 3)))})`;
-      g.fillRect((i * 137.5) % W, (i * 71.3) % (H * 0.8), 1.5, 1.5);
-    }
-  } else if (s === "arena") {
-    for (const x of [0.25, 0.75]) {
-      const r = g.createRadialGradient(W * x, H * 0.9, 10, W * x, H * 0.9, 380);
-      r.addColorStop(0, "rgba(255,255,255,.07)");
-      r.addColorStop(1, "rgba(255,255,255,0)");
-      g.fillStyle = r;
-      g.fillRect(0, 0, W, H);
-    }
-  }
-}
-
 /** Neutral placeholder while the core has not delivered a rig. Turns with the view. */
 function drawPlaceholder(g: CanvasRenderingContext2D, amp: number, vis: Viseme, t: number, view: ViewName, seed: number) {
   const turn = view === "left" ? -1 : view === "right" ? 1 : 0;
@@ -197,7 +166,7 @@ export function viewFor(r: RenderResult, speaker: number, idx: number, tMs: numb
   return "front";
 }
 
-function drawCharacter(g: CanvasRenderingContext2D, c: Character, img: Images, cx: number, scale: number, amp: number, vis: Viseme, t: number, view: ViewName, seed: number) {
+function drawCharacter(g: CanvasRenderingContext2D, c: Character, img: Images, cx: number, scale: number, amp: number, vis: Viseme, t: number, view: ViewName, seed: number, light: Light) {
   const v = c.views[view] ?? c.views.front;
   const cw = v?.canvas.w ?? 512, ch = v?.canvas.h ?? 640;
   // Fit any core canvas to the same on-screen height (the mock's 640px canvas keeps ~its old size).
@@ -214,10 +183,12 @@ function drawCharacter(g: CanvasRenderingContext2D, c: Character, img: Images, c
       const x0 = (cw - w) / 2, y0 = ch - h + breathe;
       const j = c.photo.jaw;
       const drop = amp * j.h * h * 0.55;
-      g.shadowColor = "rgba(0,0,0,.45)";
-      g.shadowBlur = 30;
+      g.shadowColor = "rgba(0,0,0,.5)";
+      g.shadowBlur = 40;
+      g.shadowOffsetX = light.side * 18;
+      g.shadowOffsetY = 8;
       g.drawImage(im, x0, y0, w, h);
-      g.shadowBlur = 0;
+      g.shadowColor = "transparent";
       g.fillStyle = "#120808";
       g.fillRect(x0 + j.x * w, y0 + j.y * h, j.w * w, drop + 1);
       g.drawImage(im, j.x * im.width, j.y * im.height, j.w * im.width, j.h * im.height, x0 + j.x * w, y0 + j.y * h + drop, j.w * w, j.h * h);
@@ -230,6 +201,12 @@ function drawCharacter(g: CanvasRenderingContext2D, c: Character, img: Images, c
     g.restore();
     return;
   }
+  const body = v.layers.filter((l) => l.name === "body" || l.name === "head").map((l) => ({ ...l, im: img.get(l.url)! })).filter((l) => l.im);
+  if (body.length) {
+    // soft shadow cast on the backdrop, away from the key light
+    const sh = dropShadow(`${c.id}:${view}`, body, cw, ch);
+    g.drawImage(sh, light.side * 26 / fit, 10 / fit + breathe * 0.4, cw, ch);
+  }
   const blink = (t + seed) % 3.6 < 0.12;
   const mouth = v.visemes[vis] ?? v.visemes.X;
   const parts = [...v.layers, ...(mouth ? [{ ...mouth, name: "mouth", z: mouth.z ?? 99 }] : [])].sort((a, b) => a.z - b.z);
@@ -239,7 +216,8 @@ function drawCharacter(g: CanvasRenderingContext2D, c: Character, img: Images, c
     const im = img.get(l.url);
     if (!im) continue;
     const head = l.name !== "body";
-    g.drawImage(im, l.x, l.y + (head ? breathe - amp * 4 : breathe * 0.4) + (l.name === "brows" ? -amp * 6 : 0), l.w, l.h);
+    const src = l.name === "mouth" ? im : litLayer(im, l, cw, ch, light, l.name === "body" || l.name === "head" || l.name === "hair");
+    g.drawImage(src, l.x, l.y + (head ? breathe - amp * 4 : breathe * 0.4) + (l.name === "brows" ? -amp * 6 : 0), l.w, l.h);
   }
   g.restore();
 }
@@ -256,47 +234,175 @@ function wrap(g: CanvasRenderingContext2D, text: string, maxW: number) {
   return lines;
 }
 
+const cutsCache = new WeakMap<RenderResult, Cut[]>();
+const lineAt = (r: RenderResult, ms: number, grace = 0) => r.script.find((l) => ms >= l.startMs && ms <= l.endMs + grace);
+let shotCanvas: HTMLCanvasElement | null = null;
+
+function drawBoard(g: CanvasRenderingContext2D, r: RenderResult, tMs: number) {
+  const x = W * 0.48, y = H * 0.14, bw = W * 0.44, bh = H * 0.48;
+  if (r.scenario === "classroom") {
+    g.fillStyle = "#462e1c";
+    g.beginPath();
+    g.roundRect(x, y, bw, bh, 10);
+    g.fill();
+    g.fillStyle = "#182c24";
+    g.beginPath();
+    g.roundRect(x + 12, y + 12, bw - 24, bh - 24, 6);
+    g.fill();
+  } else {
+    g.fillStyle = "rgba(255,255,255,.06)";
+    g.strokeStyle = "rgba(255,255,255,.18)";
+    g.lineWidth = 2;
+    g.beginPath();
+    g.roundRect(x, y, bw, bh, 16);
+    g.fill();
+    g.stroke();
+  }
+  const cur = lineAt(r, tMs, 350) ?? r.script[0];
+  g.fillStyle = r.scenario === "classroom" ? "rgba(236,238,228,.92)" : "rgba(255,255,255,.88)";
+  g.font = "500 30px Geist, ui-sans-serif, system-ui";
+  g.textAlign = "left";
+  g.textBaseline = "alphabetic";
+  wrap(g, cur?.text ?? "", W * 0.38).forEach((ln, i) => g.fillText(ln, x + W * 0.03, y + H * 0.08 + 24 + i * 44));
+}
+
+/** Plates (parallax + depth of field), then the characters, through one camera shot. */
+function drawWorld(g: CanvasRenderingContext2D, r: RenderResult, img: Images, shot: Shot, drift: [number, number, number], t: number, tMs: number, speaker: number, amp: number, vis: Viseme) {
+  const p = plates(r.scenario, r.template);
+  g.save();
+  depthTransform(g, shot, "far", drift);
+  g.drawImage(p.far, 0, 0);
+  depthTransform(g, shot, "mid", drift);
+  g.drawImage(p.mid, 0, 0);
+  depthTransform(g, shot, "stage", drift);
+  const chars = r.characters;
+  const say = (i: number) => (speaker === i ? [amp, vis] : [0, "X"]) as [number, Viseme];
+  const place = PLACES[r.template] ?? PLACES.solo;
+  const n = r.template === "debate" ? 2 : 1;
+  if (r.template === "lesson") drawBoard(g, r, tMs);
+  // the speaker is drawn last (in front)
+  const order = [...Array(n).keys()].sort((a, b) => (a === speaker ? 1 : 0) - (b === speaker ? 1 : 0));
+  for (const i of order) {
+    const c = chars[i] ?? chars[0];
+    drawCharacter(g, c, img, W * place[i][0], place[i][1], ...say(i), t, viewFor(r, speaker, i, tMs), i * 1.3, lightFor(r.scenario, r.template, i));
+  }
+  g.restore();
+}
+
+function roleLine(c: Character, r: RenderResult) {
+  const a = c.photo?.attribution;
+  if (a?.author) return `Foto: ${a.author}${a.license ? ` · ${a.license}` : ""}`;
+  return { debate: "Debate", lesson: "Aula", solo: "Fala" }[r.template] + " · animind";
+}
+
+const prettyName = (s: string) => {
+  const n = s.trim().replace(/\s+/g, " ");
+  const v = n.charAt(0).toUpperCase() + n.slice(1);
+  return v.length > 34 ? `${v.slice(0, 33).trimEnd()}…` : v;
+};
+
+function lowerThird(g: CanvasRenderingContext2D, r: RenderResult, line: ScriptLine, t: number) {
+  const first = r.script.find((l) => l.speaker === line.speaker);
+  const c = r.characters[line.speaker];
+  if (first !== line || !c) return;
+  const since = t - line.startMs / 1000;
+  const hold = Math.min(3.4, (line.endMs - line.startMs) / 1000);
+  const a = ease((since - 0.25) / 0.35) * (1 - ease((since - hold) / 0.3));
+  if (a <= 0.01) return;
+  const name = prettyName(c.name);
+  const role = roleLine(c, r).toUpperCase();
+  g.save();
+  g.globalAlpha = a;
+  g.font = "700 30px Geist, ui-sans-serif, system-ui";
+  const nw = g.measureText(name).width;
+  g.font = "600 15px Geist, ui-sans-serif, system-ui";
+  g.letterSpacing = "2.2px";
+  const rw = g.measureText(role).width;
+  const pw = Math.min(620, Math.max(nw, rw) + 52);
+  const right = r.template === "debate" && line.speaker === 1;
+  const x = (right ? W - 64 - pw : 64) + Math.round(30 * (1 - a)) * (right ? 1 : -1);
+  const y = H - 236;
+  g.fillStyle = "rgba(8,8,10,.67)";
+  g.beginPath();
+  g.roundRect(x, y, pw, 92, 10);
+  g.fill();
+  g.fillStyle = ACCENT[r.scenario];
+  g.beginPath();
+  g.roundRect(x, y, 6, 92, 3);
+  g.fill();
+  g.textAlign = "left";
+  g.textBaseline = "top";
+  g.fillText(role, x + 27, y + 60);
+  g.letterSpacing = "0px";
+  g.font = "700 30px Geist, ui-sans-serif, system-ui";
+  g.fillStyle = "#fff";
+  g.fillText(name, x + 26, y + 16);
+  g.restore();
+}
+
 export function drawFrame(g: CanvasRenderingContext2D, r: RenderResult, img: Images, track: Track | null, tMs: number) {
   const t = tMs / 1000;
   const k = Math.min(Math.floor(t * FPS_ENV), (track?.env.length ?? 1) - 1);
   const speaker = track ? track.who[Math.max(0, k)] : -1;
   const amp = track ? track.env[Math.max(0, k)] : 0;
   const vis = track ? track.vis[Math.max(0, k)] : "X";
-  background(g, r.scenario, t);
-  const chars = r.characters;
-  const say = (i: number) => (speaker === i ? [amp, vis] : [0, "X"]) as [number, Viseme];
-  if (r.template === "debate") {
-    const b = chars[1] ?? chars[0];
-    drawCharacter(g, chars[0], img, W * 0.27, 0.85, ...say(0), t, viewFor(r, speaker, 0, tMs), 0);
-    drawCharacter(g, b, img, W * 0.73, 0.85, ...say(1), t, viewFor(r, speaker, 1, tMs), 1.3);
-  } else if (r.template === "lesson") {
-    g.strokeStyle = "rgba(255,255,255,.12)";
-    g.lineWidth = 2;
-    g.beginPath();
-    g.roundRect(W * 0.48, H * 0.14, W * 0.44, H * 0.48, 16);
-    g.stroke();
-    const cur = r.script.find((l) => tMs >= l.startMs && tMs <= l.endMs + 350) ?? r.script[0];
-    g.fillStyle = "rgba(255,255,255,.85)";
-    g.font = "500 28px Geist, ui-sans-serif, system-ui";
-    g.textAlign = "left";
-    wrap(g, cur?.text ?? "", W * 0.38).forEach((ln, i) => g.fillText(ln, W * 0.51, H * 0.24 + i * 40));
-    drawCharacter(g, chars[0], img, W * 0.25, 0.9, ...say(0), t, viewFor(r, speaker, 0, tMs), 0);
-  } else {
-    drawCharacter(g, chars[0], img, W * 0.5, 0.95, ...say(0), t, viewFor(r, speaker, 0, tMs), 0);
+  let cuts = cutsCache.get(r);
+  if (!cuts) cutsCache.set(r, (cuts = planShots(r.template, r.script)));
+  const drift = handheld(t);
+  const takes = camera(cuts, t);
+  g.save();
+  g.imageSmoothingQuality = "high";
+  takes.forEach(([weight, shot, blur], i) => {
+    if (i === 0 && blur < 0.05) return drawWorld(g, r, img, shot, drift, t, tMs, speaker, amp, vis);
+    // dissolve (second take) or whip pan: draw the take off-screen, then blend it in
+    shotCanvas ??= Object.assign(document.createElement("canvas"), { width: W, height: H });
+    const s = shotCanvas.getContext("2d")!;
+    drawWorld(s, r, img, shot, drift, t, tMs, speaker, amp, vis);
+    if (blur >= 0.05) {
+      const taps = 7, span = 140 * blur;
+      g.globalAlpha = 1;
+      g.drawImage(shotCanvas, 0, 0);
+      for (let j = 0; j < taps; j++) {
+        g.globalAlpha = 0.5 * blur;
+        g.drawImage(shotCanvas, ((j / (taps - 1)) - 0.5) * span, 0);
+      }
+    } else {
+      g.globalAlpha = weight;
+      g.drawImage(shotCanvas, 0, 0);
+    }
+    g.globalAlpha = 1;
+  });
+  grade(g, r.scenario);
+  const fade = ease(t / FADE_IN_S) * ease((r.durationMs / 1000 - t) / FADE_OUT_S);
+  if (fade < 0.999) {
+    g.fillStyle = `rgba(0,0,0,${1 - fade})`;
+    g.fillRect(0, 0, W, H);
   }
-  // caption
-  const line = r.script.find((l) => tMs >= l.startMs && tMs <= l.endMs);
+  // bottom scrim that seats the captions
+  const sc = g.createLinearGradient(0, H * 0.68, 0, H);
+  sc.addColorStop(0, "rgba(0,0,0,0)");
+  sc.addColorStop(1, "rgba(0,0,0,.6)");
+  g.fillStyle = sc;
+  g.fillRect(0, H * 0.68, W, H * 0.32);
+  const line = lineAt(r, tMs);
+  if (line) lowerThird(g, r, line, t);
   if (line && r.template !== "lesson") {
-    g.font = "500 28px Geist, ui-sans-serif, system-ui";
+    const a = ease((t - line.startMs / 1000) / 0.18);
+    g.globalAlpha = a;
+    g.font = "600 34px Geist, ui-sans-serif, system-ui";
     g.textAlign = "center";
-    const ls = wrap(g, line.text, W * 0.66);
-    g.fillStyle = "rgba(0,0,0,.55)";
-    g.shadowColor = "rgba(0,0,0,.8)";
-    g.shadowBlur = 12;
+    g.textBaseline = "top";
+    const ls = wrap(g, line.text, W * 0.7).slice(0, 3);
+    const y0 = H - 20 - ls.length * 44 + Math.round(6 * (1 - a));
+    g.shadowColor = "rgba(0,0,0,.9)";
+    g.shadowBlur = 10;
+    g.shadowOffsetY = 2;
     g.fillStyle = "#fff";
-    ls.forEach((s, i) => g.fillText(s, W / 2, H - 40 - (ls.length - 1 - i) * 38));
-    g.shadowBlur = 0;
+    ls.forEach((s, i) => g.fillText(s, W / 2, y0 + i * 44));
+    g.shadowColor = "transparent";
+    g.globalAlpha = 1;
   }
+  g.textBaseline = "alphabetic";
   // parody disclaimer (always visible, baked into the video)
   g.font = "600 18px Geist, ui-sans-serif, system-ui";
   g.textAlign = "left";
@@ -310,8 +416,9 @@ export function drawFrame(g: CanvasRenderingContext2D, r: RenderResult, img: Ima
   g.fillText(label, 38, 47);
   g.font = "500 16px Geist, ui-sans-serif, system-ui";
   g.textAlign = "right";
-  g.fillStyle = "rgba(255,255,255,.4)";
+  g.fillStyle = "rgba(255,255,255,.43)";
   g.fillText("animind", W - 28, 46);
+  g.restore();
 }
 
 export function pickMime() {
