@@ -43,7 +43,7 @@ export function Studio({ source }: { source: CharacterSource | null }) {
   const [progress, setProgress] = useState(0);
   const [result, setResult] = useState<RenderResult | null>(null);
   const [take, setTake] = useState(0);
-  const audio = useRef<AudioContext | null>(null);
+  const [audio, setAudio] = useState<AudioContext | null>(null);
   const started = useRef(false);
 
   useEffect(() => {
@@ -56,8 +56,9 @@ export function Studio({ source }: { source: CharacterSource | null }) {
 
   async function pick(t: (typeof TEMPLATES)[number]) {
     if (!char) return;
-    audio.current ??= new AudioContext();
-    void audio.current.resume();
+    const ctx = audio ?? new AudioContext();
+    if (!audio) setAudio(ctx);
+    void ctx.resume();
     setTemplate(t.id);
     setResult(null);
     setProgress(0);
@@ -148,8 +149,8 @@ export function Studio({ source }: { source: CharacterSource | null }) {
       </Step>
 
       <Step n={3} title="Prévia e download" active={!!result} done={false}>
-        {result && audio.current ? (
-          <Player key={take} result={result} audioCtx={audio.current} fileName={`animind-${char?.name.toLowerCase().replace(/\W+/g, "-")}-${result.template}`} />
+        {result && audio ? (
+          <Player key={take} result={result} audioCtx={audio} fileName={`animind-${char?.name.toLowerCase().replace(/\W+/g, "-")}-${result.template}`} />
         ) : (
           <div className="grid aspect-video place-items-center rounded-2xl border border-dashed border-border/60 text-sm text-muted-foreground">
             {template ? "Renderizando…" : "Escolha uma cena para ver a prévia"}

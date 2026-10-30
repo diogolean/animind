@@ -25,9 +25,9 @@ const HAIR = ["#1f1b2e", "#5b3a29", "#d4a24c", "#9b2c2c", "#e5e7eb", "#4c1d95"];
 export function cartoonLayers(seed: string): { layers: Layer[]; palette: { primary: string; accent: string } } {
   const h = hash(seed.toLowerCase());
   const skin = SKINS[h % SKINS.length];
-  const [primary, accent] = PALETTES[(h >> 3) % PALETTES.length];
-  const hair = HAIR[(h >> 6) % HAIR.length];
-  const hairStyle = (h >> 9) % 3;
+  const [primary, accent] = PALETTES[(h >>> 3) % PALETTES.length];
+  const hair = HAIR[(h >>> 6) % HAIR.length];
+  const hairStyle = (h >>> 9) % 3;
   const ink = "#15121f";
   const L: Layer[] = [];
   const add = (name: Layer["name"], x: number, y: number, w: number, hh: number, z: number, body: string) =>
