@@ -107,12 +107,12 @@ export function mockCreateJob(req: RenderRequest): RenderJob {
 export function mockGetJob(id: string): RenderJob {
   const { r, c } = unb64<MockJobState>(id.replace(/^mock_/, ""));
   const p = Math.min(1, (Date.now() - c) / RENDER_MS);
-  if (p < 1) return { id, status: p < 0.15 ? "queued" : "running", progress: Math.round(p * 100) };
+  if (p < 1) return { id, status: p < 0.15 ? "queued" : "running", progress: Math.round(p * 100) / 100 };
   const lines = script(r);
   return {
     id,
     status: "done",
-    progress: 100,
+    progress: 1,
     result: {
       template: r.template,
       scenario: r.scenario,

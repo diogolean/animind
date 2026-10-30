@@ -151,6 +151,7 @@ export type JobStatus = "queued" | "running" | "done" | "failed";
 export interface RenderJob {
   id: string;
   status: JobStatus;
+  /** 0..1, as the core reports it (the UI shows it as a percentage). */
   progress: number;
   result?: RenderResult;
   error?: string;
