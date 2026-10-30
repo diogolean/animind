@@ -42,6 +42,7 @@ export function Studio({ source }: { source: CharacterSource | null }) {
   const [template, setTemplate] = useState<SceneTemplate | null>(null);
   const [progress, setProgress] = useState(0);
   const [result, setResult] = useState<RenderResult | null>(null);
+  const [take, setTake] = useState(0);
   const audio = useRef<AudioContext | null>(null);
   const started = useRef(false);
 
@@ -68,6 +69,7 @@ export function Studio({ source }: { source: CharacterSource | null }) {
       const done = await waitJob(job.id, (j) => setProgress(j.progress));
       // Keep the full local rigs (the job may return lightweight copies).
       setResult({ ...done.result!, characters: cast });
+      setTake((n) => n + 1);
     } catch (e) {
       toast.error((e as Error).message);
       setTemplate(null);
@@ -147,7 +149,7 @@ export function Studio({ source }: { source: CharacterSource | null }) {
 
       <Step n={3} title="Prévia e download" active={!!result} done={false}>
         {result && audio.current ? (
-          <Player key={`${result.template}-${result.scenario}-${progress}`} result={result} audioCtx={audio.current} fileName={`animind-${char?.name.toLowerCase().replace(/\W+/g, "-")}-${result.template}`} />
+          <Player key={take} result={result} audioCtx={audio.current} fileName={`animind-${char?.name.toLowerCase().replace(/\W+/g, "-")}-${result.template}`} />
         ) : (
           <div className="grid aspect-video place-items-center rounded-2xl border border-dashed border-border/60 text-sm text-muted-foreground">
             {template ? "Renderizando…" : "Escolha uma cena para ver a prévia"}
