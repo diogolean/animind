@@ -1,9 +1,11 @@
 "use client";
 /* Cinematic look for the browser preview, mirroring the core's
- * products/animind_core/look.py: parallax scenario plates with depth-of-field
- * blur, rim/key light and soft drop shadows on the rig layers, a camera that
- * pushes in, drifts and reframes on the speaker (cross-dissolve / whip pan),
- * a colour grade and a vignette. Plates and lit layers are built once and
+ * products/animind_core/look.py: built sets per scenario on parallax plates
+ * (perspective floor under the horizon, set pieces and practical lights that
+ * match the rim colours, depth-of-field blur), lecterns with contact shadows,
+ * rim/key light and set ambient on the rig layers, shot grammar (wide,
+ * over-the-shoulder, close-up on quotes, two-shot) with cuts, dissolves and
+ * whip pans, a colour grade and a vignette. Plates and lit layers are built once and
  * cached; every per-frame value is a pure function of time (deterministic). */
 import type { Scenario, SceneTemplate, ScriptLine } from "./contract";
 
@@ -12,16 +14,21 @@ export const H = 720;
 const MARGIN = 1.3;
 const PW = Math.round(W * MARGIN), PH = Math.round(H * MARGIN);
 const OX = (PW - W) / 2, OY = (PH - H) / 2;
-const HORIZON = 0.8;
-export const PARALLAX = { far: 0.35, mid: 0.65, stage: 1 } as const;
+const HORIZON = 0.6;
+export const PARALLAX = { far: 0.5, mid: 0.75, stage: 1 } as const;
 export const DISSOLVE_S = 0.45, WHIP_S = 0.3, FADE_IN_S = 0.5, FADE_OUT_S = 0.6;
 
-/** (x centre as a fraction of W, scale on top of "fit to 92% of the height") */
+/** (x centre as a fraction of W, scale on top of BUST_H) */
 export const PLACES: Record<SceneTemplate, [number, number][]> = {
-  debate: [[0.27, 0.85], [0.73, 0.85]],
-  lesson: [[0.25, 0.9]],
-  solo: [[0.5, 0.95]],
+  debate: [[0.29, 1], [0.71, 1]],
+  lesson: [[0.25, 1]],
+  solo: [[0.5, 1.06]],
 };
+/** Set geometry (fractions of H / W), as in scene.py: busts stand behind lecterns that hide the cut. */
+export const BUST_H = 0.55, BUST_BOTTOM = 0.8;
+export const LECTERN_TOP = 0.645, LECTERN_BASE = 0.835, LECTERN_W = 0.27;
+export const FACE_Y = 0.42;
+export const BOARD = [0.45, 0.08, 0.94, 0.62] as const;
 const RIM: Record<Scenario, string[]> = {
   studio: ["#ffd199", "#9edbff"],
   classroom: ["#ffe6b8", "#ffe6b8"],
@@ -37,13 +44,15 @@ const GRADE: Record<Scenario, [string, number]> = {
 };
 export const ACCENT: Record<Scenario, string> = { studio: "#f5b042", classroom: "#f0c46e", arena: "#ff5460", space: "#60d6ff" };
 
-export interface Light { side: number; rim: string }
+/** the set's bounce light, multiplied into the characters */
+const AMBIENT: Record<Scenario, string> = { studio: "#e6edff", classroom: "#ffebcc", arena: "#fad6f2", space: "#d1e6ff" };
+export interface Light { side: number; rim: string; ambient: string }
 
 export function lightFor(scenario: Scenario, template: SceneTemplate, idx: number): Light {
   const px = PLACES[template][Math.min(idx, PLACES[template].length - 1)][0];
   const side = template === "solo" ? 1 : px < 0.5 ? -1 : 1;
   const rims = RIM[scenario] ?? RIM.studio;
-  return { side, rim: rims[Math.min(idx, rims.length - 1)] };
+  return { side, rim: rims[Math.min(idx, rims.length - 1)], ambient: AMBIENT[scenario] ?? AMBIENT.studio };
 }
 
 const canvas = (w: number, h: number) => {
@@ -95,15 +104,20 @@ function pool(g: CanvasRenderingContext2D, x: number, y: number, rx: number, ry:
   g.restore();
 }
 
-function floor(g: CanvasRenderingContext2D, c: HTMLCanvasElement, top: string, bottom: string, reflect: number) {
-  const hy = py(HORIZON);
-  const n = PH - hy;
+const rect = (g: CanvasRenderingContext2D, x0: number, y0: number, x1: number, y1: number, fill: string | CanvasGradient) => {
+  g.fillStyle = fill;
+  g.fillRect(px(x0), py(y0), (x1 - x0) * W, (y1 - y0) * H);
+};
+
+/** Floor below the horizon: gradient, perspective seams/planks/tiles toward a vanishing point, and a
+ *  fading mirror of the wall (gloss). */
+function floor(g: CanvasRenderingContext2D, c: HTMLCanvasElement, top: string, bottom: string, reflect: number, pattern: "seams" | "planks" | "tiles", line: string) {
+  const hy = py(HORIZON), n = PH - hy, vx = px(0.5);
   const grad = g.createLinearGradient(0, hy, 0, PH);
   grad.addColorStop(0, top);
   grad.addColorStop(1, bottom);
   g.fillStyle = grad;
   g.fillRect(0, hy, PW, n);
-  // mirrored wall, fading out
   const refl = canvas(PW, n);
   const r = ctx2d(refl);
   r.translate(0, n);
@@ -117,7 +131,32 @@ function floor(g: CanvasRenderingContext2D, c: HTMLCanvasElement, top: string, b
   r.fillStyle = m;
   r.fillRect(0, 0, PW, n);
   g.drawImage(refl, 0, hy);
-  g.fillStyle = "rgba(255,255,255,.035)";
+  // perspective lines, fading toward the horizon
+  const lines = canvas(PW, n);
+  const l = ctx2d(lines);
+  l.strokeStyle = line;
+  l.lineWidth = pattern === "planks" ? 1.5 : 2;
+  const step = pattern === "planks" ? 0.045 : 0.11;
+  for (let k = -30; k <= 30; k++) {
+    l.beginPath();
+    l.moveTo(vx - 0, 0);
+    l.lineTo(vx + k * step * W * 2.2, n * 1.0);
+    l.stroke();
+  }
+  if (pattern !== "planks") for (let i = 1; i < 12; i++) {
+    const y = n * (0.06 * i * i) / 1.2;
+    if (y > n) break;
+    l.fillStyle = line;
+    l.fillRect(0, y, PW, 2);
+  }
+  l.globalCompositeOperation = "destination-in";
+  const f = l.createLinearGradient(0, 0, 0, n);
+  f.addColorStop(0, "rgba(0,0,0,0)");
+  f.addColorStop(0.25, "rgba(0,0,0,1)");
+  l.fillStyle = f;
+  l.fillRect(0, 0, PW, n);
+  g.drawImage(lines, 0, hy);
+  g.fillStyle = "rgba(255,255,255,.05)";
   g.fillRect(0, hy, PW, 2);
 }
 
@@ -131,49 +170,120 @@ function far(s: Scenario, places: number[]) {
     g.fillStyle = grad;
     g.fillRect(0, 0, PW, PH);
   };
+  const rims = RIM[s] ?? RIM.studio;
   if (s === "classroom") {
-    v("#4d4133", "#29211a");
-    g.fillStyle = "#8c9eb3";
-    for (const wx of [0.04, 0.96]) g.fillRect(px(wx) - 0.07 * W, py(0.06), 0.14 * W, 0.6 * H);
-    places.forEach((x) => pool(g, px(x), py(0.42), 0.22 * W, 0.4 * H, "rgba(36,28,18,1)"));
-    floor(g, c, "#33221a", "#1c130c", 0.12);
-    g.fillStyle = "rgba(0,0,0,.08)";
-    for (let x = 0; x < PW; x += 57) g.fillRect(x, py(HORIZON), 2, PH);
+    v("#8a7558", "#5a4a37"); // plaster wall
+    rect(g, -0.2, 0.4, 1.2, HORIZON, "#4a3220"); // wainscot
+    rect(g, -0.2, 0.395, 1.2, 0.405, "#6b4a2e");
+    // sunlit window on the left, with mullions
+    const win = g.createLinearGradient(0, py(0.08), 0, py(0.5));
+    win.addColorStop(0, "#e8f1fa");
+    win.addColorStop(1, "#b9cfe0");
+    rect(g, -0.02, 0.08, 0.2, 0.5, "#5a3f28");
+    rect(g, -0.005, 0.095, 0.185, 0.485, win);
+    rect(g, 0.083, 0.095, 0.092, 0.485, "#5a3f28");
+    rect(g, -0.005, 0.28, 0.185, 0.29, "#5a3f28");
+    pool(g, px(0.09), py(0.3), 0.3 * W, 0.35 * H, "rgba(255,236,190,.35)");
+    // bookcase on the right
+    rect(g, 0.82, 0.06, 1.15, HORIZON, "#3d2614");
+    const r = rng(5);
+    const pal = ["#731f1a", "#264066", "#806633", "#33522e", "#8c8066", "#5a2846"];
+    for (let shelf = 0; shelf < 4; shelf++) {
+      const y1 = 0.1 + (shelf + 1) * 0.12;
+      for (let x = 0.832; x < 1.13;) {
+        const bw = 0.008 + r() * 0.008;
+        g.globalAlpha = 0.6 + r() * 0.4;
+        rect(g, x, y1 - 0.07 - r() * 0.025, x + bw, y1 - 0.004, pal[Math.floor(r() * pal.length)]);
+        g.globalAlpha = 1;
+        x += bw + 0.002;
+      }
+      rect(g, 0.82, y1 - 0.004, 1.15, y1 + 0.006, "#3d2614");
+    }
+    floor(g, c, "#6b4a2e", "#3a2616", 0.08, "planks", "rgba(0,0,0,.22)");
+    pool(g, px(0.22), py(0.75), 0.22 * W, 0.08 * H, "rgba(255,226,170,.25)"); // sun patch
   } else if (s === "arena") {
-    v("#090611", "#07050b");
-    pool(g, px(0.1), py(0.35), 0.45 * W, 0.6 * H, "rgba(115,10,23,1)");
-    pool(g, px(0.9), py(0.35), 0.45 * W, 0.6 * H, "rgba(10,31,122,1)");
-    g.fillStyle = "rgba(255,255,255,.025)";
-    for (let x = 0; x < PW; x += 46) g.fillRect(x, 0, 2, py(HORIZON));
-    for (let y = 0; y < py(HORIZON); y += 46) g.fillRect(0, y, PW, 2);
-    floor(g, c, "#08060a", "#050406", 0.35);
+    v("#0b0714", "#07050b");
+    pool(g, px(0.08), py(0.3), 0.5 * W, 0.6 * H, "rgba(140,14,30,1)");
+    pool(g, px(0.92), py(0.3), 0.5 * W, 0.6 * H, "rgba(14,40,150,1)");
+    // jumbotron
+    rect(g, 0.37, 0.03, 0.63, 0.23, "#111018");
+    const jb = g.createLinearGradient(px(0.38), 0, px(0.62), 0);
+    jb.addColorStop(0, rims[0]);
+    jb.addColorStop(1, rims[1]);
+    g.globalAlpha = 0.35;
+    rect(g, 0.38, 0.045, 0.62, 0.215, jb);
+    g.globalAlpha = 1;
+    // LED ad board along the horizon
+    const led = g.createLinearGradient(px(-0.2), 0, px(1.2), 0);
+    led.addColorStop(0, "#5a0c16");
+    led.addColorStop(0.5, "#1c1530");
+    led.addColorStop(1, "#0c1f66");
+    rect(g, -0.2, HORIZON - 0.07, 1.2, HORIZON, led);
+    rect(g, -0.2, HORIZON - 0.072, 1.2, HORIZON - 0.068, "rgba(255,255,255,.25)");
+    floor(g, c, "#120d18", "#060408", 0.4, "seams", "rgba(255,255,255,.035)");
+    // ring disc with a glowing edge
+    g.save();
+    g.translate(px(0.5), py(0.82));
+    g.scale(1, 0.16);
+    g.strokeStyle = "rgba(255,84,96,.55)";
+    g.lineWidth = 10;
+    g.beginPath();
+    g.arc(0, 0, 0.46 * W, 0, 7);
+    g.stroke();
+    g.restore();
   } else if (s === "space") {
     v("#02030a", "#03040d");
     const r = rng(7);
     for (let i = 0; i < 14; i++) {
       const col = i % 3 === 0 ? "rgba(0,64,82,.9)" : "rgba(107,31,128,.7)";
-      pool(g, r() * PW, r() * PH * 0.8, 120 + r() * 260, 80 + r() * 200, col);
+      pool(g, r() * PW, r() * PH * 0.5, 120 + r() * 260, 80 + r() * 160, col);
     }
     const st = rng(42);
     for (let i = 0; i < 900; i++) {
       const b = st() ** 3;
       g.fillStyle = `rgba(255,255,255,${0.25 + 0.75 * b})`;
-      g.fillRect(Math.floor(st() * PW), Math.floor(st() * PH), 1, 1);
+      g.fillRect(Math.floor(st() * PW), Math.floor(st() * py(0.5)), 1.5, 1.5);
     }
-    floor(g, c, "#080a0f", "#040507", 0.25);
-    g.fillStyle = "rgba(26,115,153,.9)";
-    g.fillRect(0, py(HORIZON) - 1, PW, 4);
+    // bridge window frame: header, mullions, sill with a cyan line
+    const metal = "#1c222c";
+    rect(g, -0.2, -0.2, 1.2, 0.05, metal);
+    for (const mx of [-0.02, 0.24, 0.5, 0.76, 1.02]) rect(g, mx - 0.018, 0.05, mx + 0.018, 0.5, metal);
+    rect(g, -0.2, 0.5, 1.2, HORIZON, "#12161d");
+    rect(g, -0.2, 0.5, 1.2, 0.506, "rgba(77,217,255,.85)");
+    pool(g, px(-0.05), py(0.35), 0.3 * W, 0.4 * H, hexA(rims[0], 0.35));
+    pool(g, px(1.05), py(0.35), 0.3 * W, 0.4 * H, hexA(rims[1], 0.35));
+    floor(g, c, "#121821", "#06080b", 0.25, "tiles", "rgba(77,200,240,.18)");
   } else {
-    v("#1a1d21", "#0a0b0d");
-    pool(g, px(0.5), py(0.38), 0.6 * W, 0.45 * H, "rgba(13,26,31,1)");
-    for (let i = 0; i < 16; i++) {
-      g.fillStyle = `rgba(0,0,0,${0.05 + 0.05 * Math.cos(i * Math.PI)})`;
-      g.fillRect(px(0) + i * 0.0625 * W - W * 0.3, 0, 0.0625 * W, PH);
+    v("#1d2026", "#0c0d10");
+    for (let i = 0; i < 40; i++) { // slat wall
+      g.fillStyle = `rgba(0,0,0,${i % 2 ? 0.16 : 0.04})`;
+      g.fillRect(px(-0.15) + i * 0.035 * W, 0, 0.035 * W, py(HORIZON));
     }
-    places.forEach((x) => pool(g, px(x), py(0.45), 0.2 * W, 0.42 * H, "rgba(51,41,31,1)"));
-    floor(g, c, "#0d0d0e", "#060607", 0.3);
+    // central screen with a gradient in the two rim colours
+    rect(g, 0.29, 0.07, 0.71, 0.47, "#0a0b0e");
+    rect(g, 0.3, 0.085, 0.7, 0.455, "#0c0e12");
+    g.save();
+    g.beginPath();
+    g.rect(px(0.3), py(0.085), 0.4 * W, 0.37 * H);
+    g.clip();
+    pool(g, px(0.3), py(0.27), 0.3 * W, 0.3 * H, hexA(rims[0], 0.32));
+    pool(g, px(0.7), py(0.27), 0.3 * W, 0.3 * H, hexA(rims[1], 0.32));
+    g.restore();
+    // practical light strips that motivate the rim lights (warm left, cool right)
+    for (const [fx, col] of [[0.045, rims[0]], [0.955, rims[1]]] as [number, string][]) {
+      pool(g, px(fx), py(0.32), 0.12 * W, 0.4 * H, hexA(col, 0.45));
+      rect(g, fx - 0.005, 0.04, fx + 0.005, HORIZON - 0.01, col);
+    }
+    rect(g, -0.2, HORIZON - 0.012, 1.2, HORIZON, "#050506"); // skirting
+    floor(g, c, "#15161a", "#060607", 0.45, "seams", "rgba(255,255,255,.03)");
   }
-  return softBlur(c, 6); // depth of field
+  places.forEach((x) => pool(g, px(x), py(0.62), 0.16 * W, 0.12 * H, "rgba(255,240,220,.06)"));
+  return softBlur(c, 2.2); // depth of field
+}
+
+function hexA(hex: string, a: number) {
+  const n = parseInt(hex.slice(1), 16);
+  return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`;
 }
 
 function mid(s: Scenario, template: SceneTemplate) {
@@ -182,53 +292,54 @@ function mid(s: Scenario, template: SceneTemplate) {
   const r = rng({ studio: 1, classroom: 2, arena: 3, space: 4 }[s] ?? 1);
   if (s === "classroom") {
     if (template !== "lesson") {
-      g.fillStyle = "#462e1c";
-      g.beginPath();
-      g.roundRect(px(0.33), py(0.13), 0.34 * W, 0.47 * H, 10);
-      g.fill();
-      g.fillStyle = "#182c24";
-      g.beginPath();
-      g.roundRect(px(0.33) + 12, py(0.13) + 12, 0.34 * W - 24, 0.47 * H - 24, 6);
-      g.fill();
+      rect(g, 0.35, 0.1, 0.65, 0.44, "#52361f");
+      rect(g, 0.36, 0.115, 0.64, 0.425, "#1b3128");
+      rect(g, 0.37, 0.425, 0.63, 0.44, "#6b4a2e");
     }
-    g.fillStyle = "rgba(255,244,220,.08)";
-    for (const [wx, k] of [[0.04, 1], [0.96, -1]]) {
-      g.beginPath();
-      g.moveTo(px(wx) - 60, py(0.06));
-      g.lineTo(px(wx) + 60, py(0.06));
-      g.lineTo(px(wx + k * 0.38), py(1));
-      g.lineTo(px(wx + k * 0.2), py(1));
-      g.fill();
-    }
+    g.fillStyle = "rgba(255,244,220,.07)"; // sun shaft from the window
+    g.beginPath();
+    g.moveTo(px(0.0), py(0.1));
+    g.lineTo(px(0.18), py(0.1));
+    g.lineTo(px(0.42), py(0.95));
+    g.lineTo(px(0.12), py(0.95));
+    g.fill();
     return softBlur(c, 2);
   }
   if (s === "arena") {
     for (const fx of [0.2, 0.5, 0.8]) {
-      const grad = g.createLinearGradient(0, py(-0.05), 0, py(HORIZON));
-      grad.addColorStop(0, "rgba(255,236,220,.2)");
-      grad.addColorStop(1, "rgba(255,236,220,.05)");
+      const grad = g.createLinearGradient(0, py(-0.05), 0, py(0.95));
+      grad.addColorStop(0, "rgba(255,236,220,.22)");
+      grad.addColorStop(1, "rgba(255,236,220,.03)");
       g.fillStyle = grad;
       g.beginPath();
       g.moveTo(px(fx) - 18, py(-0.05));
       g.lineTo(px(fx) + 18, py(-0.05));
-      g.lineTo(px(fx) + 230, py(HORIZON));
-      g.lineTo(px(fx) - 230, py(HORIZON));
+      g.lineTo(px(fx) + 230, py(0.95));
+      g.lineTo(px(fx) - 230, py(0.95));
       g.fill();
     }
     const blurred = softBlur(c, 8);
     const out = ctx2d(blurred);
-    out.fillStyle = "rgba(6,5,9,.92)";
-    const hy = py(HORIZON);
-    for (let i = 0; i < 70; i++) {
-      const cx = (i + (r() - 0.5) * 0.6) * (PW / 69);
-      const rad = 15 + r() * 9;
-      const top = hy - 20 - r() * 26;
-      out.beginPath();
-      out.arc(cx, top, rad, 0, 7);
-      out.fill();
-      out.beginPath();
-      out.roundRect(cx - rad * 1.6, top + rad * 0.6, rad * 3.2, hy + 30 - top - rad * 0.6, 14);
-      out.fill();
+    out.fillStyle = "#16141c"; // truss with fixtures
+    out.fillRect(0, py(-0.06), PW, 14);
+    for (const fx of [0.2, 0.5, 0.8]) {
+      out.fillStyle = "#2a2833";
+      out.fillRect(px(fx) - 16, py(-0.06), 32, 26);
+    }
+    const hy = py(HORIZON - 0.07);
+    for (let row = 0; row < 2; row++) { // crowd above the LED board
+      out.fillStyle = row ? "rgba(10,8,14,.95)" : "rgba(22,18,30,.9)";
+      for (let i = 0; i < 70; i++) {
+        const cx = (i + (r() - 0.5) * 0.6 + row * 0.5) * (PW / 69);
+        const rad = 11 + r() * 6;
+        const top = hy - 16 - row * 30 - r() * 10;
+        out.beginPath();
+        out.arc(cx, top, rad, 0, 7);
+        out.fill();
+        out.beginPath();
+        out.roundRect(cx - rad * 1.5, top + rad * 0.6, rad * 3, hy - top - rad * 0.6, 10);
+        out.fill();
+      }
     }
     return softBlur(blurred, 1.6);
   }
@@ -242,19 +353,14 @@ function mid(s: Scenario, template: SceneTemplate) {
     g.beginPath();
     g.arc(cx, cy, rad, 0, 7);
     g.fill();
-    for (let i = 0; i < 30; i++) {
-      const s2 = 1.5 + r() * 1.7;
-      g.fillStyle = "rgba(220,235,255,.9)";
-      g.beginPath();
-      g.arc(r() * PW, r() * py(HORIZON), s2, 0, 7);
-      g.fill();
-    }
     return softBlur(c, 1.5);
   }
-  for (let i = 0; i < 34; i++) { // studio bokeh
-    const cx = r() * PW, cy = py(0.02) + r() * 0.6 * H, rad = 10 + r() * 24;
-    const warm = r() < 0.6;
-    g.fillStyle = warm ? `rgba(255,196,120,${(22 + r() * 48) / 255})` : `rgba(120,210,255,${(22 + r() * 48) / 255})`;
+  const rims = RIM.studio;
+  pool(g, px(0.05), py(0.3), 0.2 * W, 0.45 * H, hexA(rims[0], 0.12)); // haze from the practicals
+  pool(g, px(0.95), py(0.3), 0.2 * W, 0.45 * H, hexA(rims[1], 0.12));
+  for (let i = 0; i < 14; i++) { // a few bokeh high up
+    const cx = r() * PW, cy = py(0.0) + r() * 0.12 * H, rad = 8 + r() * 14;
+    g.fillStyle = r() < 0.6 ? `rgba(255,196,120,${(20 + r() * 40) / 255})` : `rgba(120,210,255,${(20 + r() * 40) / 255})`;
     g.beginPath();
     g.arc(cx, cy, rad, 0, 7);
     g.fill();
@@ -277,7 +383,7 @@ export function plates(s: Scenario, template: SceneTemplate) {
  *  `box` is the layer's box in its view canvas (`cw` x `ch`), so ramps match across layers. */
 const litCache = new WeakMap<HTMLImageElement, Map<string, HTMLCanvasElement>>();
 export function litLayer(im: HTMLImageElement, box: { x: number; y: number; w: number; h: number }, cw: number, ch: number, light: Light, rim: boolean) {
-  const key = `${box.x},${box.y},${box.w},${box.h},${cw},${ch},${light.side},${light.rim},${rim}`;
+  const key = `${box.x},${box.y},${box.w},${box.h},${cw},${ch},${light.side},${light.rim},${light.ambient},${rim}`;
   let m = litCache.get(im);
   if (!m) litCache.set(im, (m = new Map()));
   const hit = m.get(key);
@@ -295,11 +401,17 @@ export function litLayer(im: HTMLImageElement, box: { x: number; y: number; w: n
   kx.addColorStop(1, light.side > 0 ? dark : clear);
   g.fillStyle = kx;
   g.fillRect(0, 0, w, h);
-  const fy = g.createLinearGradient(0, (ch * 0.72 - box.y) * sy, 0, (ch - box.y) * sy);
+  const fy = g.createLinearGradient(0, (ch * 0.62 - box.y) * sy, 0, (ch * 0.92 - box.y) * sy); // occlusion toward the lectern
   fy.addColorStop(0, clear);
-  fy.addColorStop(1, "rgba(0,0,0,.55)");
+  fy.addColorStop(1, "rgba(0,0,0,.45)");
   g.fillStyle = fy;
   g.fillRect(0, 0, w, h);
+  g.globalCompositeOperation = "multiply"; // set ambient
+  g.fillStyle = light.ambient;
+  g.fillRect(0, 0, w, h);
+  g.globalCompositeOperation = "destination-in"; // multiply also painted the transparent area
+  g.drawImage(im, 0, 0);
+  g.globalCompositeOperation = "source-atop";
   if (rim) {
     const d = Math.max(2, Math.round(Math.min(w, h) * 0.014));
     const r = canvas(w, h);
@@ -321,21 +433,97 @@ export function litLayer(im: HTMLImageElement, box: { x: number; y: number; w: n
   return c;
 }
 
-/** Soft black silhouette of the given layers, in view-canvas space (scaled by `k`). */
-const shadowCache = new Map<string, HTMLCanvasElement>();
-export function dropShadow(key: string, parts: { im: HTMLImageElement; x: number; y: number; w: number; h: number }[], cw: number, ch: number) {
-  let c = shadowCache.get(key);
-  if (c) return c;
-  const k = 0.25;
-  const small = canvas(cw * k, ch * k);
-  const g = ctx2d(small);
-  parts.forEach((p) => g.drawImage(p.im, p.x * k, p.y * k, p.w * k, p.h * k));
-  g.globalCompositeOperation = "source-in";
-  g.fillStyle = "rgba(0,0,0,.55)";
-  g.fillRect(0, 0, small.width, small.height);
-  c = softBlur(softBlur(small, 3), 2);
-  shadowCache.set(key, c);
+// ------------------------------------------------------------------ set pieces on the stage
+/** lectern finish per scenario: body, top, accent strip ("rim" = the character's rim colour) */
+const LECTERN: Record<Scenario, [string, string, string | null]> = {
+  studio: ["#13151a", "#33363b", "rim"],
+  classroom: ["#5c381f", "#805430", null],
+  arena: ["#0a090d", "#242129", "rim"],
+  space: ["#29303b", "#4d5966", "#4dd9ff"],
+};
+
+const lecternCache = new Map<string, HTMLCanvasElement>();
+/** Front-on lectern: top slab, tapered body, key-side shading, outer rim edge in the rim colour. */
+export function lectern(s: Scenario, light: Light) {
+  const key = `${s}:${light.side}:${light.rim}`;
+  const hit = lecternCache.get(key);
+  if (hit) return hit;
+  const w = Math.round(W * LECTERN_W), h = Math.round(H * (LECTERN_BASE - LECTERN_TOP));
+  const c = canvas(w, h);
+  const g = ctx2d(c);
+  const [body, top, strip] = LECTERN[s] ?? LECTERN.studio;
+  const slab = Math.round(h * 0.075);
+  g.fillStyle = body;
+  g.beginPath();
+  g.moveTo(w * 0.035, slab);
+  g.lineTo(w * 0.965, slab);
+  g.lineTo(w * 0.915, h);
+  g.lineTo(w * 0.085, h);
+  g.fill();
+  g.globalCompositeOperation = "source-atop";
+  const kx = g.createLinearGradient(0, 0, w, 0); // key side brighter
+  kx.addColorStop(light.side > 0 ? 0 : 1, "rgba(255,255,255,.12)");
+  kx.addColorStop(light.side > 0 ? 1 : 0, "rgba(0,0,0,.25)");
+  g.fillStyle = kx;
+  g.fillRect(0, 0, w, h);
+  const dy = g.createLinearGradient(0, slab, 0, h); // darker toward the floor
+  dy.addColorStop(0, "rgba(0,0,0,0)");
+  dy.addColorStop(1, "rgba(0,0,0,.45)");
+  g.fillStyle = dy;
+  g.fillRect(0, 0, w, h);
+  if (s === "classroom") {
+    g.strokeStyle = "rgba(0,0,0,.18)";
+    g.lineWidth = 3;
+    g.strokeRect(w * 0.14, h * 0.25, w * 0.72, h * 0.6);
+  }
+  if (strip) {
+    const sc = strip === "rim" ? light.rim : strip;
+    g.fillStyle = sc;
+    g.shadowColor = sc;
+    g.shadowBlur = 14;
+    g.fillRect(w * 0.08, h * 0.2 - 2, w * 0.84, 4);
+    g.shadowBlur = 0;
+  }
+  g.globalCompositeOperation = "source-over";
+  g.fillStyle = top;
+  g.fillRect(0, 0, w, slab);
+  g.fillStyle = "rgba(255,255,255,.12)";
+  g.fillRect(0, slab - 2, w, 2);
+  // rim on the outer edge
+  const rx = light.side > 0 ? w * 0.93 : w * 0.035;
+  g.fillStyle = hexA(light.rim, 0.5);
+  g.fillRect(light.side > 0 ? w - 4 : 0, 0, 4, slab);
+  g.globalAlpha = 0.45;
+  g.fillRect(rx, slab, w * 0.035, h - slab);
+  g.globalAlpha = 1;
+  lecternCache.set(key, c);
   return c;
+}
+
+let shadowCanvas: HTMLCanvasElement | null = null;
+/** Soft dark ellipse where a lectern meets the floor. */
+export function contactShadow() {
+  if (shadowCanvas) return shadowCanvas;
+  const w = Math.round(W * LECTERN_W * 1.35), h = Math.round(H * 0.06);
+  const c = canvas(w, h);
+  const g = ctx2d(c);
+  g.translate(w / 2, h / 2);
+  g.scale(1, h / w);
+  const r = g.createRadialGradient(0, 0, 0, 0, 0, w / 2);
+  r.addColorStop(0, "rgba(0,0,0,.75)");
+  r.addColorStop(1, "rgba(0,0,0,0)");
+  g.fillStyle = r;
+  g.fillRect(-w / 2, -w / 2, w, w);
+  return (shadowCanvas = c);
+}
+
+/** Out-of-focus copy (the listener in a single, the board behind the teacher). */
+const softCache = new WeakMap<HTMLCanvasElement, HTMLCanvasElement>();
+export const blurNow = (c: HTMLCanvasElement) => softBlur(softBlur(c, 3), 2);
+export function soft(c: HTMLCanvasElement) {
+  let o = softCache.get(c);
+  if (!o) softCache.set(c, (o = softBlur(softBlur(c, 3), 2)));
+  return o;
 }
 
 let vigCache: HTMLCanvasElement | null = null;
@@ -373,7 +561,8 @@ export function grade(g: CanvasRenderingContext2D, s: Scenario) {
 }
 
 // ------------------------------------------------------------------ camera
-export interface Shot { cx: number; cy: number; zoom: number }
+export type ShotKind = "wide" | "two" | "ots" | "cu" | "mcu" | "board";
+export interface Shot { cx: number; cy: number; zoom: number; kind?: ShotKind }
 
 export function handheld(t: number): [number, number, number] {
   return [
@@ -391,34 +580,49 @@ export const ease = (x: number) => {
 function clampShot(s: Shot): Shot {
   const z = Math.max(1.04, s.zoom);
   const hw = W / (2 * z) + 8, hh = H / (2 * z) + 8;
-  return { cx: Math.min(Math.max(s.cx, hw), W - hw), cy: Math.min(Math.max(s.cy, hh), H - hh), zoom: z };
+  return { cx: Math.min(Math.max(s.cx, hw), W - hw), cy: Math.min(Math.max(s.cy, hh), H - hh), zoom: z, kind: s.kind };
 }
 
-export function shotFor(template: SceneTemplate, speaker: number, i: number): Shot {
+/** Shot grammar per line, as in scene.py: wide establishing shot, over-the-shoulder singles, a
+ *  close-up cutaway on every real quote and a closing two-shot; the lesson cuts to the board for quotes. */
+export function shotFor(template: SceneTemplate, speaker: number, i: number, script: ScriptLine[] = []): Shot {
+  const quote = script[i]?.kind === "quote";
+  const last = i === script.length - 1 && script.length >= 4;
+  if (speaker < 0) return { cx: W / 2, cy: H * 0.5, zoom: 1, kind: "wide" };
+  const places = PLACES[template] ?? PLACES.solo;
+  const x = places[Math.min(speaker, places.length - 1)][0];
+  const toward = x < 0.5 ? 1 : -1;
   if (template === "debate") {
-    if (speaker < 0) return { cx: W / 2, cy: H * 0.5, zoom: 1.06 };
-    const x = PLACES.debate[Math.min(speaker, 1)][0];
-    return { cx: W * (x + (x < 0.5 ? 0.07 : -0.07)), cy: H * 0.55, zoom: 1.42 };
+    if (last) return { cx: W / 2, cy: H * 0.47, zoom: 1.24, kind: "two" };
+    if (quote) return { cx: W * (x + 0.035 * toward), cy: H * FACE_Y, zoom: 2.1, kind: "cu" };
+    return { cx: W * (x + 0.115 * toward), cy: H * 0.47, zoom: 1.6, kind: "ots" };
   }
-  if (template === "lesson") return speaker < 0 || i % 2 === 0 ? { cx: W / 2, cy: H * 0.5, zoom: 1.05 } : { cx: W / 2, cy: H * 0.44, zoom: 1.16 };
-  return speaker < 0 || i % 2 === 0 ? { cx: W / 2, cy: H * 0.5, zoom: 1.08 } : { cx: W / 2, cy: H * 0.5, zoom: 1.34 };
+  if (template === "lesson") {
+    const [bx0, by0, bx1, by1] = BOARD;
+    if (quote) return { cx: (W * (bx0 + bx1)) / 2, cy: (H * (by0 + by1)) / 2 + H * 0.03, zoom: 1.72, kind: "board" };
+    if (last) return { cx: W / 2, cy: H * 0.5, zoom: 1, kind: "wide" };
+    return { cx: W * (x + 0.13), cy: H * 0.47, zoom: 1.55, kind: "mcu" };
+  }
+  if (quote) return { cx: W / 2, cy: H * FACE_Y, zoom: 2, kind: "cu" };
+  return last ? { cx: W / 2, cy: H * 0.5, zoom: 1, kind: "wide" } : { cx: W / 2, cy: H * 0.47, zoom: 1.5, kind: "mcu" };
 }
 
 export type Cut = { start: number; shot: Shot; kind: "cut" | "dissolve" | "whip" };
-const same = (a: Shot, b: Shot) => a.cx === b.cx && a.cy === b.cy && a.zoom === b.zoom;
+const same = (a: Shot, b: Shot) => a.cx === b.cx && a.cy === b.cy && a.zoom === b.zoom && a.kind === b.kind;
 
+/** Opens wide, then cuts to the first speaker; hard cuts between singles, a dissolve into
+ *  wide/two/board shots and a whip pan when a quote close-up answers the other side. */
 export function planShots(template: SceneTemplate, script: ScriptLine[]): Cut[] {
-  const cuts: Cut[] = [{ start: 0, shot: clampShot(shotFor(template, -1, 0)), kind: "cut" }];
-  const kinds = ["dissolve", "whip"] as const;
+  const cuts: Cut[] = [{ start: 0, shot: clampShot(shotFor(template, -1, 0, script)), kind: "cut" }];
   script.forEach((l, i) => {
     let start = l.startMs / 1000;
-    if (i === 0) {
-      if (template !== "debate") return;
-      start = Math.min(start + 1.4, Math.max(start, l.endMs / 1000 - 1));
-    }
-    const shot = clampShot(shotFor(template, l.speaker, i));
-    const last = cuts[cuts.length - 1];
-    if (!same(shot, last.shot)) cuts.push({ start: Math.max(start - 0.12, last.start + 0.5), shot, kind: kinds[cuts.length % 2] });
+    if (i === 0) start = Math.min(start + 1.6, Math.max(start, l.endMs / 1000 - 1));
+    const shot = clampShot(shotFor(template, l.speaker, i, script));
+    const prev = cuts[cuts.length - 1];
+    if (same(shot, prev.shot)) return;
+    const kind = ["wide", "two", "board"].includes(shot.kind ?? "") || ["wide", "board"].includes(prev.shot.kind ?? "")
+      ? "dissolve" : shot.kind === "cu" && Math.abs(shot.cx - prev.shot.cx) > W * 0.25 ? "whip" : "cut";
+    cuts.push({ start: Math.max(start - 0.12, prev.start + 0.5), shot, kind });
   });
   return cuts;
 }
@@ -440,7 +644,7 @@ export function camera(cuts: Cut[], t: number): [number, Shot, number][] {
   }
   if (kind === "whip" && local < WHIP_S) {
     const u = local / WHIP_S, a = ease(u);
-    const s = { cx: before.cx + (cur.cx - before.cx) * a, cy: before.cy + (cur.cy - before.cy) * a, zoom: before.zoom + (cur.zoom - before.zoom) * a };
+    const s = { cx: before.cx + (cur.cx - before.cx) * a, cy: before.cy + (cur.cy - before.cy) * a, zoom: before.zoom + (cur.zoom - before.zoom) * a, kind: cur.kind };
     return [[1, s, Math.sin(Math.PI * u)]];
   }
   return [[1, cur, 0]];

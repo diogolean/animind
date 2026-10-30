@@ -3,7 +3,7 @@
  * Mirrors what the Rigly engine does server-side: layered rig + mouth driven
  * by the audio envelope. Pure client code, no keys involved. */
 import { PARODY_DISCLAIMER, type Character, type RenderResult, type ScriptLine, type ViewName, type Viseme } from "./contract";
-import { ACCENT, camera, depthTransform, dropShadow, ease, FADE_IN_S, FADE_OUT_S, grade, H, lightFor, litLayer, PLACES, planShots, plates, W, handheld, type Cut, type Light, type Shot } from "./cinema";
+import { ACCENT, BOARD, BUST_BOTTOM, BUST_H, camera, contactShadow, depthTransform, ease, FADE_IN_S, FADE_OUT_S, grade, H, lectern, LECTERN_BASE, LECTERN_TOP, LECTERN_W, lightFor, litLayer, PLACES, planShots, plates, soft, blurNow, W, handheld, type Cut, type Light, type Shot } from "./cinema";
 
 export { H, W };
 export const FPS_ENV = 100; // envelope samples per second
@@ -169,10 +169,10 @@ export function viewFor(r: RenderResult, speaker: number, idx: number, tMs: numb
 function drawCharacter(g: CanvasRenderingContext2D, c: Character, img: Images, cx: number, scale: number, amp: number, vis: Viseme, t: number, view: ViewName, seed: number, light: Light) {
   const v = c.views[view] ?? c.views.front;
   const cw = v?.canvas.w ?? 512, ch = v?.canvas.h ?? 640;
-  // Fit any core canvas to the same on-screen height (the mock's 640px canvas keeps ~its old size).
-  const fit = (scale * H * 0.92) / ch;
+  // Fit any core canvas to the same bust height; the bust stands behind a lectern that hides the cut.
+  const fit = (scale * H * BUST_H) / ch;
   g.save();
-  g.translate(cx, H * 0.98);
+  g.translate(cx, H * BUST_BOTTOM);
   g.scale(fit, fit);
   g.translate(-cw / 2, -ch);
   const breathe = Math.sin(t * 1.6 + seed) * 2;
@@ -200,12 +200,6 @@ function drawCharacter(g: CanvasRenderingContext2D, c: Character, img: Images, c
     drawPlaceholder(g, amp, vis, t, view, seed);
     g.restore();
     return;
-  }
-  const body = v.layers.filter((l) => l.name === "body" || l.name === "head").map((l) => ({ ...l, im: img.get(l.url)! })).filter((l) => l.im);
-  if (body.length) {
-    // soft shadow cast on the backdrop, away from the key light
-    const sh = dropShadow(`${c.id}:${view}`, body, cw, ch);
-    g.drawImage(sh, light.side * 26 / fit, 10 / fit + breathe * 0.4, cw, ch);
   }
   const blink = (t + seed) % 3.6 < 0.12;
   const mouth = v.visemes[vis] ?? v.visemes.X;
@@ -238,57 +232,84 @@ const cutsCache = new WeakMap<RenderResult, Cut[]>();
 const lineAt = (r: RenderResult, ms: number, grace = 0) => r.script.find((l) => ms >= l.startMs && ms <= l.endMs + grace);
 let shotCanvas: HTMLCanvasElement | null = null;
 
-function drawBoard(g: CanvasRenderingContext2D, r: RenderResult, tMs: number) {
-  const x = W * 0.48, y = H * 0.14, bw = W * 0.44, bh = H * 0.48;
-  if (r.scenario === "classroom") {
-    g.fillStyle = "#462e1c";
-    g.beginPath();
-    g.roundRect(x, y, bw, bh, 10);
-    g.fill();
-    g.fillStyle = "#182c24";
-    g.beginPath();
-    g.roundRect(x + 12, y + 12, bw - 24, bh - 24, 6);
-    g.fill();
-  } else {
-    g.fillStyle = "rgba(255,255,255,.06)";
-    g.strokeStyle = "rgba(255,255,255,.18)";
-    g.lineWidth = 2;
-    g.beginPath();
-    g.roundRect(x, y, bw, bh, 16);
-    g.fill();
-    g.stroke();
-  }
+const boardCache = new Map<string, HTMLCanvasElement>();
+/** Lesson board: beat label, the line set as large as the board allows (vertically centred), and the
+ *  quote's source at the foot; out of focus behind the teacher in a medium close-up. */
+function drawBoard(g: CanvasRenderingContext2D, r: RenderResult, tMs: number, blurred: boolean) {
+  const [bx0, by0, bx1, by1] = BOARD;
+  const x = W * bx0, y = H * by0, bw = W * (bx1 - bx0), bh = H * (by1 - by0);
   const cur = lineAt(r, tMs, 350) ?? r.script[0];
-  const ink = r.scenario === "classroom" ? "rgba(236,238,228,.92)" : "rgba(255,255,255,.88)";
-  const quote = cur?.kind === "quote";
-  const tx = x + W * 0.03, top = y + H * 0.05;
-  g.textAlign = "left";
-  g.textBaseline = "alphabetic";
-  if (cur?.beat) {
-    g.font = "700 18px Geist, ui-sans-serif, system-ui";
-    g.fillStyle = ACCENT[r.scenario];
-    g.letterSpacing = "3px";
-    g.fillText(cur.beat.toUpperCase(), tx, top + 18);
-    g.letterSpacing = "0px";
+  const key = `${r.scenario}|${cur?.kind}|${cur?.beat}|${cur?.text}`;
+  let c = boardCache.get(key);
+  if (!c) {
+    if (boardCache.size > 24) boardCache.clear();
+    c = Object.assign(document.createElement("canvas"), { width: Math.round(bw), height: Math.round(bh) });
+    const b = c.getContext("2d")!;
+    if (r.scenario === "classroom") { // chalkboard in a wooden frame, with a chalk tray
+      b.fillStyle = "#523620";
+      b.beginPath();
+      b.roundRect(0, 0, bw, bh, 10);
+      b.fill();
+      b.fillStyle = "#1a3027";
+      b.beginPath();
+      b.roundRect(14, 14, bw - 28, bh - 28, 5);
+      b.fill();
+      b.fillStyle = "#68462a";
+      b.fillRect(30, bh - 14, bw - 60, 10);
+    } else { // dark glass screen with a thin accent frame
+      b.fillStyle = "rgba(10,12,16,.9)";
+      b.strokeStyle = ACCENT[r.scenario];
+      b.globalAlpha = 1;
+      b.beginPath();
+      b.roundRect(1, 1, bw - 2, bh - 2, 14);
+      b.fill();
+      b.globalAlpha = 0.6;
+      b.lineWidth = 2;
+      b.stroke();
+      b.globalAlpha = 1;
+    }
+    const ink = r.scenario === "classroom" ? "rgba(238,240,230,.94)" : "rgba(255,255,255,.94)";
+    const quote = cur?.kind === "quote";
+    const tx = bw * 0.075, width = bw * 0.85, top = bh * 0.1;
+    b.textAlign = "left";
+    b.textBaseline = "top";
+    if (cur?.beat) {
+      b.font = "700 17px Geist, ui-sans-serif, system-ui";
+      b.fillStyle = ACCENT[r.scenario];
+      b.letterSpacing = "3.5px";
+      b.fillText(cur.beat.toUpperCase(), tx, top);
+      b.letterSpacing = "0px";
+      b.fillRect(tx, top + 30, 44, 3);
+    }
+    const text = quote ? `“${cur!.text}”` : cur?.text ?? "";
+    const src = quote ? cur!.quote?.source ?? "" : "";
+    const bodyTop = top + 50, bodyBot = bh - bh * (src ? 0.17 : 0.09);
+    const room = bodyBot - bodyTop;
+    let rows: string[] = [], step = 44;
+    for (const size of [52, 48, 44, 40, 37, 34, 31, 28, 25, 22]) { // largest size whose rows fit
+      b.font = `${quote ? "italic " : ""}600 ${size}px Geist, ui-sans-serif, system-ui`;
+      rows = wrap(b, text, width);
+      step = size * 1.3;
+      if (rows.length * step <= room) break;
+    }
+    const y0 = bodyTop + Math.max(0, (room - rows.length * step) / 2);
+    b.fillStyle = ink;
+    rows.forEach((ln, i) => b.fillText(ln, tx, y0 + i * step));
+    if (src) {
+      b.font = "500 17px Geist, ui-sans-serif, system-ui";
+      b.globalAlpha = 0.7;
+      b.textBaseline = "middle";
+      b.fillText(fit(b, `— ${src}`, width), tx, bh - bh * 0.1);
+      b.globalAlpha = 1;
+    }
+    boardCache.set(key, c);
   }
-  const text = quote ? `“${cur!.text}”` : cur?.text ?? "";
-  const src = quote ? cur!.quote?.source ?? "" : "";
-  const room = bh - H * 0.05 - H * (src ? 0.16 : 0.08);
-  let rows: string[] = [], step = 44;
-  for (const size of [30, 27, 24, 21]) {
-    g.font = `${quote ? "italic " : ""}500 ${size}px Geist, ui-sans-serif, system-ui`;
-    rows = wrap(g, text, W * 0.38);
-    step = size * 1.42;
-    if (rows.length * step <= room) break;
-  }
-  g.fillStyle = ink;
-  rows.forEach((ln, i) => g.fillText(ln, tx, top + H * 0.07 + 24 + i * step));
-  if (src) {
-    g.font = "500 16px Geist, ui-sans-serif, system-ui";
-    g.globalAlpha = 0.7;
-    g.fillText(fit(g, `— ${src}`, W * 0.38), tx, y + bh - H * 0.05);
-    g.globalAlpha = 1;
-  }
+  g.save();
+  g.shadowColor = "rgba(0,0,0,.55)";
+  g.shadowBlur = 24;
+  g.shadowOffsetY = 8;
+  g.drawImage(blurred ? soft(c) : c, x, y, bw, bh);
+  g.restore();
 }
 
 /** Trim `text` with an ellipsis until it fits `maxW`. */
@@ -350,7 +371,9 @@ function sourceChip(g: CanvasRenderingContext2D, r: RenderResult, line: ScriptLi
   g.restore();
 }
 
-/** Plates (parallax + depth of field), then the characters, through one camera shot. */
+let charCanvas: HTMLCanvasElement | null = null;
+/** Plates (parallax + depth of field), then contact shadows, the characters behind their lecterns,
+ *  through one camera shot. In a single (over-the-shoulder / close-up) the listener is out of focus. */
 function drawWorld(g: CanvasRenderingContext2D, r: RenderResult, img: Images, shot: Shot, drift: [number, number, number], t: number, tMs: number, speaker: number, amp: number, vis: Viseme) {
   const p = plates(r.scenario, r.template);
   g.save();
@@ -363,12 +386,42 @@ function drawWorld(g: CanvasRenderingContext2D, r: RenderResult, img: Images, sh
   const say = (i: number) => (speaker === i ? [amp, vis] : [0, "X"]) as [number, Viseme];
   const place = PLACES[r.template] ?? PLACES.solo;
   const n = r.template === "debate" ? 2 : 1;
-  if (r.template === "lesson") drawBoard(g, r, tMs);
+  if (r.template === "lesson") drawBoard(g, r, tMs, shot.kind === "mcu");
+  const sh = contactShadow();
+  for (let i = 0; i < n; i++) {
+    const side = lightFor(r.scenario, r.template, i).side;
+    g.drawImage(sh, W * place[i][0] - sh.width / 2 + side * W * 0.012, H * LECTERN_BASE - sh.height * 0.55);
+  }
+  const single = n > 1 && (shot.kind === "ots" || shot.kind === "cu");
   // the speaker is drawn last (in front)
   const order = [...Array(n).keys()].sort((a, b) => (a === speaker ? 1 : 0) - (b === speaker ? 1 : 0));
   for (const i of order) {
     const c = chars[i] ?? chars[0];
-    drawCharacter(g, c, img, W * place[i][0], place[i][1], ...say(i), t, viewFor(r, speaker, i, tMs), i * 1.3, lightFor(r.scenario, r.template, i));
+    const light = lightFor(r.scenario, r.template, i);
+    const cx = W * place[i][0];
+    const lec = lectern(r.scenario, light);
+    const lx = cx - (W * LECTERN_W) / 2, ly = H * LECTERN_TOP;
+    if (single && speaker >= 0 && i !== speaker) {
+      // listener: draw into an off-screen canvas in stage space, then lay in a blurred, darker copy
+      charCanvas ??= Object.assign(document.createElement("canvas"), { width: W, height: H });
+      const o = charCanvas.getContext("2d")!;
+      o.setTransform(1, 0, 0, 1, 0, 0);
+      o.clearRect(0, 0, W, H);
+      drawCharacter(o, c, img, cx, place[i][1], 0, "X", t, viewFor(r, speaker, i, tMs), i * 1.3, light);
+      o.drawImage(lec, lx, ly);
+      o.globalCompositeOperation = "source-atop";
+      o.fillStyle = "rgba(0,0,0,.38)";
+      o.fillRect(0, 0, W, H);
+      o.globalCompositeOperation = "source-over";
+      g.save();
+      g.setTransform(1, 0, 0, 1, 0, 0);
+      depthTransform(g, shot, "stage", drift);
+      g.drawImage(blurNow(charCanvas), 0, 0);
+      g.restore();
+      continue;
+    }
+    drawCharacter(g, c, img, cx, place[i][1], ...say(i), t, viewFor(r, speaker, i, tMs), i * 1.3, light);
+    g.drawImage(lec, lx, ly);
   }
   g.restore();
 }
@@ -385,7 +438,7 @@ const prettyName = (s: string) => {
   return v.length > 34 ? `${v.slice(0, 33).trimEnd()}…` : v;
 };
 
-function lowerThird(g: CanvasRenderingContext2D, r: RenderResult, line: ScriptLine, t: number) {
+function lowerThird(g: CanvasRenderingContext2D, r: RenderResult, line: ScriptLine, t: number, kind?: string) {
   const first = r.script.find((l) => l.speaker === line.speaker);
   const c = r.characters[line.speaker];
   if (first !== line || !c) return;
@@ -403,9 +456,11 @@ function lowerThird(g: CanvasRenderingContext2D, r: RenderResult, line: ScriptLi
   g.letterSpacing = "2.2px";
   const rw = g.measureText(role).width;
   const pw = Math.min(620, Math.max(nw, rw) + 52);
-  const right = r.template === "debate" && line.speaker === 1;
+  // wide/two: under the speaker; close debate shots: on the open side, off the face
+  const close = kind === "ots" || kind === "cu";
+  const right = r.template === "debate" && (line.speaker === 1) !== close;
   const x = (right ? W - 64 - pw : 64) + Math.round(30 * (1 - a)) * (right ? 1 : -1);
-  const y = H - 236;
+  const y = H - 262;
   g.fillStyle = "rgba(8,8,10,.67)";
   g.beginPath();
   g.roundRect(x, y, pw, 92, 10);
@@ -469,19 +524,30 @@ export function drawFrame(g: CanvasRenderingContext2D, r: RenderResult, img: Ima
   g.fillStyle = sc;
   g.fillRect(0, H * 0.68, W, H * 0.32);
   const line = lineAt(r, tMs);
-  if (line) lowerThird(g, r, line, t);
+  const kind = takes[takes.length - 1][1].kind;
+  if (line) lowerThird(g, r, line, t, kind);
   if (line) sourceChip(g, r, line, t);
-  if (line && r.template !== "lesson") {
+  const onBoard = r.template === "lesson" && (kind === "board" || kind === "wide");
+  if (line && !onBoard) { // the lesson reads the board; captions only when it is out of frame
     const a = ease((t - line.startMs / 1000) / 0.18);
     g.globalAlpha = a;
     g.font = `${line.kind === "quote" ? "italic " : ""}600 34px Geist, ui-sans-serif, system-ui`;
     g.textAlign = "center";
     g.textBaseline = "top";
     const ls = captionPage(g, line, tMs, W * 0.72);
-    const y0 = H - 20 - ls.length * 44 + Math.round(6 * (1 - a));
+    const y0 = H - 22 - ls.length * 44 + Math.round(6 * (1 - a));
     g.shadowColor = "rgba(0,0,0,.9)";
     g.shadowBlur = 10;
     g.shadowOffsetY = 2;
+    const who = r.characters[line.speaker];
+    if (who) { // tracked speaker label in the accent colour, above the rows
+      g.font = "700 16px Geist, ui-sans-serif, system-ui";
+      g.letterSpacing = "2.6px";
+      g.fillStyle = ACCENT[r.scenario];
+      g.fillText(prettyName(who.name).toUpperCase(), W / 2, y0 - 26);
+      g.letterSpacing = "0px";
+      g.font = `${line.kind === "quote" ? "italic " : ""}600 34px Geist, ui-sans-serif, system-ui`;
+    }
     g.fillStyle = "#fff";
     ls.forEach((s, i) => g.fillText(s, W / 2, y0 + i * 44));
     g.shadowColor = "transparent";
