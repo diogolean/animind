@@ -105,6 +105,10 @@ test("debate and lesson from 'Quem vai falar?'", async ({ page }, info) => {
     await snap(page, info, "debate-tocando");
     await expect(transcript).toBeVisible();
     await expect(transcript).toContainText(/réplica/i);
+    // Four-act debate: a hook, a turn in the middle and a close (mock and core share the shape).
+    await expect(transcript).toContainText(/gancho/i);
+    await expect(transcript).toContainText(/virada/i);
+    await expect(transcript).toContainText(/fechamento/i);
     // Both speakers are in the transcript.
     await expect(transcript).toContainText(PERSONA.split(/[ ,]/)[0]);
     await expect(transcript).toContainText(RIVAL.split(/[ ,]/)[0]);
