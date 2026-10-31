@@ -86,7 +86,10 @@ test("debate and lesson from 'Quem vai falar?'", async ({ page }, info) => {
     await expect(page.getByTestId("tpl-debate")).toBeVisible({ timeout: slow });
     await expect(page.getByText(PERSONA, { exact: false }).first()).toBeVisible();
     // A real core rig ships the Gemini front view next to the side view.
-    if (core && (await page.getByTestId("core-mode").textContent())?.includes("real")) await expect(page.getByTestId("front-view")).toBeVisible({ timeout: slow });
+    // A mock fallback (Gemini 402 / no credit) says so on the card instead of failing the request.
+    const fallback = await page.getByTestId("art-fallback").count();
+    if (core && !fallback && (await page.getByTestId("core-mode").textContent())?.includes("real"))
+      await expect(page.getByTestId("front-view")).toBeVisible({ timeout: slow });
     await snap(page, info, "persona");
   });
 

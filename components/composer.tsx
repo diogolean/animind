@@ -270,6 +270,11 @@ export function Composer() {
                     <div className="text-center text-[10px] text-muted-foreground">frente</div>
                   </div>
                 )}
+                {char.generator === "mock" && char.generatorNote && (
+                  <p data-testid="art-fallback" title={char.generatorNote} className="mt-2 text-center text-[11px] leading-snug text-amber-600 dark:text-amber-400">
+                    Arte provisória: {/402|depleted|cr[eé]dit/i.test(char.generatorNote) ? "Gemini sem crédito" : "sem gerador de imagem"}
+                  </p>
+                )}
                 {char.reviewSheetUrl && (
                   <a data-testid="review-sheet" href={char.reviewSheetUrl} target="_blank" rel="noreferrer" className="mt-1 block text-center text-[11px] text-muted-foreground hover:underline">
                     Folha de revisão (bocas e olhos)

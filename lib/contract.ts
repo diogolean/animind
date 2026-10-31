@@ -105,6 +105,12 @@ export interface Character {
   frontImageUrl?: string | null;
   /** Voice override for this character (else the core casts one from the persona). */
   voice?: VoicePick;
+  /** Who drew the art (core rigs): "gemini", or "mock" when there is no key or no credit. */
+  generator?: "gemini" | "mock";
+  /** Why the art is mock (e.g. "Gemini indisponível: 402 ..."); null when Gemini drew it. */
+  generatorNote?: string | null;
+  /** true when the core returned a saved, QA-approved rig of the same persona instead of drawing a new one. */
+  reused?: boolean;
   createdAt: string;
 }
 
