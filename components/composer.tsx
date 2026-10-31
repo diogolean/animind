@@ -151,7 +151,7 @@ export function Composer() {
 
   return (
     <div className="mx-auto flex w-full max-w-2xl flex-1 flex-col px-6">
-      <motion.div layout transition={{ duration: 0.5, ease }} className={cn("flex flex-col", char ? "pt-8" : "flex-1 justify-center pb-24")}>
+      <motion.div layout="position" transition={{ duration: 0.5, ease }} className={cn("flex flex-col", char ? "pt-8" : "flex-1 justify-center pb-24")}>
         {!char && (
           <motion.h1 layout="position" className="mb-8 text-center text-4xl font-semibold tracking-tight sm:text-5xl">
             Quem vai falar?

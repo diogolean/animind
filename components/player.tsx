@@ -6,6 +6,12 @@ import type { RenderResult } from "@/lib/contract";
 import { drawFrame, H, loadImages, pickMime, synthTrack, trackFromUrl, VH, VW, W, type Images, type Track } from "@/lib/engine";
 import { Button } from "@/components/ui/button";
 
+/** A still that is never the fade-to-black tail: the middle of the last spoken line. */
+export function posterMs(r: RenderResult) {
+  const last = r.script[r.script.length - 1];
+  return last ? (last.startMs + last.endMs) / 2 : r.durationMs / 2;
+}
+
 export function Player({ result, audioCtx, fileName }: { result: RenderResult; audioCtx: AudioContext; fileName: string }) {
   const canvas = useRef<HTMLCanvasElement>(null);
   const vertical = result.format === "9:16";
@@ -25,6 +31,11 @@ export function Player({ result, audioCtx, fileName }: { result: RenderResult; a
       const src = audioCtx.createBufferSource();
       src.buffer = a.track.buffer;
       src.connect(audioCtx.destination);
+      // The take ends on a fade to black; once it is over, leave a real frame on screen.
+      const poster = () => {
+        drawFrame(g, result, a.img, a.track, posterMs(result));
+        setState("ready");
+      };
       let rec: MediaRecorder | null = null;
       const chunks: Blob[] = [];
       if (record && typeof MediaRecorder !== "undefined" && "captureStream" in cv) {
@@ -37,7 +48,7 @@ export function Player({ result, audioCtx, fileName }: { result: RenderResult; a
         rec.onstop = () => {
           const blob = new Blob(chunks, { type: mime.split(";")[0] });
           setVideo({ url: URL.createObjectURL(blob), ext: mime.includes("mp4") ? "mp4" : "webm" });
-          setState("ready");
+          poster();
         };
         rec.start(250);
       }
@@ -50,7 +61,7 @@ export function Player({ result, audioCtx, fileName }: { result: RenderResult; a
         setProgress(Math.min(1, ms / result.durationMs));
         if (ms < result.durationMs) raf.current = requestAnimationFrame(loop);
         else if (rec) rec.stop();
-        else setState("ready");
+        else poster();
       };
       loop();
     },
