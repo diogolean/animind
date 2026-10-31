@@ -134,7 +134,7 @@ test("debate and lesson from 'Quem vai falar?'", async ({ page }, info) => {
 
   await test.step("lesson renders and plays", async () => {
     await page.getByTestId("tpl-lesson").click();
-    await expect(transcript.getByText(/ponto 1/i)).toBeVisible({ timeout: slow * 2 });
+    await expect(transcript.getByText(/pergunta/i).first()).toBeVisible({ timeout: slow * 2 });
     await expectCanvasMoves(page);
     await snap(page, info, "aula-tocando");
     await checkTranscript(page, core);

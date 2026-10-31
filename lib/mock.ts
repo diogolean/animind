@@ -70,11 +70,11 @@ function script(req: RenderRequest): ScriptLine[] {
         ]
       : req.template === "lesson"
         ? [
-            [0, "gancho", `Turma, o que vocês sabem de verdade sobre ${t}?`],
-            [0, "ponto 1", "Primeiro: entender o básico, sem pressa."],
-            [0, "ponto 2", "Segundo: praticar um pouco todo dia."],
-            [0, "ponto 3", "Terceiro: explicar para alguém. Quem ensina aprende duas vezes."],
-            [0, "resumo", "Resumo: entender, praticar, explicar."],
+            [0, "gancho", `Hoje: ${t}. Parece fácil. Não é.`],
+            [0, "pergunta", `Antes da resposta, uma pergunta melhor: como você sabe o que sabe sobre ${t}?`],
+            [0, "citação", "Em outras palavras: quem explica descobre o que ainda não entendeu."],
+            [0, "exemplo", "Exemplo: explique para alguém em um minuto… e veja onde você trava."],
+            [0, "síntese", "Guarde isto: entender, praticar, explicar. E a próxima pergunta é sua."],
           ]
         : [
             [0, "gancho", `Oi! Eu sou ${a}.`],

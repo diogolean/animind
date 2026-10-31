@@ -163,7 +163,7 @@ export interface ScriptLine {
   view?: ViewName;
   /** "quote": `text` is a real quote copied from the persona sheet (see `quote`). "paraphrase": written for the scene. */
   kind?: "quote" | "paraphrase";
-  /** Script beat: gancho, tese, réplica, tréplica, fechamento; lesson: ponto 1..3, exemplo, resumo. */
+  /** Script beat: gancho, tese, réplica, tréplica, fechamento; lesson: gancho, pergunta, citação, exemplo, citação, síntese. */
   beat?: string;
   quote?: QuoteRef;
   /** The quote a paraphrase restates, when the writer said so. */
