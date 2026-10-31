@@ -163,8 +163,12 @@ export interface ScriptLine {
   view?: ViewName;
   /** "quote": `text` is a real quote copied from the persona sheet (see `quote`). "paraphrase": written for the scene. */
   kind?: "quote" | "paraphrase";
-  /** Script beat: gancho, tese, réplica, tréplica, fechamento; lesson: gancho, pergunta, citação, exemplo, citação, síntese. */
+  /** Script beat. Debate: gancho, tese, réplica, virada, tréplica, fechamento; lesson: gancho, pergunta, citação, exemplo, citação, síntese. */
   beat?: string;
+  /** Debate act: abertura (hook), confronto (clash), virada (the turn, mid-video), fechamento (close). */
+  act?: "abertura" | "confronto" | "virada" | "fechamento" | string;
+  /** Debate: the line this one answers and the idea (word, or "a~b" related concepts) it picks up from it. */
+  replyTo?: { line: number; idea: string };
   quote?: QuoteRef;
   /** The quote a paraphrase restates, when the writer said so. */
   basis?: { id: string; source: string; label?: string; url: string };
@@ -204,6 +208,8 @@ export interface RenderResult {
   disclaimer: string;
   /** Who wrote the lines: "gemini" (picks quote ids + writes paraphrases) or "template". */
   writer?: "gemini" | "template";
+  /** Debate script self-check (alternation, every line answers the previous, real quotes, arc, line lengths). */
+  scriptQA?: { pass: boolean; problems: string[] };
   topic?: string;
   personas?: PersonaSheet[];
   format?: VideoFormat;

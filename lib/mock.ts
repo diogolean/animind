@@ -58,15 +58,23 @@ function script(req: RenderRequest): ScriptLine[] {
   const a = req.characters[0]?.name ?? "Personagem";
   const b = req.characters[1]?.name ?? "Rival";
   const t = req.topic?.trim() || "o futuro da animação";
-  // The mock has no persona sheets, so every line is a marked paraphrase (never a fake quote).
-  const lines: [number, string, string][] =
+  const T = t.charAt(0).toUpperCase() + t.slice(1);
+  // The mock has no persona sheets, so every line is a marked paraphrase (never a fake quote). The debate mirrors
+  // the core's arc (abertura, confronto, virada, fechamento): speakers alternate, every reply picks up a word of the
+  // line before (`idea`), the turn sits in the middle and lines stay short and varied.
+  type MockLine = [number, string, string, string?, string?];
+  const lines: MockLine[] =
     req.template === "debate"
       ? [
-          [0, "gancho", `${b}, e se tudo o que você pensa sobre ${t} estiver errado?`],
-          [1, "réplica", `Errado? Mostre um fato, ${a}, não uma frase de efeito.`],
-          [0, "réplica", "Os fatos estão do meu lado. Pergunte a qualquer um!"],
-          [1, "tréplica", "Qualquer um não é prova. E eu trouxe argumentos."],
-          [0, "fechamento", "Então que o público decida."],
+          [0, "gancho", `${b}, ${t}: verdade ou moda? Responde sem fugir.`, "abertura"],
+          [1, "tese", `Moda, ${a}? ${T} é coisa séria. Moda é a sua pergunta.`, "confronto", "moda"],
+          [0, "réplica", `Séria? Então defina em uma frase, ${b}.`, "confronto", "séria"],
+          [1, "réplica", `Uma frase? Prove você, ${a}.`, "confronto", "frase"],
+          [0, "virada", `Provo. Quem nunca duvidou de ${t} nunca pensou de verdade, ${b}.`, "virada", "prov"],
+          [1, "réplica", `Duvidar, ${a}? Dúvida demais vira medo.`, "virada", "duvid"],
+          [0, "tréplica", `Medo é seu, ${b}. Você mesmo disse: é coisa séria.`, "fechamento", "medo"],
+          [1, "fechamento", `Séria, sim. Por isso eu decido, ${a}.`, "fechamento", "séria"],
+          [0, "fechamento", "Decida, então. Eu continuo perguntando… e o público decide.", "fechamento", "decid"],
         ]
       : req.template === "lesson"
         ? [
@@ -84,9 +92,11 @@ function script(req: RenderRequest): ScriptLine[] {
   let t0 = 400;
   const view = (speaker: number, i: number): ViewName =>
     req.template === "debate" ? (speaker === 0 ? "right" : "left") : i === 1 ? (req.template === "lesson" ? "right" : "left") : "front";
-  return lines.map(([speaker, beat, text], i) => {
+  return lines.map(([speaker, beat, text, act, idea], i) => {
     const dur = Math.max(1400, text.length * 62);
     const line: ScriptLine = { speaker, text, beat, kind: "paraphrase", startMs: t0, endMs: t0 + dur, view: view(speaker, i) };
+    if (act) line.act = act;
+    if (idea) line.replyTo = { line: i - 1, idea };
     t0 += dur + 350;
     return line;
   });
