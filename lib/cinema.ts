@@ -30,6 +30,12 @@ export const PLACES: Record<SceneTemplate, [number, number][]> = {
 export const BUST_H = 0.55, BUST_BOTTOM = 0.8;
 export const LECTERN_TOP = 0.645, LECTERN_BASE = 0.835, LECTERN_W = 0.27;
 export const FACE_Y = 0.42;
+/** Debate quote close-ups sit the face higher so mouth and beard clear the captions (scene.CU_Y). */
+export const CU_Y = 0.45;
+/** Push-in over a shot as a fraction of its zoom, eased across the shot; quotes lean in further. */
+export const PUSH = 0.04, PUSH_CU = 0.075;
+/** Depth of field (look.DOF_*): blur radii in px per level for far/mid plates, ramped by zoom. */
+export const DOF_FAR = [0, 2.6, 5.2, 8], DOF_MID = [0, 1.8, 3.6, 5.6], DOF_ZOOM = [1.06, 2.15] as const;
 export const BOARD = [0.45, 0.08, 0.94, 0.62] as const;
 const RIM: Record<Scenario, string[]> = {
   studio: ["#ffd199", "#9edbff"],
@@ -528,24 +534,59 @@ export function soft(c: HTMLCanvasElement) {
   return o;
 }
 
+/** Blurred copies of a plate, one per DOF level (built once per plate). */
+const dofCache = new WeakMap<HTMLCanvasElement, HTMLCanvasElement[]>();
+function dofStack(c: HTMLCanvasElement, radii: number[]) {
+  let st = dofCache.get(c);
+  if (!st) {
+    st = radii.map((r) => {
+      if (r <= 0) return c;
+      const o = canvas(c.width, c.height);
+      const g = ctx2d(o);
+      g.filter = `blur(${r}px)`;
+      g.drawImage(c, 0, 0);
+      return o;
+    });
+    dofCache.set(c, st);
+  }
+  return st;
+}
+
+/** Draws a far/mid plate with depth of field for the shot's zoom: wides stay crisp, close-ups
+ *  throw the set out of focus, blending neighbouring levels so a push or glide never pops. */
+export function drawPlate(g: CanvasRenderingContext2D, plate: HTMLCanvasElement, depth: "far" | "mid", zoom: number) {
+  const radii = depth === "far" ? DOF_FAR : DOF_MID;
+  const st = dofStack(plate, radii);
+  const u = Math.pow(Math.min(1, Math.max(0, (zoom - DOF_ZOOM[0]) / (DOF_ZOOM[1] - DOF_ZOOM[0]))), 0.85) * (radii.length - 1);
+  const lo = Math.min(radii.length - 2, Math.floor(u)), w = u - lo;
+  g.drawImage(st[lo], 0, 0);
+  if (w > 0.004) {
+    const a = g.globalAlpha;
+    g.globalAlpha = a * w;
+    g.drawImage(st[lo + 1], 0, 0);
+    g.globalAlpha = a;
+  }
+}
+
 let vigCache: HTMLCanvasElement | null = null;
 export function vignette() {
   if (vigCache) return vigCache;
-  const c = canvas(W, H);
+  const c = canvas(2 * W, 2 * H); // centred at (W, H): grade() shifts it onto the subject
   const g = ctx2d(c);
   g.fillStyle = "#fff";
-  g.fillRect(0, 0, W, H);
-  g.translate(W / 2, H / 2);
+  g.fillRect(0, 0, 2 * W, 2 * H);
+  g.translate(W, H);
   g.scale(1, H / W);
   const r = g.createRadialGradient(0, 0, W * 0.32, 0, 0, W * 0.72);
   r.addColorStop(0, "rgba(0,0,0,0)");
   r.addColorStop(1, "rgba(0,0,0,.55)");
   g.fillStyle = r;
-  g.fillRect(-W, -W, 2 * W, 2 * W);
+  g.fillRect(-2 * W, -2 * W, 4 * W, 4 * W);
   return (vigCache = c);
 }
 
-export function grade(g: CanvasRenderingContext2D, s: Scenario) {
+/** Colour grade; the vignette centres on the subject (clamped like look.vignette_at). */
+export function grade(g: CanvasRenderingContext2D, s: Scenario, focus: [number, number] = [W / 2, H * 0.5]) {
   const [tint, a] = GRADE[s] ?? GRADE.studio;
   g.save();
   g.globalCompositeOperation = "soft-light";
@@ -558,7 +599,10 @@ export function grade(g: CanvasRenderingContext2D, s: Scenario) {
   g.fillRect(0, 0, g.canvas.width, g.canvas.height);
   g.globalAlpha = 1;
   g.globalCompositeOperation = "multiply";
-  g.drawImage(vignette(), 0, 0, g.canvas.width, g.canvas.height);
+  const cw = g.canvas.width, ch = g.canvas.height;
+  const fx = Math.min(0.75, Math.max(0.25, focus[0] / W)) - 0.5, fy = Math.min(0.7, Math.max(0.3, focus[1] / H)) - 0.5;
+  // vignette drawn 2x and shifted, so its centre follows the speaker without exposing an edge
+  g.drawImage(vignette(), cw * (fx - 0.5), ch * (fy - 0.5), cw * 2, ch * 2);
   g.restore();
 }
 
@@ -600,7 +644,7 @@ export function shotFor(template: SceneTemplate, speaker: number, i: number, scr
   }
   if (template === "debate") {
     if (last) return { cx: W / 2, cy: H * 0.47, zoom: 1.24, kind: "two" };
-    if (quote) return { cx: W * (x + 0.035 * toward), cy: H * FACE_Y, zoom: 2.1, kind: "cu" };
+    if (quote) return { cx: W * (x + 0.035 * toward), cy: H * CU_Y, zoom: 2.1, kind: "cu" };
     return { cx: W * (x + 0.115 * toward), cy: H * 0.47, zoom: 1.6, kind: "ots" };
   }
   if (template === "lesson") {
@@ -658,13 +702,19 @@ function planVertical(template: SceneTemplate, script: ScriptLine[]): Cut[] {
 export function camera(cuts: Cut[], t: number): [number, Shot, number][] {
   let k = 0;
   cuts.forEach((c, i) => { if (c.start <= t) k = i; });
-  const pushed = (s: Shot, since: number): Shot => ({ ...s, zoom: s.zoom * (1 + 0.045 * Math.min(1, since / 7)) });
-  const { start, shot, kind } = cuts[k];
+  // eased over the whole shot (no linear creep that stops dead), stronger on quote close-ups
+  const pushed = (j: number, since: number): Shot => {
+    const s = cuts[j].shot;
+    const span = Math.max(2, (cuts[j + 1]?.start ?? cuts[j].start + 7) - cuts[j].start);
+    const amount = s.kind === "cu" || s.kind === "board" ? PUSH_CU : PUSH;
+    return { ...s, zoom: s.zoom * (1 + amount * ease(since / span)) };
+  };
+  const { start, kind } = cuts[k];
   const local = t - start;
-  const cur = pushed(shot, local);
+  const cur = pushed(k, local);
   if (k === 0) return [[1, cur, 0]];
   const prev = cuts[k - 1];
-  const before = pushed(prev.shot, start - prev.start);
+  const before = pushed(k - 1, start - prev.start);
   if (kind === "dissolve" && local < DISSOLVE_S) {
     // a glide, not a cross-dissolve: blending two framings of the same stage doubles every face
     const a = ease(local / DISSOLVE_S);

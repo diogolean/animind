@@ -3,7 +3,7 @@
  * Mirrors what the Rigly engine does server-side: layered rig + mouth driven
  * by the audio envelope. Pure client code, no keys involved. */
 import { PARODY_DISCLAIMER, type Character, type Layer, type RenderResult, type ScriptLine, type ViewName, type Viseme } from "./contract";
-import { ACCENT, BOARD, BUST_BOTTOM, BUST_H, camera, contactShadow, depthTransform, ease, FADE_IN_S, FADE_OUT_S, grade, H, lectern, LECTERN_BASE, LECTERN_TOP, LECTERN_W, lightFor, litLayer, PLACES, planShots, plates, soft, blurNow, W, VW, VH, handheld, type Cut, type Light, type Shot } from "./cinema";
+import { ACCENT, BOARD, BUST_BOTTOM, BUST_H, camera, contactShadow, depthTransform, drawPlate, ease, FACE_Y, FADE_IN_S, FADE_OUT_S, grade, H, lectern, LECTERN_BASE, LECTERN_TOP, LECTERN_W, lightFor, litLayer, PLACES, planShots, plates, soft, blurNow, W, VW, VH, handheld, type Cut, type Light, type Shot } from "./cinema";
 import { blink, gaze, type Lids } from "./eyes";
 
 export { H, VH, VW, W };
@@ -433,6 +433,14 @@ function sourceChip(g: CanvasRenderingContext2D, r: RenderResult, line: ScriptLi
   g.restore();
 }
 
+/** Where the vignette centres (scene._focus): the framed speaker in singles, frame centre otherwise. */
+function focusOf(r: RenderResult, shot: Shot, vert: boolean): [number, number] {
+  if (vert || ["wide", "two", "board", undefined].includes(shot.kind)) return [W / 2, H * 0.46];
+  const place = PLACES[r.template] ?? PLACES.solo;
+  const px = place.reduce((b, p) => (Math.abs(p[0] * W - shot.cx) < Math.abs(b * W - shot.cx) ? p[0] : b), place[0][0]);
+  return [W / 2 + (px * W - shot.cx) * shot.zoom, H / 2 + (H * FACE_Y - shot.cy) * shot.zoom];
+}
+
 let charCanvas: HTMLCanvasElement | null = null;
 /** Plates (parallax + depth of field), then contact shadows, the characters behind their lecterns,
  *  through one camera shot. In a single (over-the-shoulder / close-up) the listener is out of focus. */
@@ -441,9 +449,9 @@ function drawWorld(g: CanvasRenderingContext2D, r: RenderResult, img: Images, sh
   const vert = r.format === "9:16";
   g.save();
   depthTransform(g, shot, "far", drift, vert);
-  g.drawImage(p.far, 0, 0);
+  drawPlate(g, p.far, "far", shot.zoom);
   depthTransform(g, shot, "mid", drift, vert);
-  g.drawImage(p.mid, 0, 0);
+  drawPlate(g, p.mid, "mid", shot.zoom);
   depthTransform(g, shot, "stage", drift, vert);
   const chars = r.characters;
   const say = (i: number) => (speaker === i ? [amp, vis] : [0, "X"]) as [number, Viseme];
@@ -579,7 +587,7 @@ export function drawFrame(g: CanvasRenderingContext2D, r: RenderResult, img: Ima
     }
     g.globalAlpha = 1;
   });
-  grade(g, r.scenario);
+  grade(g, r.scenario, focusOf(r, takes[takes.length - 1][1], vert));
   const fade = ease(t / FADE_IN_S) * ease((r.durationMs / 1000 - t) / FADE_OUT_S);
   if (fade < 0.999) {
     g.fillStyle = `rgba(0,0,0,${1 - fade})`;
@@ -614,6 +622,18 @@ export function drawFrame(g: CanvasRenderingContext2D, r: RenderResult, img: Ima
     const ls = captionPage(g, line, tMs, FW * (vert ? 0.86 : 0.72));
     const lh = Math.round(44 * ks);
     const y0 = (vert ? FH * 0.7 + 40 : H - 22 - ls.length * lh) + Math.round(6 * (1 - a));
+    { // soft dark plate behind the block, so white text reads over a white beard (scene._caption)
+      const tw = Math.max(...ls.map((s) => g.measureText(s).width), 0);
+      const top = y0 - (r.characters[line.speaker] ? 34 : 12) * ks, bottom = y0 + ls.length * lh + 4 * ks;
+      const padX = 30 * ks;
+      g.save();
+      g.filter = `blur(${Math.round(14 * ks)}px)`;
+      g.fillStyle = `rgba(6,6,9,${120 / 255})`;
+      g.beginPath();
+      g.roundRect(FW / 2 - tw / 2 - padX, top, tw + 2 * padX, bottom - top, 22 * ks);
+      g.fill();
+      g.restore();
+    }
     g.shadowColor = "rgba(0,0,0,.9)";
     g.shadowBlur = 10;
     g.shadowOffsetY = 2;
