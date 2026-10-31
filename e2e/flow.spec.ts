@@ -18,6 +18,7 @@ const TOPIC = process.env.E2E_TOPIC ?? "a verdade";
 let shot = 0;
 async function snap(page: Page, info: TestInfo, name: string) {
   const file = info.outputPath(`${String(++shot).padStart(2, "0")}-${name}.png`);
+  await page.waitForTimeout(700); // let the 0.5 s layout transitions settle
   await page.screenshot({ path: file, fullPage: true });
   await info.attach(name, { path: file, contentType: "image/png" });
   const dir = process.env.E2E_SHOTS_DIR;
@@ -175,6 +176,18 @@ async function checkDownloads(page: Page, core: boolean, slow: number) {
   // The browser recording finishes after one full play of the preview.
   await expect(page.getByTestId("download")).toBeVisible({ timeout: slow });
   await expect(page.getByTestId("download")).toHaveAttribute("download", /\.(webm|mp4)$/);
+  // After the take (which fades to black) the player keeps a real frame on screen.
+  const brightness = await page.getByTestId("preview-canvas").evaluate((c: HTMLCanvasElement) => {
+    try {
+      const d = c.getContext("2d")!.getImageData(0, 0, c.width, c.height).data;
+      let sum = 0;
+      for (let i = 0; i < d.length; i += 4 * 97) sum += d[i] + d[i + 1] + d[i + 2];
+      return sum / (3 * Math.ceil(d.length / (4 * 97)));
+    } catch {
+      return null; // tainted canvas: cannot read pixels, skip
+    }
+  });
+  if (brightness !== null) expect(brightness, "finished player should not stay black").toBeGreaterThan(8);
   const coreMp4 = page.getByTestId("download-core");
   if (!core) {
     await expect(coreMp4).toHaveCount(0);
