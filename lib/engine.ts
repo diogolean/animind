@@ -403,9 +403,9 @@ export function captionPage(g: CanvasRenderingContext2D, line: ScriptLine, tMs: 
 function sourceChip(g: CanvasRenderingContext2D, r: RenderResult, line: ScriptLine, t: number) {
   if (line.kind !== "quote" && line.kind !== "paraphrase") return;
   const head = line.kind === "quote" ? "CITAÇÃO REAL" : "PARÁFRASE";
-  const basis = line.basis?.source;
+  const basis = line.basis?.label ?? line.basis?.source;
   g.font = "500 17px Geist, ui-sans-serif, system-ui";
-  const src = fit(g, line.kind === "quote" ? `${line.quote?.source ?? ""} · ${line.quote?.site ?? "Wikiquote"}` : basis ? `inspirada em ${basis}` : "fala escrita para a cena", 560);
+  const src = fit(g, line.kind === "quote" ? `${line.quote?.label ?? line.quote?.source ?? ""} · ${line.quote?.site ?? "Wikiquote"}` : basis ? `inspirada em ${basis}` : "fala escrita para a cena", 560);
   const sw = g.measureText(src).width;
   g.font = "700 15px Geist, ui-sans-serif, system-ui";
   const hw = g.measureText(head).width + head.length * 2;

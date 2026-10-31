@@ -167,7 +167,7 @@ export interface ScriptLine {
   beat?: string;
   quote?: QuoteRef;
   /** The quote a paraphrase restates, when the writer said so. */
-  basis?: { id: string; source: string; url: string };
+  basis?: { id: string; source: string; label?: string; url: string };
 }
 
 /** A literal quote with its source (Wikiquote page; Wikisource when the page links one). */
@@ -175,6 +175,8 @@ export interface QuoteRef {
   id: string;
   text: string;
   source: string;
+  /** Short on-screen source (no pages, translators or publishers); `source` stays complete. */
+  label?: string;
   url: string;
   site?: string;
   wikisource?: string;

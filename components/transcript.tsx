@@ -21,16 +21,16 @@ export function Transcript({ result }: { result: RenderResult }) {
             <div>
               <p className={l.kind === "quote" ? "italic" : undefined}>{l.kind === "quote" ? `“${l.text}”` : l.text}</p>
               {l.kind === "quote" && l.quote ? (
-                <a href={l.quote.url} target="_blank" rel="noreferrer" className="mt-0.5 inline-flex gap-1.5 text-[11px] text-muted-foreground hover:underline">
+                <a href={l.quote.url} target="_blank" rel="noreferrer" title={l.quote.source} className="mt-0.5 inline-flex gap-1.5 text-[11px] text-muted-foreground hover:underline">
                   <span className="font-semibold text-[var(--accent-brand)]">Citação real</span>
-                  {l.quote.source} · {l.quote.site ?? "Wikiquote"}
+                  {l.quote.label ?? l.quote.source} · {l.quote.site ?? "Wikiquote"}
                 </a>
               ) : l.kind === "paraphrase" ? (
                 <span className="mt-0.5 block text-[11px] text-muted-foreground">
                   Paráfrase{l.basis ? (
                     <>
                       {" "}· inspirada em{" "}
-                      <a href={l.basis.url} target="_blank" rel="noreferrer" className="hover:underline">{l.basis.source}</a>
+                      <a href={l.basis.url} target="_blank" rel="noreferrer" title={l.basis.source} className="hover:underline">{l.basis.label ?? l.basis.source}</a>
                     </>
                   ) : " · fala escrita para a cena"}
                 </span>
