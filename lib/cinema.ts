@@ -42,6 +42,7 @@ const RIM: Record<Scenario, string[]> = {
   classroom: ["#ffe6b8", "#ffe6b8"],
   arena: ["#ff616b", "#6b9eff"],
   space: ["#8cd9ff", "#d99aff"],
+  agora: ["#ffd694", "#ffe6bd"],
 };
 /** soft-light tint (split tone) and its strength, per scenario */
 const GRADE: Record<Scenario, [string, number]> = {
@@ -49,11 +50,12 @@ const GRADE: Record<Scenario, [string, number]> = {
   classroom: ["#a8743a", 0.22],
   arena: ["#7a2f6e", 0.2],
   space: ["#2f4f9a", 0.24],
+  agora: ["#a87a3e", 0.22],
 };
-export const ACCENT: Record<Scenario, string> = { studio: "#f5b042", classroom: "#f0c46e", arena: "#ff5460", space: "#60d6ff" };
+export const ACCENT: Record<Scenario, string> = { studio: "#f5b042", classroom: "#f0c46e", arena: "#ff5460", space: "#60d6ff", agora: "#e0a24a" };
 
 /** the set's bounce light, multiplied into the characters */
-const AMBIENT: Record<Scenario, string> = { studio: "#e6edff", classroom: "#ffebcc", arena: "#fad6f2", space: "#d1e6ff" };
+const AMBIENT: Record<Scenario, string> = { studio: "#e6edff", classroom: "#ffebcc", arena: "#fad6f2", space: "#d1e6ff", agora: "#fff2db" };
 export interface Light { side: number; rim: string; ambient: string }
 
 export function lightFor(scenario: Scenario, template: SceneTemplate, idx: number): Light {
@@ -119,7 +121,7 @@ const rect = (g: CanvasRenderingContext2D, x0: number, y0: number, x1: number, y
 
 /** Floor below the horizon: gradient, perspective seams/planks/tiles toward a vanishing point, and a
  *  fading mirror of the wall (gloss). */
-function floor(g: CanvasRenderingContext2D, c: HTMLCanvasElement, top: string, bottom: string, reflect: number, pattern: "seams" | "planks" | "tiles", line: string) {
+function floor(g: CanvasRenderingContext2D, c: HTMLCanvasElement, top: string, bottom: string, reflect: number, pattern: "seams" | "planks" | "tiles" | "stone", line: string) {
   const hy = py(HORIZON), n = PH - hy, vx = px(0.5);
   const grad = g.createLinearGradient(0, hy, 0, PH);
   grad.addColorStop(0, top);
@@ -144,15 +146,16 @@ function floor(g: CanvasRenderingContext2D, c: HTMLCanvasElement, top: string, b
   const l = ctx2d(lines);
   l.strokeStyle = line;
   l.lineWidth = pattern === "planks" ? 1.5 : 2;
-  const step = pattern === "planks" ? 0.045 : 0.11;
+  const step = pattern === "planks" ? 0.045 : pattern === "stone" ? 0.075 : 0.11;
   for (let k = -30; k <= 30; k++) {
     l.beginPath();
     l.moveTo(vx - 0, 0);
     l.lineTo(vx + k * step * W * 2.2, n * 1.0);
     l.stroke();
   }
-  if (pattern !== "planks") for (let i = 1; i < 12; i++) {
-    const y = n * (0.06 * i * i) / 1.2;
+  const rows = pattern === "stone" ? 22 : 12, k2 = pattern === "stone" ? 0.012 : 0.06; // flagstones: more, shallower rows
+  if (pattern !== "planks") for (let i = 1; i < rows; i++) {
+    const y = n * (k2 * i * i) / 1.2;
     if (y > n) break;
     l.fillStyle = line;
     l.fillRect(0, y, PW, 2);
@@ -168,6 +171,105 @@ function floor(g: CanvasRenderingContext2D, c: HTMLCanvasElement, top: string, b
   g.fillRect(0, hy, PW, 2);
 }
 
+/** A painted cumulus: overlapping puffs, warm lit top fading into a lavender belly, flat base. */
+function cloud(g: CanvasRenderingContext2D, cx: number, cy: number, size: number, seed: number) {
+  const r = rng(seed);
+  const top = py(cy) - 0.45 * size * W, base = py(cy) + 0.12 * size * W;
+  const grad = g.createLinearGradient(0, top, 0, base);
+  grad.addColorStop(0, "#fff7e6");
+  grad.addColorStop(1, "#ccbdd6");
+  g.save();
+  g.beginPath();
+  g.rect(0, 0, PW, base);
+  g.clip();
+  g.fillStyle = grad;
+  for (let i = 0; i < 14; i++) {
+    const dx = (r() * 2 - 1) * size, dy = (r() * 0.42 - 0.3) * size;
+    const rad = (0.28 + r() * 0.27) * size * (1 - Math.abs(dx) / (2.2 * size)) * W;
+    g.beginPath();
+    g.ellipse(px(cx) + dx * W, py(cy) + dy * W, rad, rad / 1.35, 0, 0, 7);
+    g.fill();
+  }
+  g.restore();
+}
+
+/** Ancient set (mirrors the core's _agora_far): a stone portico open on a golden-hour landscape,
+ *  hazy hills with a temple, cypresses, a parapet on the horizon and a flagstone floor. The sun sits
+ *  on the left, like the key light. */
+function agoraFar(g: CanvasRenderingContext2D, c: HTMLCanvasElement, places: number[]) {
+  const sky = g.createLinearGradient(0, py(-0.15), 0, py(HORIZON));
+  sky.addColorStop(0, "#6b9ed1");
+  sky.addColorStop(0.55, "#d9cfb0");
+  sky.addColorStop(1, "#fcdba8");
+  g.fillStyle = sky;
+  g.fillRect(0, 0, PW, PH);
+  pool(g, px(0.05), py(0.36), 0.35 * W, 0.3 * H, "rgba(255,190,70,.4)"); // the sun's glow
+  for (const [cx, cy, size, seed] of [[0.3, 0.13, 0.1, 61], [0.62, 0.09, 0.13, 62], [0.97, 0.2, 0.08, 63], [0.06, 0.06, 0.07, 64]]) cloud(g, cx, cy, size, seed);
+  const hills = (base: number, a1: number, f1: number, p1: number, a2: number, f2: number, p2: number, col: string) => {
+    g.fillStyle = col;
+    g.beginPath();
+    g.moveTo(0, py(HORIZON));
+    for (let x = 0; x <= PW; x += 8) {
+      const fx = (x - OX) / W;
+      g.lineTo(x, py(base + a1 * Math.sin(fx * f1 + p1) + a2 * Math.sin(fx * f2 + p2)));
+    }
+    g.lineTo(PW, py(HORIZON));
+    g.fill();
+  };
+  hills(0.43, 0.025, 5.1, 0.6, 0.015, 13.7, 2.0, "#9eb3b8"); // far hills, hazy
+  const [tx, ty] = [0.74, 0.4]; // small temple on the far ridge
+  rect(g, tx - 0.04, ty - 0.012, tx + 0.04, ty + 0.004, "#dbd6cc");
+  for (let k = 0; k < 7; k++) rect(g, tx - 0.034 + k * 0.0113, ty + 0.004, tx - 0.029 + k * 0.0113, ty + 0.03, "#dbd6cc");
+  g.fillStyle = "#e0dbd1";
+  g.beginPath();
+  g.moveTo(px(tx - 0.045), py(ty - 0.012));
+  g.lineTo(px(tx), py(ty - 0.012) - 0.045 * W * 0.25);
+  g.lineTo(px(tx + 0.045), py(ty - 0.012));
+  g.fill();
+  hills(0.5, 0.02, 3.3, 2.4, 0.01, 17, 0, "#738c66"); // nearer hills with olive groves
+  const r = rng(65);
+  g.fillStyle = "rgba(40,60,40,.22)";
+  for (let i = 0; i < 40; i++) { // tree clumps
+    g.beginPath();
+    g.ellipse(px(-0.15 + r() * 1.3), py(0.535 + r() * 0.05), 14 + r() * 22, 6 + r() * 6, 0, 0, 7);
+    g.fill();
+  }
+  for (const [cx, h] of [[0.17, 0.3], [0.205, 0.24], [0.82, 0.34], [0.86, 0.26]]) { // cypresses, lit on the sun side
+    const cg = g.createLinearGradient(px(cx - 0.016), 0, px(cx + 0.016), 0);
+    cg.addColorStop(0, "#3b5937");
+    cg.addColorStop(1, "#2a3d28");
+    g.fillStyle = cg;
+    g.beginPath();
+    g.ellipse(px(cx), py(HORIZON - 0.05 - h / 2), 0.016 * W, (h / 2) * H, 0, 0, 7);
+    g.fill();
+  }
+  rect(g, -0.2, HORIZON - 0.06, 1.2, HORIZON + 0.003, "#b49f7d"); // parapet
+  rect(g, -0.2, HORIZON - 0.064, 1.2, HORIZON - 0.054, "#dfc89f"); // its sunlit coping
+  for (const cx of [-0.07, 0.07, 0.93, 1.07]) { // portico columns framing the view, fluted, lit from the left
+    const cg = g.createLinearGradient(px(cx - 0.03), 0, px(cx + 0.03), 0);
+    cg.addColorStop(0, "#ecd3a6");
+    cg.addColorStop(1, "#8f7c5f");
+    rect(g, cx - 0.03, -0.2, cx + 0.03, HORIZON + 0.003, cg);
+    g.fillStyle = "rgba(0,0,0,.05)";
+    for (let k = 0; k < 6; k++) g.fillRect(px(cx - 0.03 + (k + 0.5) * 0.01) - 2, py(-0.2), 4, (HORIZON + 0.2) * H);
+    rect(g, cx - 0.042, 0, cx + 0.042, 0.03, "#d0b891"); // capital
+    rect(g, cx - 0.038, HORIZON - 0.02, cx + 0.038, HORIZON + 0.003, "#ab9777"); // base
+  }
+  rect(g, -0.2, -0.2, 1.2, 0, "#9e8c6e"); // architrave, mostly above frame
+  places.forEach((x) => pool(g, px(x), py(0.55), 0.2 * W, 0.2 * H, "rgba(255,200,120,.08)"));
+  floor(g, c, "#a1835f", "#6b5440", 0.08, "stone", "rgba(60,40,20,.22)");
+  pool(g, px(0.15), py(0.9), 0.45 * W, 0.14 * H, "rgba(255,190,90,.14)");
+  g.fillStyle = "rgba(60,50,45,.3)"; // column shadows raking across the floor, away from the sun
+  for (const cx of [0.07, 0.93]) {
+    g.beginPath();
+    g.moveTo(px(cx - 0.03), py(HORIZON));
+    g.lineTo(px(cx + 0.03), py(HORIZON));
+    g.lineTo(px(cx + 0.36), py(1.15));
+    g.lineTo(px(cx + 0.2), py(1.15));
+    g.fill();
+  }
+}
+
 function far(s: Scenario, places: number[]) {
   const c = canvas(PW, PH);
   const g = ctx2d(c);
@@ -179,6 +281,10 @@ function far(s: Scenario, places: number[]) {
     g.fillRect(0, 0, PW, PH);
   };
   const rims = RIM[s] ?? RIM.studio;
+  if (s === "agora") {
+    agoraFar(g, c, places);
+    return softBlur(c, 2.2);
+  }
   if (s === "classroom") {
     v("#8a7558", "#5a4a37"); // plaster wall
     rect(g, -0.2, 0.4, 1.2, HORIZON, "#4a3220"); // wainscot
@@ -297,7 +403,7 @@ function hexA(hex: string, a: number) {
 function mid(s: Scenario, template: SceneTemplate) {
   const c = canvas(PW, PH);
   const g = ctx2d(c);
-  const r = rng({ studio: 1, classroom: 2, arena: 3, space: 4 }[s] ?? 1);
+  const r = rng({ studio: 1, classroom: 2, arena: 3, space: 4, agora: 5 }[s] ?? 1);
   if (s === "classroom") {
     if (template !== "lesson") {
       rect(g, 0.35, 0.1, 0.65, 0.44, "#52361f");
@@ -350,6 +456,48 @@ function mid(s: Scenario, template: SceneTemplate) {
       }
     }
     return softBlur(blurred, 1.6);
+  }
+  if (s === "agora") {
+    g.fillStyle = "rgba(255,226,170,.1)"; // late sun through the portico, raking to the right
+    for (const [x0, x1] of [[-0.04, 0.04], [0.1, 0.22]]) {
+      g.beginPath();
+      g.moveTo(px(x0), py(-0.05));
+      g.lineTo(px(x1), py(-0.05));
+      g.lineTo(px(x1 + 0.55), py(1.05));
+      g.lineTo(px(x0 + 0.45), py(1.05));
+      g.fill();
+    }
+    const soft = softBlur(softBlur(c, 6), 4);
+    const o = ctx2d(soft);
+    for (let i = 0; i < 70; i++) { // pollen and dust drifting in the light
+      const cx = r() * PW, cy = py(0.05) + r() * 0.7 * H, rad = 1.5 + r() * 2.5;
+      o.fillStyle = `rgba(255,240,205,${(40 + r() * 70) / 255})`;
+      o.beginPath();
+      o.arc(cx, cy, rad, 0, 7);
+      o.fill();
+    }
+    const leaf = canvas(PW, PH); // an olive branch hanging into the top right, out of focus
+    const l = ctx2d(leaf);
+    const [bx0, by0, bx1, by1] = [px(1.12), py(-0.12), px(0.8), py(0.06)];
+    l.strokeStyle = "#423426";
+    l.lineWidth = 7;
+    l.beginPath();
+    l.moveTo(bx0, by0);
+    l.quadraticCurveTo((bx0 + bx1) / 2, by0 + 80, bx1, by1);
+    l.stroke();
+    for (let k = 0; k < 16; k++) {
+      const f = k / 15, lx = bx0 + (bx1 - bx0) * f, ly = by0 + (by1 - by0) * f + 40 * Math.sin(f * Math.PI);
+      const side = k % 2 ? 1 : -1, ex = lx + side * 34 + (r() - 0.5) * 16, ey = ly + 44 + (r() * 20 - 8), gg = Math.floor(r() * 26);
+      l.fillStyle = `rgb(${96 + gg},${118 + gg},${82 + (gg >> 1)})`;
+      l.beginPath();
+      l.moveTo(lx, ly);
+      l.lineTo((lx + ex) / 2 + 11, (ly + ey) / 2 - 8);
+      l.lineTo(ex, ey);
+      l.lineTo((lx + ex) / 2 - 11, (ly + ey) / 2 + 8);
+      l.fill();
+    }
+    o.drawImage(softBlur(leaf, 3), 0, 0);
+    return soft;
   }
   if (s === "space") {
     const cx = px(0.86), cy = py(0.2), rad = 0.11 * W;
@@ -448,6 +596,7 @@ const LECTERN: Record<Scenario, [string, string, string | null]> = {
   classroom: ["#5c381f", "#805430", null],
   arena: ["#0a090d", "#242129", "rim"],
   space: ["#29303b", "#4d5966", "#4dd9ff"],
+  agora: ["#bda685", "#e0cca8", null], // marble plinth
 };
 
 const lecternCache = new Map<string, HTMLCanvasElement>();
@@ -479,6 +628,10 @@ export function lectern(s: Scenario, light: Light) {
   dy.addColorStop(1, "rgba(0,0,0,.45)");
   g.fillStyle = dy;
   g.fillRect(0, 0, w, h);
+  if (s === "agora") { // fluted marble
+    g.fillStyle = "rgba(0,0,0,.06)";
+    for (let k = 0; k < 9; k++) g.fillRect(w * (0.1 + k * 0.1) - 3, slab, 6, h - slab);
+  }
   if (s === "classroom") {
     g.strokeStyle = "rgba(0,0,0,.18)";
     g.lineWidth = 3;

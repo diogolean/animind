@@ -139,7 +139,7 @@ export interface VoicePick {
 }
 
 export type SceneTemplate = "debate" | "lesson" | "solo";
-export type Scenario = "studio" | "classroom" | "arena" | "space";
+export type Scenario = "studio" | "classroom" | "arena" | "space" | "agora";
 
 export interface RenderRequest {
   /** 1 character for solo/lesson, 2 for debate (the core may generate a rival). */

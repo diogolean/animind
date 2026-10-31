@@ -3,7 +3,7 @@ import { coreMode, coreOff, json, proxyJson } from "@/lib/core";
 import { mockCreateJob } from "@/lib/mock";
 
 const TEMPLATES = ["debate", "lesson", "solo"];
-const SCENARIOS = ["studio", "classroom", "arena", "space"];
+const SCENARIOS = ["studio", "classroom", "arena", "space", "agora"];
 
 export async function POST(req: Request) {
   let body: RenderRequest;

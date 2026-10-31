@@ -1,6 +1,7 @@
 import { copyFile, mkdir } from "node:fs/promises";
 import path from "node:path";
 import { expect, test, type Page, type TestInfo } from "@playwright/test";
+import { placeForPersona } from "../lib/eras";
 
 /**
  * The real user flow, asserted on what the user sees:
@@ -90,6 +91,9 @@ test("debate and lesson from 'Quem vai falar?'", async ({ page }, info) => {
     const fallback = await page.getByTestId("art-fallback").count();
     if (core && !fallback && (await page.getByTestId("core-mode").textContent())?.includes("real"))
       await expect(page.getByTestId("front-view")).toBeVisible({ timeout: slow });
+    // The set follows the persona's era: a classical philosopher starts in the Ágora.
+    const era = placeForPersona(PERSONA) ?? "studio";
+    await expect(page.getByTestId(`place-${era}`)).toHaveClass(/bg-muted/);
     await snap(page, info, "persona");
   });
 
@@ -105,6 +109,7 @@ test("debate and lesson from 'Quem vai falar?'", async ({ page }, info) => {
     await page.getByTestId("tpl-debate").click();
     await waitForPreview(page, slow * 2);
     await expectCanvasMoves(page);
+    await expectSceneNotBlank(page, placeForPersona(PERSONA) === "agora");
     await snap(page, info, "debate-tocando");
     await expect(transcript).toBeVisible();
     await expect(transcript).toContainText(/réplica/i);
@@ -155,6 +160,30 @@ test("debate and lesson from 'Quem vai falar?'", async ({ page }, info) => {
   const dir = process.env.E2E_SHOTS_DIR;
   if (dir && video) await video.saveAs(path.join(dir, `9-e2e-${info.project.name}-fluxo-tela.webm`));
 });
+
+/** The scenery behind the speakers is a built set, not a flat fill: luminance varies across the frame
+ *  and the frame is neither black nor blown out. The sunlit Ágora also reads warm (red over blue). */
+async function expectSceneNotBlank(page: Page, warm: boolean) {
+  const st = await page.getByTestId("preview-canvas").evaluate((c: HTMLCanvasElement) => {
+    try {
+      const d = c.getContext("2d")!.getImageData(0, 0, c.width, c.height).data;
+      let n = 0, s = 0, s2 = 0, r = 0, b = 0;
+      for (let i = 0; i < d.length; i += 4 * 53) {
+        const y = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
+        n++; s += y; s2 += y * y; r += d[i]; b += d[i + 2];
+      }
+      const mean = s / n;
+      return { mean, std: Math.sqrt(Math.max(0, s2 / n - mean * mean)), r: r / n, b: b / n };
+    } catch {
+      return null; // tainted canvas: cannot read pixels, skip
+    }
+  });
+  if (!st) return;
+  expect(st.std, `scene contrast ${JSON.stringify(st)}`).toBeGreaterThan(18);
+  expect(st.mean, "scene brightness").toBeGreaterThan(25);
+  expect(st.mean, "scene brightness").toBeLessThan(235);
+  if (warm) expect(st.r, "sunlit Ágora reads warm").toBeGreaterThan(st.b + 8);
+}
 
 async function checkTranscript(page: Page, core: boolean) {
   const transcript = page.getByTestId("transcript");

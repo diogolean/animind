@@ -9,6 +9,7 @@ import { ART_STYLES } from "@/lib/contract";
 import type { ArtStyle, Character, CharacterSource, RenderResult, Scenario, SceneTemplate, VideoFormat, PersonaMode, DeepStatus } from "@/lib/contract";
 import { createCharacter, deepStatus, startDeep, startRender, waitJob } from "@/lib/api";
 import { PORTRAITS, portraitImageUrl } from "@/lib/catalog";
+import { placeForPersona } from "@/lib/eras";
 import { Avatar } from "@/components/avatar";
 import { Player } from "@/components/player";
 import { Transcript } from "@/components/transcript";
@@ -37,6 +38,7 @@ const PLACES: { id: Scenario; label: string }[] = [
   { id: "classroom", label: "Sala" },
   { id: "arena", label: "Arena" },
   { id: "space", label: "Espaço" },
+  { id: "agora", label: "Ágora" },
 ];
 const ease = [0.22, 1, 0.36, 1] as const;
 
@@ -60,6 +62,8 @@ export function Composer() {
   const [char, setChar] = useState<Character | null>(null);
   const [scene, setScene] = useState<SceneTemplate | null>(null);
   const [place, setPlace] = useState<Scenario>("studio");
+  // Set picked by hand; until then the set follows the persona's era (Sócrates -> Ágora).
+  const placeTouched = useRef(false);
   const [format, setFormat] = useState<VideoFormat>("16:9");
   const [voice, setVoice] = useState("auto");
   const [art, setArt] = useState<ArtStyle>("cartoon");
@@ -106,7 +110,9 @@ export function Composer() {
     setScene(null);
     setPortraits(false);
     try {
-      setChar(await createCharacter({ source, artStyle: art }));
+      const c = await createCharacter({ source, artStyle: art });
+      setChar(c);
+      if (!placeTouched.current) setPlace(placeForPersona(c.name) ?? "studio");
     } catch (e) {
       toast.error((e as Error).message);
     } finally {
@@ -333,6 +339,7 @@ export function Composer() {
                     key={p.id}
                     data-testid={`place-${p.id}`}
                     onClick={() => {
+                      placeTouched.current = true;
                       setPlace(p.id);
                       if (scene && result) render(scene, p.id);
                     }}
