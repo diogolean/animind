@@ -666,8 +666,9 @@ export function camera(cuts: Cut[], t: number): [number, Shot, number][] {
   const prev = cuts[k - 1];
   const before = pushed(prev.shot, start - prev.start);
   if (kind === "dissolve" && local < DISSOLVE_S) {
+    // a glide, not a cross-dissolve: blending two framings of the same stage doubles every face
     const a = ease(local / DISSOLVE_S);
-    return [[1 - a, { ...before, zoom: before.zoom * (1 + 0.01 * a) }, 0], [a, cur, 0]];
+    return [[1, { cx: before.cx + (cur.cx - before.cx) * a, cy: before.cy + (cur.cy - before.cy) * a, zoom: before.zoom + (cur.zoom - before.zoom) * a, kind: cur.kind }, 0]];
   }
   if (kind === "whip" && local < WHIP_S) {
     const u = local / WHIP_S, a = ease(u);

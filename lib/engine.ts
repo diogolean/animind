@@ -167,16 +167,16 @@ export function viewFor(r: RenderResult, speaker: number, idx: number, tMs: numb
   return "front";
 }
 
-/** Mouth crossfade (mirrors scene.viseme_mix in the core): the newest viseme fades in over
- *  XFADE_MS so shapes do not pop. Set per frame for the speaking character. */
-const XFADE_MS = 60;
+/** Viseme changes are hard cuts (mirrors scene.XFADE_S = 0 in the core): every mouth sprite has its
+ *  own alpha shape, so an alpha crossfade between two shapes shows two mouths at once. */
+const XFADE_MS = 0;
 let speakingFade: { cur: Viseme; prev: Viseme; w: number } | null = null;
 export function visemeFade(vis: Viseme[], k: number): { cur: Viseme; prev: Viseme; w: number } {
   const cur = vis[k] ?? "X";
   let j = k;
   while (j > 0 && vis[j - 1] === cur) j--;
   const prev = j > 0 ? vis[j - 1] : cur;
-  return { cur, prev, w: prev === cur ? 1 : Math.min(1, ((k - j) * 10) / XFADE_MS) };
+  return { cur, prev, w: prev === cur || XFADE_MS <= 0 ? 1 : Math.min(1, ((k - j) * 10) / XFADE_MS) };
 }
 
 let irisCanvas: HTMLCanvasElement | null = null;
@@ -253,7 +253,7 @@ function drawCharacter(g: CanvasRenderingContext2D, c: Character, img: Images, c
     const im = img.get(l.url);
     if (!im) continue;
     // The face no longer rides the jaw: only the mouth layer changes with speech.
-    const dy = breathe * (BREATH_SHARE[l.name] ?? 1) + (l.name === "brows" ? -amp * 6 : 0);
+    const dy = breathe * (BREATH_SHARE[l.name] ?? 1) + (l.name === "brows" ? -amp * 2 : 0);
     if (l.name === "iris" && socket) {
       const sk = img.get(socket.url);
       const gx = Math.max(-1, Math.min(1, eye.gaze[0])), gy = Math.max(-1, Math.min(1, eye.gaze[1]));  // iris never leaves the socket
