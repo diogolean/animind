@@ -14,6 +14,10 @@ export async function POST(req: Request) {
   const s = body?.source;
   if (!s || !["prompt", "catalog", "upload"].includes(s.kind)) return json({ error: "source inválido" }, 400);
   if (s.kind === "prompt" && !s.prompt?.trim()) return json({ error: "Descreva o personagem" }, 400);
+  if (s.kind === "prompt" && !body.name?.trim()) return json({ error: "Dê um nome ao personagem" }, 400);
+  if (s.kind === "prompt" && (s.prompt.length > 600 || body.name!.length > 60)) return json({ error: "Nome ou descrição longa demais" }, 400);
+  if (body.characterType && !["stick", "illustrated"].includes(body.characterType))
+    return json({ error: "Tipo de personagem inválido" }, 400);
   if (s.kind === "upload") {
     if (s.rightsConfirmed !== true) return json({ error: "Confirme que você tem direito de usar esta imagem" }, 422);
     if (!/^data:image\/(png|jpe?g|webp);base64,/.test(s.imageDataUrl ?? "")) return json({ error: "Imagem inválida" }, 400);

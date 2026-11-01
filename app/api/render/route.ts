@@ -12,8 +12,8 @@ export async function POST(req: Request) {
   } catch {
     return json({ error: "JSON inválido" }, 400);
   }
-  if (!Array.isArray(body?.characters) || body.characters.length < 1 || body.characters.length > 2)
-    return json({ error: "Envie 1 ou 2 personagens" }, 400);
+  if (!Array.isArray(body?.characters) || body.characters.length < 1 || body.characters.length > 6)
+    return json({ error: "Envie de 1 a 6 personagens" }, 400);
   if (!TEMPLATES.includes(body.template) || !SCENARIOS.includes(body.scenario))
     return json({ error: "Modelo de cena ou cenário inválido" }, 400);
   const mode = coreMode();

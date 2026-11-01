@@ -54,8 +54,16 @@ export function mockCreateCharacter(req: CreateCharacterRequest): Character {
       photo: { url: src.imageDataUrl, jaw: { x: 0.36, y: 0.55, w: 0.28, h: 0.14 } },
     };
   }
-  const name = titleCase(src.prompt) || "Personagem";
-  return { ...base, id: `mock_${hash(name).toString(36)}`, name, status: "placeholder", style: "rig", artStyle: req.artStyle ?? "cartoon" };
+  const name = titleCase(req.name || src.prompt) || "Personagem";
+  return {
+    ...base,
+    id: `mock_${hash(`${name}:${src.prompt}`).toString(36)}`,
+    name,
+    status: "placeholder",
+    style: "rig",
+    artStyle: req.artStyle ?? "ghibli",
+    characterType: req.characterType ?? "stick",
+  };
 }
 
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);

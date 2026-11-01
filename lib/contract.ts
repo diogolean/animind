@@ -69,9 +69,10 @@ export type CharacterSource =
   | { kind: "upload"; imageDataUrl: string; name?: string; rightsConfirmed: true };
 
 /** Animation style: feeds the Gemini character prompt and the scene look (palette, grade, backgrounds). */
-export type ArtStyle = "cartoon" | "anime" | "retro" | "realista" | "cyberpunk" | "aquarela";
+export type ArtStyle = "ghibli" | "cartoon" | "anime" | "retro" | "realista" | "cyberpunk" | "aquarela";
 
 export const ART_STYLES: { id: ArtStyle; label: string }[] = [
+  { id: "ghibli", label: "Ghibli retrô" },
   { id: "cartoon", label: "Cartoon" },
   { id: "anime", label: "Anime" },
   { id: "retro", label: "Retrô" },
@@ -80,9 +81,16 @@ export const ART_STYLES: { id: ArtStyle; label: string }[] = [
   { id: "aquarela", label: "Aquarela" },
 ];
 
+/** Stick figures are the MVP path; illustrated characters use the Aiwake factory. */
+export type CharacterType = "stick" | "illustrated";
+
 export interface CreateCharacterRequest {
   source: CharacterSource;
-  /** Drawing style for generated (prompt) characters. Default cartoon. */
+  /** Display/persona name, kept separate from the visual prompt. */
+  name?: string;
+  /** MVP defaults to a lightweight stick figure. */
+  characterType?: CharacterType;
+  /** Drawing style for generated (prompt) characters. Default ghibli. */
   artStyle?: ArtStyle;
 }
 
@@ -100,6 +108,7 @@ export interface Character {
   reviewSheetUrl?: string;
   /** Style the character was drawn in (core rigs). */
   artStyle?: ArtStyle;
+  characterType?: CharacterType;
   /** Side (3/4) art and the real front view (Gemini, side as reference), when the core drew one. */
   imageUrl?: string;
   frontImageUrl?: string | null;
@@ -142,9 +151,36 @@ export interface VoicePick {
 
 export type SceneTemplate = "debate" | "lesson" | "solo";
 export type Scenario = "studio" | "classroom" | "arena" | "space" | "agora";
+export type Tone = "comedia" | "ficcao" | "horror" | "serio";
+export type Narrative = "direto" | "historia" | "aula" | "debate";
+
+export interface CatalogOption<T extends string> {
+  id: T;
+  label: string;
+}
+
+export interface ToneCatalog {
+  tones: CatalogOption<Tone>[];
+  default: Tone;
+}
+
+/**
+ * Contract reserved for a future core scenario generator.
+ * Until `/v1/scenarios` exists, the app resolves a prompt to a built-in set.
+ */
+export type ScenarioRequest =
+  | { mode: "auto"; characterNames: string[] }
+  | { mode: "prompt"; prompt: string; characterNames: string[] };
+
+export interface ScenarioResolution {
+  scenario: Scenario;
+  source: "core" | "era" | "fallback";
+  prompt?: string;
+  note?: string;
+}
 
 export interface RenderRequest {
-  /** 1 character for solo/lesson, 2 for debate (the core may generate a rival). */
+  /** 1 character for a monologue, 2+ for dialogue. */
   characters: Character[];
   template: SceneTemplate;
   scenario: Scenario;
@@ -157,6 +193,15 @@ export interface RenderRequest {
   personaMode?: PersonaMode;
   /** Scene look; defaults to the first character's artStyle. */
   style?: ArtStyle;
+  /** Script tone from GET /v1/tones. */
+  tone?: Tone;
+  /** Desired narrative shape and free direction for the writer. */
+  narrative?: Narrative;
+  scriptPrompt?: string;
+  /** Target requested by the UI; the current core may adjust it to the spoken script. */
+  targetDurationSec?: 30 | 60 | 90;
+  /** Original scenario choice, retained while the core only accepts built-in scenario ids. */
+  scenarioRequest?: ScenarioRequest;
 }
 
 export interface ScriptLine {
