@@ -1,17 +1,14 @@
-import type { ToneCatalog } from "@/lib/contract";
-import { coreMode, json, proxyJson } from "@/lib/core";
-
-const MOCK_TONES: ToneCatalog = {
-  tones: [
-    { id: "comedia", label: "Comédia" },
-    { id: "ficcao", label: "Ficção" },
-    { id: "horror", label: "Horror" },
-    { id: "serio", label: "Sério" },
-  ],
-  default: "comedia",
-};
+import { coreFetch, coreMode, json } from "@/lib/core";
+import { normalizeToneCatalog } from "@/lib/tones";
 
 export async function GET() {
-  if (coreMode() === "core") return proxyJson("/tones");
-  return json(MOCK_TONES);
+  if (coreMode() === "core") {
+    try {
+      const response = await coreFetch("/tones");
+      if (response.ok) return json(normalizeToneCatalog(await response.json(), "core"));
+    } catch {
+      // Keep the controls available with the documented mappings.
+    }
+  }
+  return json(normalizeToneCatalog());
 }

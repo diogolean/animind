@@ -151,7 +151,9 @@ export interface VoicePick {
 
 export type SceneTemplate = "debate" | "lesson" | "solo";
 export type Scenario = "studio" | "classroom" | "arena" | "space" | "agora";
-export type Tone = "comedia" | "ficcao" | "horror" | "serio";
+/** Product-facing tone ids; adapters map these to the ids advertised by the core. */
+export type Tone = "humor" | "terror" | "educacional" | "sabio" | "serio";
+export type Objective = "ensinar" | "debater" | "entreter" | "convencer";
 export type Narrative = "direto" | "historia" | "aula" | "debate";
 
 export interface CatalogOption<T extends string> {
@@ -159,9 +161,17 @@ export interface CatalogOption<T extends string> {
   label: string;
 }
 
+export interface ToneOption extends CatalogOption<Tone> {
+  /** Actual id accepted by the connected core. */
+  coreId: string;
+  /** True when the product tone is approximated by another core tone. */
+  fallback: boolean;
+}
+
 export interface ToneCatalog {
-  tones: CatalogOption<Tone>[];
+  tones: ToneOption[];
   default: Tone;
+  source: "core" | "fallback";
 }
 
 /**
@@ -195,6 +205,10 @@ export interface RenderRequest {
   style?: ArtStyle;
   /** Script tone from GET /v1/tones. */
   tone?: Tone;
+  /** Intended result of the script; additive until the core consumes it. */
+  objective?: Objective;
+  /** Whether the client inferred the controls or received explicit choices. */
+  configurationSource?: "automatic" | "manual";
   /** Desired narrative shape and free direction for the writer. */
   narrative?: Narrative;
   scriptPrompt?: string;
