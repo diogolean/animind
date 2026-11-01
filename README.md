@@ -11,6 +11,7 @@ PWA (Next.js 16 App Router, React 19, TypeScript, Tailwind 4, shadcn/ui, framer-
   - `POST /api/render` → `RenderJob`
   - `GET /api/jobs/:id` → `RenderJob` (com `result.script`, `audioUrl`, `videoUrl`)
   - `GET /api/tones` → catálogo de tons do núcleo (`/v1/tones`)
+  - `GET /api/voices?lang=` → catálogo de vozes por idioma; tenta `/v1/voices` e usa lista fake no mock/fallback
   - `POST /api/plan` → prompt livre para `CreationPlan`; tenta o futuro `/v1/plan` e usa a heurística local como fallback
   - `POST /api/scenarios` → contrato do gerador de cenário; usa cenário existente como fallback enquanto `/v1/scenarios` não existe
 - Com `ANIMIND_CORE_URL` definido, as rotas fazem proxy para `${ANIMIND_CORE_URL}/v1/*` com `ANIMIND_CORE_KEY` (só no servidor). Personagens por descrição são recortados pelo núcleo; catálogo e upload continuam como rig de foto feito no app.
@@ -49,6 +50,19 @@ o cenário existente mais próximo e devolve `source: "fallback"` com uma nota v
 O switch **Automático** começa ligado. `lib/planner.ts` extrai o elenco e o tema do prompt e delega as
 escolhas criativas para `lib/auto-config.ts`. Por exemplo, “Sócrates fala sobre a morte” resulta em
 Sábio, Ensinar, Ghibli retrô, Ágora e 60s.
+
+## Idioma e vozes
+
+O idioma padrão é `en-US` (English); `pt-BR` também está disponível e a lista em código aceita novos
+idiomas. No Automático, `lib/planner.ts` detecta português por vocabulário/acentos, senão usa inglês.
+`CreationPlan.language` aparece como chip editável e o render envia `language`; o adapter também
+preenche `lang` para compatibilidade com a PR #93 do núcleo.
+
+Cada personagem tem gênero vocal (`male`/`female`) e `voiceId` opcional. Sem escolha explícita, a UI
+seleciona vozes distintas do gênero indicado; o chip de cada personagem abre gênero, catálogo e botão
+de prévia. `GET /api/voices?lang=` normaliza o futuro catálogo do núcleo. Como `/v1/voices` ainda não
+existe na PR #93, o app marca e usa um catálogo provisório para English e Português BR; a prévia usa a
+URL do catálogo quando houver e Web Speech como fallback.
 
 Os tons de produto são Humor, Terror, Educacional, Sábio e Sério. `GET /api/tones` normaliza o catálogo
 do núcleo: Humor → `comedia`, Terror → `horror` e Sério → `serio`; Educacional e Sábio aparecem com

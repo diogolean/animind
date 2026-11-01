@@ -2,12 +2,13 @@
 
 Two complete user flows are asserted on what the user sees:
 
-- prompt único com Automático ligado: extrai Jesus + Diabo, debate e tema; mostra chips editáveis e gera;
-- Automático desligado: modo, personagens, tipo, estilo, tom, objetivo, cenário e duração aparecem na mesma página.
+- prompt único com Automático ligado: infere Português BR, extrai Jesus + Diabo, mostra chips e permite editar gênero/voz;
+- Automático desligado: English padrão, controles completos e voz individual com prévia na mesma página.
 
-Each scene must animate in the preview, show both the transcript and a passing “Roteiro conferido”
-self-check. The tests also inspect the `/api/characters` and `/api/render` payloads. Tela inicial,
-chips, controles manuais e resultados são capturados quando `E2E_SHOTS_DIR` is set.
+Each scene must animate in the preview and show the transcript with a passing “Roteiro conferido”
+self-check. The tests inspect `/api/characters` and `/api/render`, including `language` and
+per-character `voices`. Tela inicial, chips, controles manuais e resultados são capturados quando
+`E2E_SHOTS_DIR` is set.
 
 | Project | When | Server | Checks |
 | --- | --- | --- | --- |

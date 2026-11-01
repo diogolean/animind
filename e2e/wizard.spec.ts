@@ -41,6 +41,7 @@ test("prompt automático em um clique", async ({ page }, info) => {
   await expect(page.getByTestId("creation-prompt")).toHaveAttribute("placeholder", /Descreva sua criação/);
   await expect(page.getByTestId("core-mode")).toHaveText("mock de dev");
   await expect(page.getByTestId("automatic-toggle")).toHaveAttribute("aria-checked", "true");
+  await expect(page.getByTestId("language-selector")).toHaveValue("en-US");
   await snap(page, info, "automatico", "01-tela-inicial");
 
   await page.getByTestId("creation-prompt").fill("Uma conversa entre Jesus e o diabo debatendo temas bíblicos");
@@ -49,7 +50,18 @@ test("prompt automático em um clique", async ({ page }, info) => {
   await expect(page.getByTestId("plan-chip-mode")).toContainText("Debate");
   await expect(page.getByTestId("plan-chip-characters")).toContainText("Jesus + Diabo");
   await expect(page.getByTestId("plan-chip-topic")).toContainText("temas bíblicos");
+  await expect(page.getByTestId("plan-chip-language")).toContainText("Português BR");
+  await expect(page.getByTestId("language-selector")).toHaveValue("pt-BR");
+  await expect(page.getByTestId("plan-chip-voice-0")).toContainText("Masc. · Auto");
   await snap(page, info, "automatico", "02-chips");
+
+  await page.getByTestId("plan-chip-voice-0").click();
+  await page.getByTestId("plan-voice-gender-0-female").click();
+  await page.getByTestId("plan-voice-select-0").selectOption("pt-BR-FranciscaNeural");
+  await page.getByTestId("plan-voice-preview-0").click();
+  await expect(page.getByTestId("plan-chip-voice-0")).toContainText("Fem. · Francisca");
+  await snap(page, info, "automatico", "03-voz-editavel");
+  await page.getByRole("button", { name: "Fechar editor" }).click();
 
   await page.getByTestId("plan-chip-tone").click();
   await expect(page.getByTestId("chip-editor")).toBeVisible();
@@ -68,8 +80,13 @@ test("prompt automático em um clique", async ({ page }, info) => {
     objective: "debater",
     targetDurationSec: 90,
     configurationSource: "automatic",
+    language: "pt-BR",
+    voices: [
+      { voice: "pt-BR-FranciscaNeural", auto: false },
+      { voice: "pt-BR-AntonioNeural", auto: true },
+    ],
   });
-  await snap(page, info, "automatico", "03-resultado");
+  await snap(page, info, "automatico", "04-resultado");
 });
 
 test("controles manuais na mesma página", async ({ page }, info) => {
@@ -82,12 +99,17 @@ test("controles manuais na mesma página", async ({ page }, info) => {
   await page.getByTestId("automatic-toggle").click();
   await expect(page.getByTestId("automatic-toggle")).toHaveAttribute("aria-checked", "false");
   await expect(page.getByTestId("manual-controls")).toBeVisible();
+  await expect(page.getByTestId("manual-language")).toHaveValue("en-US");
   await page.getByTestId("manual-mode-debate").click();
   await page.getByTestId("manual-character-name-0").fill("Luna");
   await page.getByTestId("manual-character-prompt-0").fill("astronauta jovem, macacão laranja, otimista");
   await page.getByTestId("manual-character-add").click();
   await page.getByTestId("manual-character-name-1").fill("Orion");
   await page.getByTestId("manual-character-prompt-1").fill("robô astrônomo azul, preciso e desconfiado");
+  await page.getByTestId("manual-voice-gender-0-female").click();
+  await page.getByTestId("manual-voice-select-0").selectOption("en-US-AvaMultilingualNeural");
+  await page.getByTestId("manual-voice-select-1").selectOption("en-US-BrianMultilingualNeural");
+  await page.getByTestId("manual-voice-preview-0").click();
   await page.getByTestId("manual-type-illustrated").click();
   await page.getByTestId("manual-art-retro").click();
   await page.getByTestId("manual-topic").fill("se a humanidade deve morar em Marte");
@@ -111,6 +133,11 @@ test("controles manuais na mesma página", async ({ page }, info) => {
     style: "retro",
     targetDurationSec: 90,
     configurationSource: "manual",
+    language: "en-US",
+    voices: [
+      { voice: "en-US-AvaMultilingualNeural", auto: false },
+      { voice: "en-US-BrianMultilingualNeural", auto: false },
+    ],
   });
   await snap(page, info, "manual", "02-resultado");
 });
