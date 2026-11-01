@@ -5,8 +5,12 @@ import {
   type RenderJob,
   type RenderRequest,
   type ScriptLine,
+  type PersonaSheet,
+  type QuoteRef,
   type ViewName,
 } from "./contract";
+import { mockSheet, type QuoteSheet } from "./quote-sheets";
+import { checkFidelity } from "./script-qa";
 import { portraitById, portraitImageUrl } from "./catalog";
 
 const hash = (s: string) => {
@@ -54,35 +58,68 @@ export function mockCreateCharacter(req: CreateCharacterRequest): Character {
   return { ...base, id: `mock_${hash(name).toString(36)}`, name, status: "placeholder", style: "rig", artStyle: req.artStyle ?? "cartoon" };
 }
 
+const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+
+/** A real quote of the sheet, as the transcript shows it (text copied byte for byte, source and link). */
+function quoteRef(sheet: QuoteSheet, id: string): QuoteRef {
+  const q = sheet.quotes.find((x) => x.id === id)!;
+  return { id: q.id, text: q.text, source: q.source, label: q.label, url: q.url, site: "Wikiquote", ...(q.wikisource ? { wikisource: q.wikisource } : {}) };
+}
+const ideaOf = (sheet: QuoteSheet, id: string) => sheet.quotes.find((x) => x.id === id)?.idea ?? "";
+
 function script(req: RenderRequest): ScriptLine[] {
   const a = req.characters[0]?.name ?? "Personagem";
   const b = req.characters[1]?.name ?? "Rival";
   const t = req.topic?.trim() || "o futuro da animação";
-  const T = t.charAt(0).toUpperCase() + t.slice(1);
-  // The mock has no persona sheets, so every line is a marked paraphrase (never a fake quote). The debate mirrors
-  // the core's arc (abertura, confronto, virada, fechamento): speakers alternate, every reply picks up a word of the
-  // line before (`idea`), the turn sits in the middle and lines stay short and varied.
-  type MockLine = [number, string, string, string?, string?];
+  const T = cap(t);
+  const sa = mockSheet(a);
+  const sb = mockSheet(b);
+  // Real quotes only from the bundled sheets (lib/quote-sheets.ts); every other line is a marked paraphrase
+  // and never claims literal wording. The debate mirrors the core's arc (abertura, confronto, virada, fechamento):
+  // speakers alternate, every written reply picks up a word of the line before (`idea`), the turn sits in the
+  // middle and lines stay short and varied. A line is [speaker, beat, text or quote, act, idea].
+  type MockLine = [number, string, string | QuoteRef, string?, string?];
+  const ia = sa ? ideaOf(sa, sa.roles.thesis) : "";
+  const ib = sb ? ideaOf(sb, sb.roles.thesis) : "";
   const lines: MockLine[] =
     req.template === "debate"
       ? [
           [0, "gancho", `${b}, ${t}: verdade ou moda? Responde sem fugir.`, "abertura"],
-          [1, "tese", `Moda, ${a}? ${T} é coisa séria. Moda é a sua pergunta.`, "confronto", "moda"],
-          [0, "réplica", `Séria? Então defina em uma frase, ${b}.`, "confronto", "séria"],
-          [1, "réplica", `Uma frase? Prove você, ${a}.`, "confronto", "frase"],
-          [0, "virada", `Provo. Quem nunca duvidou de ${t} nunca pensou de verdade, ${b}.`, "virada", "prov"],
-          [1, "réplica", `Duvidar, ${a}? Dúvida demais vira medo.`, "virada", "duvid"],
-          [0, "tréplica", `Medo é seu, ${b}. Você mesmo disse: é coisa séria.`, "fechamento", "medo"],
-          [1, "fechamento", `Séria, sim. Por isso eu decido, ${a}.`, "fechamento", "séria"],
-          [0, "fechamento", "Decida, então. Eu continuo perguntando… e o público decide.", "fechamento", "decid"],
+          sb
+            ? [1, "tese", quoteRef(sb, sb.roles.thesis), "confronto"]
+            : [1, "tese", `Moda, ${a}? ${T} é coisa séria. Moda é a sua pergunta.`, "confronto", "moda"],
+          sb
+            ? [0, "réplica", `${cap(ib)}, ${b}? Bonita palavra. Agora defina em uma frase.`, "confronto", ib]
+            : [0, "réplica", `Séria? Então defina em uma frase, ${b}.`, "confronto", "séria"],
+          [1, "réplica", `Uma frase? Diga a sua, ${a}… se tiver coragem.`, "confronto", "frase"],
+          sa
+            ? [0, "virada", quoteRef(sa, sa.roles.turn), "virada"]
+            : [0, "virada", `Digo. Quem nunca duvidou de ${t} nunca pensou de verdade, ${b}.`, "virada", "diga"],
+          sa
+            ? [1, "réplica", `${cap(ideaOf(sa, sa.roles.turn))}, ${a}? Isso é medo com roupa de virtude.`, "virada", ideaOf(sa, sa.roles.turn)]
+            : [1, "réplica", `Duvidar, ${a}? Dúvida demais vira medo.`, "virada", "duvid"],
+          sb
+            ? [0, "tréplica", `Medo é seu, ${b}. Você começou falando em ${ib}.`, "fechamento", "medo"]
+            : [0, "tréplica", `Medo é seu, ${b}. Você mesmo chamou de coisa séria.`, "fechamento", "medo"],
+          sb
+            ? [1, "fechamento", `Medo, ${a}? Eu chamo de ${ib}. E eu decido.`, "fechamento", "medo"]
+            : [1, "fechamento", `Séria, sim. Por isso eu decido, ${a}.`, "fechamento", "séria"],
+          sa
+            ? [0, "fechamento", quoteRef(sa, sa.roles.close), "fechamento"]
+            : [0, "fechamento", "Decida, então. Eu continuo perguntando… e o público decide.", "fechamento", "decid"],
         ]
       : req.template === "lesson"
         ? [
             [0, "gancho", `Hoje: ${t}. Parece fácil. Não é.`],
             [0, "pergunta", `Antes da resposta, uma pergunta melhor: como você sabe o que sabe sobre ${t}?`],
-            [0, "citação", "Em outras palavras: quem explica descobre o que ainda não entendeu."],
-            [0, "exemplo", "Exemplo: explique para alguém em um minuto… e veja onde você trava."],
-            [0, "síntese", "Guarde isto: entender, praticar, explicar. E a próxima pergunta é sua."],
+            sa ? [0, "citação", quoteRef(sa, sa.roles.thesis)] : [0, "ideia", "Uma ideia para levar: quem explica descobre o que ainda não entendeu."],
+            sa
+              ? [0, "exemplo", `Repare na palavra ${ia}. Pense em ${t} com um exemplo seu… e veja onde você trava.`]
+              : [0, "exemplo", "Exemplo: explique para alguém em um minuto… e veja onde você trava."],
+            sa ? [0, "virada", quoteRef(sa, sa.roles.turn)] : [0, "virada", `Agora a virada: e se a dúvida sobre ${t} for o começo, não o fim?`],
+            sa
+              ? [0, "síntese", `Guarde a palavra ${ia}: é por ela que ${t} se examina.`]
+              : [0, "síntese", "Guarde isto: entender, praticar, explicar. E a próxima pergunta é sua."],
           ]
         : [
             [0, "gancho", `Oi! Eu sou ${a}.`],
@@ -92,13 +129,25 @@ function script(req: RenderRequest): ScriptLine[] {
   let t0 = 400;
   const view = (speaker: number, i: number): ViewName =>
     req.template === "debate" ? (speaker === 0 ? "right" : "left") : i === 1 ? (req.template === "lesson" ? "right" : "left") : "front";
-  return lines.map(([speaker, beat, text, act, idea], i) => {
+  return lines.map(([speaker, beat, said, act, idea], i) => {
+    const text = typeof said === "string" ? said : said.text;
     const dur = Math.max(1400, text.length * 62);
-    const line: ScriptLine = { speaker, text, beat, kind: "paraphrase", startMs: t0, endMs: t0 + dur, view: view(speaker, i) };
+    const line: ScriptLine = { speaker, text, beat, kind: typeof said === "string" ? "paraphrase" : "quote", startMs: t0, endMs: t0 + dur, view: view(speaker, i) };
+    if (typeof said !== "string") line.quote = said;
     if (act) line.act = act;
     if (idea) line.replyTo = { line: i - 1, idea };
     t0 += dur + 350;
     return line;
+  });
+}
+
+/** What the mock knows about each speaker's sheet (the same shape the core reports). */
+function personas(r: RenderRequest): PersonaSheet[] {
+  return r.characters.map((c) => {
+    const s = mockSheet(c.name);
+    return s
+      ? { name: s.name, found: true, wikiquote: s.wikiquote, quotes: s.quotes.length, license: s.license }
+      : { name: c.name, found: false, quotes: 0 };
   });
 }
 
@@ -137,6 +186,11 @@ export function mockGetJob(id: string): RenderJob {
       disclaimer: PARODY_DISCLAIMER,
       writer: "template",
       topic: r.topic?.trim() || "o futuro da animação",
+      personas: personas(r),
+      scriptQA: (() => {
+        const problems = checkFidelity(lines, r.characters.map((c) => mockSheet(c.name)));
+        return { pass: problems.length === 0, problems, notes: [] };
+      })(),
     },
   };
 }

@@ -169,7 +169,7 @@ export interface ScriptLine {
   view?: ViewName;
   /** "quote": `text` is a real quote copied from the persona sheet (see `quote`). "paraphrase": written for the scene. */
   kind?: "quote" | "paraphrase";
-  /** Script beat. Debate: gancho, tese, réplica, virada, tréplica, fechamento; lesson: gancho, pergunta, citação, exemplo, citação, síntese. */
+  /** Script beat. Debate: gancho, tese, réplica, virada, tréplica, fechamento; lesson: gancho, pergunta, citação, exemplo, virada, síntese (a written idea line is "ideia", never "citação"). */
   beat?: string;
   /** Debate act: abertura (hook), confronto (clash), virada (the turn, mid-video), fechamento (close). */
   act?: "abertura" | "confronto" | "virada" | "fechamento" | string;
@@ -214,8 +214,13 @@ export interface RenderResult {
   disclaimer: string;
   /** Who wrote the lines: "gemini" (picks quote ids + writes paraphrases) or "template". */
   writer?: "gemini" | "template";
-  /** Debate script self-check (alternation, every line answers the previous, real quotes, arc, line lengths). */
-  scriptQA?: { pass: boolean; problems: string[] };
+  /**
+   * Script self-check, every template. `problems` fail it: a quote not literally in the speaker's sheet (invented,
+   * or paraphrased but shown as literal), a wrong source or link, a written line that claims literal wording, and the
+   * arc (debate: alternation, replies, hook, turn, memorable close; lesson: hook, question, quote, turn, synthesis).
+   * `notes` are soft style remarks.
+   */
+  scriptQA?: { pass: boolean; problems: string[]; notes?: string[] };
   topic?: string;
   personas?: PersonaSheet[];
   format?: VideoFormat;
