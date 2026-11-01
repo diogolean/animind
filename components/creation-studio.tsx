@@ -13,17 +13,21 @@ import type {
   CreationMode,
   CreationPlan,
   CreationPlanCharacter,
+  LanguageCode,
   Objective,
   RenderResult,
   ScenarioRequest,
   ScenarioResolution,
   Tone,
   ToneOption,
+  VoiceCatalog,
   VideoFormat,
 } from "@/lib/contract";
-import { HEALTH_EVENT, createCharacter, getTones, planCreation, resolveScenario, startRender, waitJob } from "@/lib/api";
+import { HEALTH_EVENT, createCharacter, getTones, getVoices, planCreation, resolveScenario, startRender, waitJob } from "@/lib/api";
 import { normalizeToneCatalog } from "@/lib/tones";
+import { fallbackVoiceCatalog } from "@/lib/voices";
 import { CharacterListEditor } from "@/components/flow/character-list-editor";
+import { CharacterVoicesEditor } from "@/components/flow/character-voices-editor";
 import { ChoiceCard } from "@/components/flow/choice-card";
 import { PlanChips, type PlanField } from "@/components/flow/plan-chips";
 import { Player } from "@/components/player";
@@ -47,6 +51,10 @@ const SCENARIO_PROMPTS = {
   space: { label: "Espaço", prompt: "nave no espaço entre planetas" },
   agora: { label: "Ágora", prompt: "ágora clássica com colunas gregas" },
 } as const;
+const LANGUAGES: { id: LanguageCode; label: string }[] = [
+  { id: "en-US", label: "English" },
+  { id: "pt-BR", label: "Português BR" },
+];
 
 function Label({ children }: { children: React.ReactNode }) {
   return <span className="mb-2 block text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">{children}</span>;
@@ -60,6 +68,7 @@ export function CreationStudio() {
   const [editing, setEditing] = useState<PlanField | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [tones, setTones] = useState<ToneOption[]>(normalizeToneCatalog().tones);
+  const [languageOverride, setLanguageOverride] = useState<LanguageCode | null>(null);
 
   const [manualMode, setManualMode] = useState<CreationMode>("monologue");
   const [manualCharacters, setManualCharacters] = useState<CreationPlanCharacter[]>([{ name: "", prompt: "" }]);
@@ -71,6 +80,7 @@ export function CreationStudio() {
   const [manualScenarioMode, setManualScenarioMode] = useState<"auto" | "prompt">("auto");
   const [manualScenarioPrompt, setManualScenarioPrompt] = useState("");
   const [manualDuration, setManualDuration] = useState<30 | 60 | 90>(60);
+  const [manualLanguage, setManualLanguage] = useState<LanguageCode>("en-US");
   const [format, setFormat] = useState<VideoFormat>("16:9");
 
   const [rendering, setRendering] = useState(false);
@@ -79,6 +89,8 @@ export function CreationStudio() {
   const [audio, setAudio] = useState<AudioContext | null>(null);
   const [result, setResult] = useState<RenderResult | null>(null);
   const [scenarioResolution, setScenarioResolution] = useState<ScenarioResolution | null>(null);
+  const currentLanguage = automatic ? plan?.language ?? languageOverride ?? "en-US" : manualLanguage;
+  const [voiceCatalog, setVoiceCatalog] = useState<VoiceCatalog>(fallbackVoiceCatalog("en-US"));
 
   useEffect(() => {
     getTones().then((catalog) => setTones(catalog.tones)).catch(() => {});
@@ -87,7 +99,13 @@ export function CreationStudio() {
     };
   }, []);
 
-  const requestPlan = (value: string) => {
+  useEffect(() => {
+    getVoices(currentLanguage)
+      .then(setVoiceCatalog)
+      .catch(() => setVoiceCatalog(fallbackVoiceCatalog(currentLanguage)));
+  }, [currentLanguage]);
+
+  const requestPlan = (value: string, language = languageOverride) => {
     if (timer.current) clearTimeout(timer.current);
     const clean = value.trim();
     if (!clean) {
@@ -97,7 +115,7 @@ export function CreationStudio() {
     }
     setPlanning(true);
     timer.current = setTimeout(() => {
-      planCreation({ prompt: clean, lang: "pt-BR" })
+      planCreation({ prompt: clean, ...(language ? { language } : {}) })
         .then((next) => {
           setPlan(next);
           setEditing(null);
@@ -108,6 +126,7 @@ export function CreationStudio() {
   };
 
   const applyPlanToManual = (source: CreationPlan) => {
+    setManualLanguage(source.language);
     setManualMode(source.mode);
     setManualCharacters(source.characters);
     setManualType(source.characterType);
@@ -127,6 +146,7 @@ export function CreationStudio() {
         : { mode: "auto", characterNames: manualCharacters.map((character) => character.name) };
     return {
       prompt,
+      language: manualLanguage,
       mode: manualMode,
       characters: manualCharacters,
       topic: manualTopic,
@@ -151,6 +171,7 @@ export function CreationStudio() {
     manualScenarioMode,
     manualScenarioPrompt,
     manualDuration,
+    manualLanguage,
   ]);
 
   const activePlan = automatic ? plan : manualPlan;
@@ -171,6 +192,8 @@ export function CreationStudio() {
     setScenarioResolution(null);
     setProgress(0);
     try {
+      const availableVoices = await getVoices(activePlan.language).catch(() => fallbackVoiceCatalog(activePlan.language));
+      setVoiceCatalog(availableVoices);
       const cast: Character[] = [];
       const drafts = activePlan.mode === "monologue" ? activePlan.characters.slice(0, 1) : activePlan.characters;
       for (let index = 0; index < drafts.length; index++) {
@@ -189,6 +212,14 @@ export function CreationStudio() {
       setScenarioResolution(scenario);
       setStatus("Escrevendo e animando");
       const template = activePlan.mode === "monologue" ? (activePlan.objective === "ensinar" ? "lesson" : "solo") : "debate";
+      const voiceIndex = { male: 0, female: 0 };
+      const voices = drafts.map((character) => {
+        const gender = character.gender ?? "male";
+        const matching = availableVoices.voices.filter((voice) => voice.gender === gender);
+        const explicit = matching.find((voice) => voice.id === character.voiceId);
+        const picked = explicit ?? matching[voiceIndex[gender]++ % Math.max(1, matching.length)] ?? availableVoices.voices[0];
+        return { voice: picked.id, label: picked.label, auto: !explicit };
+      });
       const job = await startRender({
         characters: cast,
         template,
@@ -201,7 +232,8 @@ export function CreationStudio() {
         narrative: activePlan.mode === "debate" ? "debate" : activePlan.mode === "dialogue" ? "historia" : activePlan.objective === "ensinar" ? "aula" : "direto",
         targetDurationSec: activePlan.duration,
         configurationSource: automatic ? "automatic" : "manual",
-        lang: "pt-BR",
+        language: activePlan.language,
+        voices,
         format,
         personaMode: "quick",
         style: activePlan.artStyle,
@@ -248,23 +280,44 @@ export function CreationStudio() {
               <p className="text-sm font-medium">Automático</p>
               <p className="text-xs text-muted-foreground">{automatic ? "A IA organiza tudo a partir do prompt." : "Controles completos abertos."}</p>
             </div>
-            <button
-              type="button"
-              role="switch"
-              aria-checked={automatic}
-              data-testid="automatic-toggle"
-              onClick={() => {
-                const next = !automatic;
-                setAutomatic(next);
-                setEditing(null);
-                if (!next && plan) applyPlanToManual(plan);
-                if (next) requestPlan(prompt);
-              }}
-              className={cn("relative h-7 w-12 rounded-full transition-colors", automatic ? "bg-[var(--accent-brand)]" : "bg-white/10")}
-            >
-              <span className={cn("absolute top-1 left-1 size-5 rounded-full bg-white shadow transition-transform", automatic ? "translate-x-5" : "translate-x-0")} />
-              <span className="sr-only">{automatic ? "Desligar automático" : "Ligar automático"}</span>
-            </button>
+            <div className="flex items-center gap-3">
+              <select
+                data-testid="language-selector"
+                aria-label="Idioma"
+                value={currentLanguage}
+                onChange={(event) => {
+                  const language = event.target.value as LanguageCode;
+                  if (automatic) {
+                    setLanguageOverride(language);
+                    setPlan((current) => current ? { ...current, language, characters: current.characters.map((character) => ({ ...character, voiceId: undefined })) } : current);
+                    if (prompt.trim()) requestPlan(prompt, language);
+                  } else {
+                    setManualLanguage(language);
+                    setManualCharacters((characters) => characters.map((character) => ({ ...character, voiceId: undefined })));
+                  }
+                }}
+                className="h-9 rounded-full border border-white/10 bg-background px-3 text-xs"
+              >
+                {LANGUAGES.map((language) => <option key={language.id} value={language.id}>{language.label}</option>)}
+              </select>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={automatic}
+                data-testid="automatic-toggle"
+                onClick={() => {
+                  const next = !automatic;
+                  setAutomatic(next);
+                  setEditing(null);
+                  if (!next && plan) applyPlanToManual(plan);
+                  if (next) requestPlan(prompt);
+                }}
+                className={cn("relative h-7 w-12 rounded-full transition-colors", automatic ? "bg-[var(--accent-brand)]" : "bg-white/10")}
+              >
+                <span className={cn("absolute top-1 left-1 size-5 rounded-full bg-white shadow transition-transform", automatic ? "translate-x-5" : "translate-x-0")} />
+                <span className="sr-only">{automatic ? "Desligar automático" : "Ligar automático"}</span>
+              </button>
+            </div>
           </div>
         </div>
 
@@ -276,7 +329,7 @@ export function CreationStudio() {
               ) : plan ? (
                 <>
                   <div className="mb-3 flex items-center gap-2 text-sm text-muted-foreground"><Sparkles className="size-4 text-[var(--accent-brand)]" />Entendi assim — toque em qualquer item para editar</div>
-                  <PlanChips plan={plan} tones={tones} onEdit={setEditing} />
+                  <PlanChips plan={plan} tones={tones} voices={voiceCatalog} onEdit={setEditing} />
                   <AnimatePresence>
                     {editing ? (
                       <motion.div
@@ -291,7 +344,7 @@ export function CreationStudio() {
                           <p className="text-sm font-medium">Editar {editing === "characters" ? "elenco" : editing}</p>
                           <button type="button" aria-label="Fechar editor" onClick={() => setEditing(null)} className="grid size-8 place-items-center rounded-full hover:bg-white/10"><X className="size-4" /></button>
                         </div>
-                        <PlanEditor field={editing} plan={plan} tones={tones} onChange={updatePlan} />
+                        <PlanEditor field={editing} plan={plan} tones={tones} voices={voiceCatalog} onChange={updatePlan} />
                       </motion.div>
                     ) : null}
                   </AnimatePresence>
@@ -313,8 +366,11 @@ export function CreationStudio() {
               <ManualControls
                 mode={manualMode}
                 onMode={setManualMode}
+                language={manualLanguage}
+                onLanguage={setManualLanguage}
                 characters={manualCharacters}
                 onCharacters={setManualCharacters}
+                voices={voiceCatalog}
                 characterType={manualType}
                 onCharacterType={setManualType}
                 artStyle={manualStyle}
@@ -379,13 +435,42 @@ function PlanEditor({
   field,
   plan,
   tones,
+  voices,
   onChange,
 }: {
   field: PlanField;
   plan: CreationPlan;
   tones: ToneOption[];
+  voices: VoiceCatalog;
   onChange: (patch: Partial<CreationPlan>) => void;
 }) {
+  if (field === "language")
+    return (
+      <select
+        data-testid="plan-language"
+        value={plan.language}
+        onChange={(event) => onChange({
+          language: event.target.value as LanguageCode,
+          characters: plan.characters.map((character) => ({ ...character, voiceId: undefined })),
+        })}
+        className="h-11 w-full rounded-xl border bg-background px-3"
+      >
+        {LANGUAGES.map((language) => <option key={language.id} value={language.id}>{language.label}</option>)}
+      </select>
+    );
+  if (field.startsWith("voice-")) {
+    const index = Number(field.split("-")[1]);
+    return (
+      <CharacterVoicesEditor
+        characters={plan.characters}
+        onChange={(characters) => onChange({ characters })}
+        catalog={voices}
+        language={plan.language}
+        onlyIndex={index}
+        testIdPrefix="plan-voice"
+      />
+    );
+  }
   if (field === "characters") return <CharacterListEditor value={plan.characters} onChange={(characters) => onChange({ characters })} testIdPrefix="plan-character" />;
   if (field === "mode")
     return (
@@ -443,8 +528,11 @@ function PlanEditor({
 interface ManualControlsProps {
   mode: CreationMode;
   onMode: (value: CreationMode) => void;
+  language: LanguageCode;
+  onLanguage: (value: LanguageCode) => void;
   characters: CreationPlanCharacter[];
   onCharacters: (value: CreationPlanCharacter[]) => void;
+  voices: VoiceCatalog;
   characterType: CharacterType;
   onCharacterType: (value: CharacterType) => void;
   artStyle: ArtStyle;
@@ -467,6 +555,20 @@ interface ManualControlsProps {
 function ManualControls(props: ManualControlsProps) {
   return (
     <>
+      <section className="max-w-xs">
+        <Label>Idioma</Label>
+        <select
+          data-testid="manual-language"
+          value={props.language}
+          onChange={(event) => {
+            props.onLanguage(event.target.value as LanguageCode);
+            props.onCharacters(props.characters.map((character) => ({ ...character, voiceId: undefined })));
+          }}
+          className="h-11 w-full rounded-xl border bg-background px-3"
+        >
+          {LANGUAGES.map((language) => <option key={language.id} value={language.id}>{language.label}</option>)}
+        </select>
+      </section>
       <section>
         <Label>Modo</Label>
         <div className="grid gap-3 sm:grid-cols-3">
@@ -476,6 +578,19 @@ function ManualControls(props: ManualControlsProps) {
       <section>
         <Label>Personagens</Label>
         <CharacterListEditor value={props.characters} onChange={props.onCharacters} testIdPrefix="manual-character" />
+      </section>
+      <section>
+        <div className="mb-2 flex items-center justify-between gap-3">
+          <Label>Vozes</Label>
+          {props.voices.source === "fallback" ? <span className="text-xs text-amber-500">Catálogo provisório</span> : null}
+        </div>
+        <CharacterVoicesEditor
+          characters={props.characters}
+          onChange={props.onCharacters}
+          catalog={props.voices}
+          language={props.language}
+          testIdPrefix="manual-voice"
+        />
       </section>
       <section className="grid gap-6 sm:grid-cols-2">
         <div>

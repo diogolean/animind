@@ -1,18 +1,28 @@
 "use client";
 
 import { Pencil } from "lucide-react";
-import type { CreationPlan, ToneOption } from "@/lib/contract";
+import type { CreationPlan, ToneOption, VoiceCatalog } from "@/lib/contract";
 import { ART_STYLES } from "@/lib/contract";
 
-export type PlanField = "mode" | "characters" | "topic" | "tone" | "objective" | "style" | "scenario" | "duration";
+export type PlanField = "language" | "mode" | "characters" | "topic" | "tone" | "objective" | "style" | "scenario" | "duration" | `voice-${number}`;
 
 const MODES = { monologue: "Monólogo", dialogue: "Diálogo", debate: "Debate" };
 const OBJECTIVES = { ensinar: "Ensinar", debater: "Debater", entreter: "Entreter", convencer: "Convencer" };
 
-export function PlanChips({ plan, tones, onEdit }: { plan: CreationPlan; tones: ToneOption[]; onEdit: (field: PlanField) => void }) {
+export function PlanChips({ plan, tones, voices, onEdit }: { plan: CreationPlan; tones: ToneOption[]; voices: VoiceCatalog; onEdit: (field: PlanField) => void }) {
   const chips: { field: PlanField; label: string; value: string }[] = [
+    { field: "language", label: "Idioma", value: plan.language === "pt-BR" ? "Português BR" : plan.language === "en-US" ? "English" : plan.language },
     { field: "mode", label: "Modo", value: MODES[plan.mode] },
     { field: "characters", label: "Elenco", value: plan.characters.map((character) => character.name).join(" + ") },
+    ...plan.characters.map((character, index) => {
+      const gender = character.gender ?? "male";
+      const selected = voices.voices.find((voice) => voice.id === character.voiceId);
+      return {
+        field: `voice-${index}` as const,
+        label: character.name,
+        value: `${gender === "male" ? "Masc." : "Fem."} · ${selected?.label ?? "Auto"}`,
+      };
+    }),
     { field: "topic", label: "Tema", value: plan.topic },
     { field: "tone", label: "Tom", value: tones.find((tone) => tone.id === plan.tone)?.label ?? plan.tone },
     { field: "objective", label: "Objetivo", value: OBJECTIVES[plan.objective] },
