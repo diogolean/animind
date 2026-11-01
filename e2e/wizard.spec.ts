@@ -41,8 +41,26 @@ test("prompt automático em um clique", async ({ page }, info) => {
   await expect(page.getByTestId("creation-prompt")).toHaveAttribute("placeholder", /Descreva sua criação/);
   await expect(page.getByTestId("core-mode")).toHaveText("mock de dev");
   await expect(page.getByTestId("automatic-toggle")).toHaveAttribute("aria-checked", "true");
-  await expect(page.getByTestId("language-selector")).toHaveValue("en-US");
+  await expect(page.getByTestId("language-selector")).toHaveAttribute("data-value", "en-US");
+  const japaneseCatalog = await (await page.request.get("/api/voices?lang=ja-JP")).json();
+  expect(japaneseCatalog.languages.length).toBeGreaterThan(70);
+  expect(japaneseCatalog.voices).toEqual(expect.arrayContaining([
+    expect.objectContaining({ id: "ja-JP-KeitaNeural", language: "ja-JP" }),
+    expect.objectContaining({ id: "ja-JP-NanamiNeural", language: "ja-JP" }),
+  ]));
+  expect(japaneseCatalog.voices.every((voice: { language: string }) => voice.language === "ja-JP")).toBe(true);
+  const japanesePlan = await (await page.request.post("/api/plan", {
+    data: { prompt: "先生が宇宙について話す" },
+  })).json();
+  expect(japanesePlan.language).toBe("ja-JP");
   await snap(page, info, "automatico", "01-tela-inicial");
+
+  await page.getByTestId("language-selector").click();
+  const suggestedOptions = page.getByRole("option");
+  await expect(suggestedOptions.nth(0)).toContainText("English");
+  await expect(suggestedOptions.nth(1)).toContainText("Português BR");
+  await expect(suggestedOptions.nth(2)).toContainText("Español");
+  await page.getByTestId("language-selector-search").press("Escape");
 
   await page.getByTestId("creation-prompt").fill("Uma conversa entre Jesus e o diabo debatendo temas bíblicos");
   const chips = page.getByTestId("plan-chips");
@@ -51,16 +69,25 @@ test("prompt automático em um clique", async ({ page }, info) => {
   await expect(page.getByTestId("plan-chip-characters")).toContainText("Jesus + Diabo");
   await expect(page.getByTestId("plan-chip-topic")).toContainText("temas bíblicos");
   await expect(page.getByTestId("plan-chip-language")).toContainText("Português BR");
-  await expect(page.getByTestId("language-selector")).toHaveValue("pt-BR");
+  await expect(page.getByTestId("language-selector")).toHaveAttribute("data-value", "pt-BR");
   await expect(page.getByTestId("plan-chip-voice-0")).toContainText("Masc. · Auto");
   await snap(page, info, "automatico", "02-chips");
 
+  await page.getByTestId("language-selector").click();
+  const languageSearch = page.getByTestId("language-selector-search");
+  await languageSearch.fill("Japonês");
+  await expect(page.getByTestId("language-selector-option-ja-JP")).toContainText("日本語");
+  await snap(page, info, "automatico", "03-busca-idioma");
+  await languageSearch.press("Enter");
+  await expect(page.getByTestId("language-selector")).toHaveAttribute("data-value", "ja-JP");
+  await expect(page.getByTestId("plan-chip-language")).toContainText("日本語");
+
   await page.getByTestId("plan-chip-voice-0").click();
   await page.getByTestId("plan-voice-gender-0-female").click();
-  await page.getByTestId("plan-voice-select-0").selectOption("pt-BR-FranciscaNeural");
+  await page.getByTestId("plan-voice-select-0").selectOption("ja-JP-NanamiNeural");
   await page.getByTestId("plan-voice-preview-0").click();
-  await expect(page.getByTestId("plan-chip-voice-0")).toContainText("Fem. · Francisca");
-  await snap(page, info, "automatico", "03-voz-editavel");
+  await expect(page.getByTestId("plan-chip-voice-0")).toContainText("Fem. · Nanami");
+  await snap(page, info, "automatico", "04-voz-editavel");
   await page.getByRole("button", { name: "Fechar editor" }).click();
   await expect(page.getByTestId("chip-editor")).toHaveCount(0);
 
@@ -81,13 +108,13 @@ test("prompt automático em um clique", async ({ page }, info) => {
     objective: "debater",
     targetDurationSec: 90,
     configurationSource: "automatic",
-    language: "pt-BR",
+    language: "ja-JP",
     voices: [
-      { voice: "pt-BR-FranciscaNeural", auto: false },
-      { voice: "pt-BR-AntonioNeural", auto: true },
+      { voice: "ja-JP-NanamiNeural", auto: false },
+      { voice: "ja-JP-KeitaNeural", auto: true },
     ],
   });
-  await snap(page, info, "automatico", "04-resultado");
+  await snap(page, info, "automatico", "05-resultado");
 });
 
 test("controles manuais na mesma página", async ({ page }, info) => {
@@ -100,7 +127,7 @@ test("controles manuais na mesma página", async ({ page }, info) => {
   await page.getByTestId("automatic-toggle").click();
   await expect(page.getByTestId("automatic-toggle")).toHaveAttribute("aria-checked", "false");
   await expect(page.getByTestId("manual-controls")).toBeVisible();
-  await expect(page.getByTestId("manual-language")).toHaveValue("en-US");
+  await expect(page.getByTestId("manual-language")).toHaveAttribute("data-value", "en-US");
   await page.getByTestId("manual-mode-debate").click();
   await page.getByTestId("manual-character-name-0").fill("Luna");
   await page.getByTestId("manual-character-prompt-0").fill("astronauta jovem, macacão laranja, otimista");

@@ -41,9 +41,23 @@ function inferTopic(prompt: string): string {
 }
 
 export function inferLanguage(prompt: string): LanguageCode {
+  if (/[\u3040-\u30ff]/u.test(prompt)) return "ja-JP";
+  if (/[\uac00-\ud7af]/u.test(prompt)) return "ko-KR";
+  if (/[\u4e00-\u9fff]/u.test(prompt)) return "zh-CN";
+  if (/[\u0600-\u06ff]/u.test(prompt)) return "ar-SA";
+  if (/[\u0590-\u05ff]/u.test(prompt)) return "he-IL";
+  if (/[\u0e00-\u0e7f]/u.test(prompt)) return "th-TH";
+  if (/[\u0900-\u097f]/u.test(prompt)) return "hi-IN";
+  if (/[\u0370-\u03ff]/u.test(prompt)) return "el-GR";
+  if (/[\u0400-\u04ff]/u.test(prompt)) return "ru-RU";
   const text = fold(prompt);
   const portugueseSignals = text.match(/\b(uma|entre|e|o|a|sobre|debatendo|conversa|personagem|fala|temas|biblicos|morte|ensina|com)\b/g)?.length ?? 0;
-  return portugueseSignals >= 2 || /[ãõçáéíóúâêô]/i.test(prompt) ? "pt-BR" : "en-US";
+  if (portugueseSignals >= 2 || /[ãõçâêô]/i.test(prompt)) return "pt-BR";
+  if (/\b(una|entre|sobre|habla|conversacion|personaje|debate|ensenar|con)\b/.test(text) || /[ñ¿¡]/.test(prompt)) return "es-ES";
+  if (/\b(une|entre|avec|parle|conversation|personnage|enseigne|sur)\b/.test(text)) return "fr-FR";
+  if (/\b(eine|zwischen|spricht|gesprach|figur|lehrt|uber|mit)\b/.test(text)) return "de-DE";
+  if (/\b(una|tra|parla|conversazione|personaggio|insegna|sulla)\b/.test(text)) return "it-IT";
+  return "en-US";
 }
 
 function inferGender(name: string, prompt: string): VoiceGender {
