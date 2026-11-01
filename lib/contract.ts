@@ -149,6 +149,23 @@ export interface VoicePick {
   traits?: { gender: "m" | "f"; born?: number | null; age: string; temper: string };
 }
 
+export type LanguageCode = "en-US" | "pt-BR" | (string & {});
+export type VoiceGender = "male" | "female";
+
+export interface VoiceOption {
+  id: string;
+  label: string;
+  language: LanguageCode;
+  gender: VoiceGender;
+  previewUrl?: string;
+}
+
+export interface VoiceCatalog {
+  voices: VoiceOption[];
+  defaultByGender: Record<VoiceGender, string>;
+  source: "core" | "fallback";
+}
+
 export type SceneTemplate = "debate" | "lesson" | "solo";
 export type Scenario = "studio" | "classroom" | "arena" | "space" | "agora";
 export type CreationMode = "monologue" | "dialogue" | "debate";
@@ -193,11 +210,15 @@ export interface ScenarioResolution {
 export interface CreationPlanCharacter {
   name: string;
   prompt: string;
+  /** Used for automatic casting; voiceId absent means pick from this gender. */
+  gender?: VoiceGender;
+  voiceId?: string;
 }
 
 /** Prompt-to-controls contract, ready for a future POST /v1/plan planner. */
 export interface CreationPlan {
   prompt: string;
+  language: LanguageCode;
   mode: CreationMode;
   characters: CreationPlanCharacter[];
   topic: string;
@@ -213,7 +234,9 @@ export interface CreationPlan {
 
 export interface CreationPlanRequest {
   prompt: string;
-  lang?: "pt-BR" | "en-US";
+  language?: LanguageCode;
+  /** Legacy alias accepted by the app adapter. */
+  lang?: LanguageCode;
 }
 
 export interface RenderRequest {
@@ -222,7 +245,9 @@ export interface RenderRequest {
   template: SceneTemplate;
   scenario: Scenario;
   topic?: string;
-  lang?: "pt-BR" | "en-US";
+  /** Preferred field for the core; the app also sends `lang` to older cores. */
+  language?: LanguageCode;
+  lang?: LanguageCode;
   format?: VideoFormat;
   /** Per-speaker voice override; null/absent entries are cast automatically. */
   voices?: (VoicePick | null)[];

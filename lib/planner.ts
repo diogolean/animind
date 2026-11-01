@@ -1,4 +1,4 @@
-import type { CreationMode, CreationPlan, CreationPlanCharacter } from "./contract";
+import type { CreationMode, CreationPlan, CreationPlanCharacter, LanguageCode, VoiceGender } from "./contract";
 import { inferAutoConfig } from "./auto-config";
 
 const fold = (value: string) =>
@@ -40,13 +40,26 @@ function inferTopic(prompt: string): string {
   return (match?.[1] ?? prompt).trim().slice(0, 160);
 }
 
-export function inferCreationPlan(rawPrompt: string): CreationPlan {
+export function inferLanguage(prompt: string): LanguageCode {
+  const text = fold(prompt);
+  const portugueseSignals = text.match(/\b(uma|entre|e|o|a|sobre|debatendo|conversa|personagem|fala|temas|biblicos|morte|ensina|com)\b/g)?.length ?? 0;
+  return portugueseSignals >= 2 || /[ãõçáéíóúâêô]/i.test(prompt) ? "pt-BR" : "en-US";
+}
+
+function inferGender(name: string, prompt: string): VoiceGender {
+  const text = fold(`${name} ${prompt}`);
+  return /\b(mulher|menina|garota|rainha|mae|avo|feminina|female|woman|girl|maria|luna|ana|eva)\b/.test(text) ? "female" : "male";
+}
+
+export function inferCreationPlan(rawPrompt: string, requestedLanguage?: LanguageCode): CreationPlan {
   const prompt = rawPrompt.trim().replace(/\s+/g, " ").slice(0, 1200);
+  const language = requestedLanguage ?? inferLanguage(prompt);
   const mode = inferMode(prompt);
   const names = namedCharacters(prompt, mode);
   const characters: CreationPlanCharacter[] = names.map((name) => ({
     name,
     prompt: `${name}, coerente com esta criação: ${prompt}`.slice(0, 600),
+    gender: inferGender(name, prompt),
   }));
   const topic = inferTopic(prompt);
   const automatic = inferAutoConfig({
@@ -58,6 +71,7 @@ export function inferCreationPlan(rawPrompt: string): CreationPlan {
   });
   return {
     prompt,
+    language,
     mode,
     characters,
     topic,

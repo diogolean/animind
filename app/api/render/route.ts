@@ -21,6 +21,8 @@ export async function POST(req: Request) {
     return json({ error: "Modelo de cena ou cenário inválido" }, 400);
   if (body.tone && !TONES.includes(body.tone)) return json({ error: "Tom inválido" }, 400);
   if (body.objective && !OBJECTIVES.includes(body.objective)) return json({ error: "Objetivo inválido" }, 400);
+  const language = body.language ?? body.lang ?? "en-US";
+  const adaptedBody = { ...body, language, lang: language };
   const mode = coreMode();
   if (mode === "off") return coreOff();
   if (mode === "core") {
@@ -31,8 +33,8 @@ export async function POST(req: Request) {
     } catch {
       // The documented fallback mapping keeps render available.
     }
-    const coreBody = { ...body, requestedTone: body.tone, tone: coreToneId(body.tone, catalog) };
+    const coreBody = { ...adaptedBody, requestedTone: body.tone, tone: coreToneId(body.tone, catalog) };
     return proxyJson("/render", { method: "POST", body: JSON.stringify(coreBody) });
   }
-  return json(mockCreateJob(body), 202);
+  return json(mockCreateJob(adaptedBody), 202);
 }

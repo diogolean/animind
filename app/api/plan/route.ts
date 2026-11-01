@@ -1,6 +1,6 @@
 import type { CreationPlan, CreationPlanRequest } from "@/lib/contract";
 import { coreFetch, coreMode, json } from "@/lib/core";
-import { inferCreationPlan } from "@/lib/planner";
+import { inferCreationPlan, inferLanguage } from "@/lib/planner";
 
 const validPlan = (value: unknown): value is CreationPlan => {
   const plan = value as Partial<CreationPlan>;
@@ -20,15 +20,16 @@ export async function POST(req: Request) {
 
   if (coreMode() === "core") {
     try {
-      const response = await coreFetch("/plan", { method: "POST", body: JSON.stringify({ prompt, lang: body.lang ?? "pt-BR" }) });
+      const language = body.language ?? body.lang;
+      const response = await coreFetch("/plan", { method: "POST", body: JSON.stringify({ prompt, language, lang: language }) });
       if (response.ok) {
         const candidate = await response.json();
-        if (validPlan(candidate)) return json({ ...candidate, prompt, source: "core" });
+        if (validPlan(candidate)) return json({ ...candidate, prompt, language: candidate.language ?? language ?? inferLanguage(prompt), source: "core" });
       }
       if (![404, 405, 501].includes(response.status)) return json({ error: `Erro do núcleo ${response.status}` }, response.status);
     } catch {
       // Planning must remain available while the optional core planner is offline.
     }
   }
-  return json(inferCreationPlan(prompt));
+  return json(inferCreationPlan(prompt, body.language ?? body.lang));
 }

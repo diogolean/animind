@@ -4,11 +4,13 @@ import type {
   CreationPlanRequest,
   CreateCharacterRequest,
   DeepStatus,
+  LanguageCode,
   RenderJob,
   RenderRequest,
   ScenarioRequest,
   ScenarioResolution,
   ToneCatalog,
+  VoiceCatalog,
 } from "./contract";
 
 async function call<T>(url: string, init?: RequestInit): Promise<T> {
@@ -27,6 +29,9 @@ export const planCreation = (body: CreationPlanRequest) =>
   call<CreationPlan>("/api/plan", { method: "POST", body: JSON.stringify(body) });
 
 export const getTones = () => call<ToneCatalog>("/api/tones");
+
+export const getVoices = (language: LanguageCode) =>
+  call<VoiceCatalog>(`/api/voices?${new URLSearchParams({ lang: language })}`);
 
 export const resolveScenario = (body: ScenarioRequest) =>
   call<ScenarioResolution>("/api/scenarios", { method: "POST", body: JSON.stringify(body) });
