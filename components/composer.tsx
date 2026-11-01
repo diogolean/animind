@@ -28,9 +28,13 @@ const FORMATS: { id: VideoFormat; label: string }[] = [
 /** "auto" lets the core cast a voice from the persona (gender, age, temper). */
 const VOICES = [
   { id: "auto", label: "Voz automática" },
-  { id: "pt-BR-AntonioNeural", label: "Antonio" },
-  { id: "pt-BR-FranciscaNeural", label: "Francisca" },
-  { id: "pt-BR-ThalitaMultilingualNeural", label: "Thalita" },
+  { id: "pt-BR-AntonioNeural", label: "Antonio (masc.)" },
+  { id: "en-US-AndrewMultilingualNeural", label: "Andrew (masc.)" },
+  { id: "fr-FR-RemyMultilingualNeural", label: "Rémy (masc., grave)" },
+  { id: "en-US-BrianMultilingualNeural", label: "Brian (masc.)" },
+  { id: "pt-BR-FranciscaNeural", label: "Francisca (fem.)" },
+  { id: "pt-BR-ThalitaMultilingualNeural", label: "Thalita (fem.)" },
+  { id: "en-US-AvaMultilingualNeural", label: "Ava (fem.)" },
 ];
 
 const PLACES: { id: Scenario; label: string }[] = [
@@ -398,8 +402,8 @@ export function Composer() {
                 </div>
               ) : null}
               {result?.voices?.length ? (
-                <div className="text-[11px] text-muted-foreground">
-                  Vozes: {result.voices.map((v, i) => `${result.characters[i]?.name ?? i + 1}: ${v.voice.replace(/^pt-BR-|Neural$/g, "")}${v.auto ? " (auto)" : ""}`).join(" · ")}
+                <div className="text-[11px] text-muted-foreground" data-testid="voices">
+                  Vozes: {result.voices.map((v, i) => `${result.characters[i]?.name ?? i + 1}: ${v.label ?? v.voice.replace(/^[a-z]{2}-[A-Z]{2}-|(Multilingual)?Neural$/g, "")}${v.auto ? " (auto)" : ""}`).join(" · ")}
                 </div>
               ) : null}
               {scene && !result && <div className="mt-2 text-xs text-muted-foreground tabular-nums">{Math.round(progress * 100)}%</div>}

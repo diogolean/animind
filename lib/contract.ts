@@ -131,6 +131,8 @@ export interface DeepStatus {
 
 export interface VoicePick {
   voice: string;
+  /** Human name of the voice (e.g. "Rémy"); each speaker in a scene gets a different voice. */
+  label?: string;
   pitchHz?: number;
   ratePct?: number;
   /** true when the core picked it from the persona. */

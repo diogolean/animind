@@ -129,6 +129,14 @@ test("debate and lesson from 'Quem vai falar?'", async ({ page }, info) => {
     // Both speakers are in the transcript.
     await expect(transcript).toContainText(PERSONA.split(/[ ,]/)[0]);
     await expect(transcript).toContainText(RIVAL.split(/[ ,]/)[0]);
+    if (core) {
+      // Each speaker gets their own voice (two men too): never one voice split by pitch.
+      const voices = page.getByTestId("voices");
+      await expect(voices).toBeVisible();
+      const picked = ((await voices.textContent()) ?? "").replace(/^Vozes:\s*/, "").split(" · ").map((s) => s.split(": ")[1]?.replace(/ \(auto\)$/, ""));
+      expect(picked.length, "one voice per speaker").toBe(2);
+      expect(picked[0], "speakers have different voices").not.toBe(picked[1]);
+    }
   });
 
   await test.step("vertical 9:16 debate", async () => {
