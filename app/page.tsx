@@ -1,5 +1,5 @@
-import { Composer } from "@/components/composer";
+import { CreationStudio } from "@/components/creation-studio";
 
 export default function Home() {
-  return <Composer />;
+  return <CreationStudio />;
 }
