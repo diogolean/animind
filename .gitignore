@@ -147,3 +147,9 @@ vite.config.ts.timestamp-*
 
 # Turbo Repo
 .turbo
+
+# Playwright E2E artefacts (videos, screenshots, traces, reports)
+/test-results/
+/playwright-report/
+/blob-report/
+/playwright/.cache/

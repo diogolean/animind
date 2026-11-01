@@ -1,0 +1,221 @@
+import {
+  PARODY_DISCLAIMER,
+  type Character,
+  type CharacterPreview,
+  type CharacterPreviewRequest,
+  type CreateCharacterRequest,
+  type RenderJob,
+  type RenderRequest,
+  type ScriptLine,
+  type PersonaSheet,
+  type QuoteRef,
+  type ViewName,
+} from "./contract";
+import { mockSheet, type QuoteSheet } from "./quote-sheets";
+import { checkFidelity } from "./script-qa";
+import { portraitById, portraitImageUrl } from "./catalog";
+
+const hash = (s: string) => {
+  let h = 2166136261;
+  for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 16777619);
+  return h >>> 0;
+};
+
+/** The mock never fakes a rig: views are empty and the UI shows a neutral placeholder. */
+const emptyViews = (): Character["views"] => {
+  const v = () => ({ canvas: { w: 512, h: 640 }, layers: [], visemes: {} });
+  return { front: v(), left: v(), right: v() };
+};
+
+/* Self-contained mock of the Omni-Engine core, used when CORE_URL is unset.
+ * Characters are procedural SVG cut-outs; jobs are stateless (state is encoded
+ * in the job id) so this works on serverless without storage. */
+
+const b64 = (o: unknown) => Buffer.from(JSON.stringify(o)).toString("base64url");
+const unb64 = <T,>(s: string): T => JSON.parse(Buffer.from(s, "base64url").toString("utf8")) as T;
+
+const titleCase = (s: string) =>
+  s.trim().replace(/\s+/g, " ").slice(0, 40).replace(/(^|\s)\p{L}/gu, (m) => m.toUpperCase());
+
+export function mockCreateCharacter(req: CreateCharacterRequest): Character {
+  const now = new Date().toISOString();
+  const src = req.source;
+  const base = { views: emptyViews(), createdAt: now };
+  if (src.kind === "catalog") {
+    const p = portraitById(src.portraitId);
+    if (!p) throw new Error("Retrato não encontrado no catálogo");
+    return { ...base, id: `mock_cat_${p.id}`, name: p.name, status: "ready", style: "cutout", photo: { url: portraitImageUrl(p.id), jaw: p.jaw, attribution: p.attribution } };
+  }
+  if (src.kind === "upload") {
+    return {
+      ...base,
+      id: `mock_up_${hash(src.imageDataUrl.slice(0, 4096)).toString(36)}`,
+      name: titleCase(src.name || "Sua foto"),
+      status: "ready",
+      style: "cutout",
+      photo: { url: src.imageDataUrl, jaw: { x: 0.36, y: 0.55, w: 0.28, h: 0.14 } },
+    };
+  }
+  const name = titleCase(req.name || src.prompt) || "Personagem";
+  return {
+    ...base,
+    id: `mock_${hash(`${name}:${src.prompt}`).toString(36)}`,
+    name,
+    status: "placeholder",
+    style: "rig",
+    artStyle: req.artStyle ?? "ghibli",
+    characterType: req.characterType ?? "stick",
+  };
+}
+
+export function mockCreatePreview(req: CharacterPreviewRequest): CharacterPreview {
+  const seed = hash(`${req.character.name}:${req.character.prompt}:${req.index}`);
+  const hue = 205 + (seed % 75);
+  return {
+    id: `preview_${seed.toString(36)}`,
+    index: req.index,
+    name: req.character.name || `Personagem ${req.index + 1}`,
+    kind: "stick",
+    source: "local",
+    accent: `hsl(${hue} 72% 62%)`,
+    note: "Preview local instantâneo; o núcleo pode substituir por PNG/frames.",
+  };
+}
+
+const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+
+/** A real quote of the sheet, as the transcript shows it (text copied byte for byte, source and link). */
+function quoteRef(sheet: QuoteSheet, id: string): QuoteRef {
+  const q = sheet.quotes.find((x) => x.id === id)!;
+  return { id: q.id, text: q.text, source: q.source, label: q.label, url: q.url, site: "Wikiquote", ...(q.wikisource ? { wikisource: q.wikisource } : {}) };
+}
+const ideaOf = (sheet: QuoteSheet, id: string) => sheet.quotes.find((x) => x.id === id)?.idea ?? "";
+
+function script(req: RenderRequest): ScriptLine[] {
+  const a = req.characters[0]?.name ?? "Personagem";
+  const b = req.characters[1]?.name ?? "Rival";
+  const t = req.topic?.trim() || "o futuro da animação";
+  const T = cap(t);
+  const sa = mockSheet(a);
+  const sb = mockSheet(b);
+  // Real quotes only from the bundled sheets (lib/quote-sheets.ts); every other line is a marked paraphrase
+  // and never claims literal wording. The debate mirrors the core's arc (abertura, confronto, virada, fechamento):
+  // speakers alternate, every written reply picks up a word of the line before (`idea`), the turn sits in the
+  // middle and lines stay short and varied. A line is [speaker, beat, text or quote, act, idea].
+  type MockLine = [number, string, string | QuoteRef, string?, string?];
+  const ia = sa ? ideaOf(sa, sa.roles.thesis) : "";
+  const ib = sb ? ideaOf(sb, sb.roles.thesis) : "";
+  const lines: MockLine[] =
+    req.template === "debate"
+      ? [
+          [0, "gancho", `${b}, ${t}: verdade ou moda? Responde sem fugir.`, "abertura"],
+          sb
+            ? [1, "tese", quoteRef(sb, sb.roles.thesis), "confronto"]
+            : [1, "tese", `Moda, ${a}? ${T} é coisa séria. Moda é a sua pergunta.`, "confronto", "moda"],
+          sb
+            ? [0, "réplica", `${cap(ib)}, ${b}? Bonita palavra. Agora defina em uma frase.`, "confronto", ib]
+            : [0, "réplica", `Séria? Então defina em uma frase, ${b}.`, "confronto", "séria"],
+          [1, "réplica", `Uma frase? Diga a sua, ${a}… se tiver coragem.`, "confronto", "frase"],
+          sa
+            ? [0, "virada", quoteRef(sa, sa.roles.turn), "virada"]
+            : [0, "virada", `Digo. Quem nunca duvidou de ${t} nunca pensou de verdade, ${b}.`, "virada", "diga"],
+          sa
+            ? [1, "réplica", `${cap(ideaOf(sa, sa.roles.turn))}, ${a}? Isso é medo com roupa de virtude.`, "virada", ideaOf(sa, sa.roles.turn)]
+            : [1, "réplica", `Duvidar, ${a}? Dúvida demais vira medo.`, "virada", "duvid"],
+          sb
+            ? [0, "tréplica", `Medo é seu, ${b}. Você começou falando em ${ib}.`, "fechamento", "medo"]
+            : [0, "tréplica", `Medo é seu, ${b}. Você mesmo chamou de coisa séria.`, "fechamento", "medo"],
+          sb
+            ? [1, "fechamento", `Medo, ${a}? Eu chamo de ${ib}. E eu decido.`, "fechamento", "medo"]
+            : [1, "fechamento", `Séria, sim. Por isso eu decido, ${a}.`, "fechamento", "séria"],
+          sa
+            ? [0, "fechamento", quoteRef(sa, sa.roles.close), "fechamento"]
+            : [0, "fechamento", "Decida, então. Eu continuo perguntando… e o público decide.", "fechamento", "decid"],
+        ]
+      : req.template === "lesson"
+        ? [
+            [0, "gancho", `Hoje: ${t}. Parece fácil. Não é.`],
+            [0, "pergunta", `Antes da resposta, uma pergunta melhor: como você sabe o que sabe sobre ${t}?`],
+            sa ? [0, "citação", quoteRef(sa, sa.roles.thesis)] : [0, "ideia", "Uma ideia para levar: quem explica descobre o que ainda não entendeu."],
+            sa
+              ? [0, "exemplo", `Repare na palavra ${ia}. Pense em ${t} com um exemplo seu… e veja onde você trava.`]
+              : [0, "exemplo", "Exemplo: explique para alguém em um minuto… e veja onde você trava."],
+            sa ? [0, "virada", quoteRef(sa, sa.roles.turn)] : [0, "virada", `Agora a virada: e se a dúvida sobre ${t} for o começo, não o fim?`],
+            sa
+              ? [0, "síntese", `Guarde a palavra ${ia}: é por ela que ${t} se examina.`]
+              : [0, "síntese", "Guarde isto: entender, praticar, explicar. E a próxima pergunta é sua."],
+          ]
+        : [
+            [0, "gancho", `Oi! Eu sou ${a}.`],
+            [0, "tese", `Hoje eu quero falar sobre ${t}.`],
+            [0, "fechamento", "Curtiu? Então compartilha com alguém!"],
+          ];
+  let t0 = 1800; // silent cold open for the title card, like the core (titles.TITLE_S)
+  const view = (speaker: number, i: number): ViewName =>
+    req.template === "debate" ? (speaker === 0 ? "right" : "left") : i === 1 ? (req.template === "lesson" ? "right" : "left") : "front";
+  return lines.map(([speaker, beat, said, act, idea], i) => {
+    const text = typeof said === "string" ? said : said.text;
+    if (i && act && act !== lines[i - 1][3]) t0 += 700; // act break: the dip and its chapter card (titles.ACT_GAP_S)
+    const dur = Math.max(1400, text.length * 62);
+    const line: ScriptLine = { speaker, text, beat, kind: typeof said === "string" ? "paraphrase" : "quote", startMs: t0, endMs: t0 + dur, view: view(speaker, i) };
+    if (typeof said !== "string") line.quote = said;
+    if (act) line.act = act;
+    if (idea) line.replyTo = { line: i - 1, idea };
+    t0 += dur + 350;
+    return line;
+  });
+}
+
+/** What the mock knows about each speaker's sheet (the same shape the core reports). */
+function personas(r: RenderRequest): PersonaSheet[] {
+  return r.characters.map((c) => {
+    const s = mockSheet(c.name);
+    return s
+      ? { name: s.name, found: true, wikiquote: s.wikiquote, quotes: s.quotes.length, license: s.license }
+      : { name: c.name, found: false, quotes: 0 };
+  });
+}
+
+interface MockJobState { r: RenderRequest; c: number }
+const RENDER_MS = 7000;
+
+export function mockCreateJob(req: RenderRequest): RenderJob {
+  // Strip heavy fields (uploaded data URLs) from the stateless id.
+  const lite: RenderRequest = {
+    ...req,
+    characters: req.characters.map((c) => ({ ...c, views: emptyViews(), photo: c.photo && { ...c.photo, url: "" } })),
+  };
+  return { id: `mock_${b64({ r: lite, c: Date.now() } satisfies MockJobState)}`, status: "queued", progress: 0 };
+}
+
+export function mockGetJob(id: string): RenderJob {
+  const { r, c } = unb64<MockJobState>(id.replace(/^mock_/, ""));
+  const p = Math.min(1, (Date.now() - c) / RENDER_MS);
+  if (p < 1) return { id, status: p < 0.15 ? "queued" : "running", progress: Math.round(p * 100) / 100 };
+  const lines = script(r);
+  return {
+    id,
+    status: "done",
+    progress: 1,
+    result: {
+      template: r.template,
+      format: r.format ?? "16:9",
+      width: r.format === "9:16" ? 1080 : 1280,
+      height: r.format === "9:16" ? 1920 : 720,
+      scenario: r.scenario,
+      characters: r.characters,
+      script: lines,
+      durationMs: (lines.at(-1)?.endMs ?? 0) + 2400, // end card (titles.END_S)
+      audioUrl: null,
+      videoUrl: null,
+      disclaimer: PARODY_DISCLAIMER,
+      writer: "template",
+      topic: r.topic?.trim() || "o futuro da animação",
+      personas: personas(r),
+      scriptQA: (() => {
+        const problems = checkFidelity(lines, r.characters.map((c) => mockSheet(c.name)));
+        return { pass: problems.length === 0, problems, notes: [] };
+      })(),
+    },
+  };
+}
