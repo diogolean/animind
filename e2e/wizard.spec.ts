@@ -62,6 +62,7 @@ test("prompt automático em um clique", async ({ page }, info) => {
   await expect(page.getByTestId("plan-chip-voice-0")).toContainText("Fem. · Francisca");
   await snap(page, info, "automatico", "03-voz-editavel");
   await page.getByRole("button", { name: "Fechar editor" }).click();
+  await expect(page.getByTestId("chip-editor")).toHaveCount(0);
 
   await page.getByTestId("plan-chip-tone").click();
   await expect(page.getByTestId("chip-editor")).toBeVisible();
