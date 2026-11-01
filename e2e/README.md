@@ -15,8 +15,11 @@ npm run build
 npm run test:e2e:mock                   # fast, ~1 min
 
 # against a real core (Omni-Engine products/animind_core, ~10-20 min, uses Gemini/edge-tts/Wikiquote):
-#   CORE_API_KEY=$KEY RHUBARB_PATH=... uvicorn products.animind_core.app:app --port 8797
-E2E_CORE_URL=http://127.0.0.1:8797 E2E_CORE_KEY=$KEY npm run test:e2e
+#   cd Omni-Engine && CORE_API_KEY=$KEY RHUBARB_PATH=... ANIMIND_DATA_DIR=/tmp/animind-data \
+#     python -m uvicorn products.animind_core.app:app --host 127.0.0.1 --port 8787
+#   restart it after every pull: a core from an older checkout renders unknown sets (e.g. agora) as the studio;
+#   the core project checks /v1/health `scenarios` up front and the app warns when the set it got differs.
+E2E_CORE_URL=http://127.0.0.1:8787 E2E_CORE_KEY=$KEY npm run test:e2e
 ```
 
 Options: `E2E_PERSONA` (default `Sócrates`), `E2E_RIVAL` (`Nietzsche`), `E2E_TOPIC` (`a verdade`),

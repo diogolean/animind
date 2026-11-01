@@ -141,6 +141,12 @@ export function Composer() {
       const job = await startRender({ characters: chars, template: tpl, scenario: where, topic: topic.trim() || undefined, lang: "pt-BR", format, voices: [voice === "auto" ? null : { voice }], personaMode: pmode, style: art });
       const done = await waitJob(job.id, (j) => setProgress(j.progress));
       const r = done.result!;
+      window.dispatchEvent(new Event(HEALTH_EVENT)); // a render may have hit a Gemini 402 (script writer): refresh the badge
+      // An older core renders an unknown scenario as the studio: say so instead of silently showing another set.
+      if (r.scenario && r.scenario !== where) {
+        const label = (id: string) => PLACES.find((p) => p.id === id)?.label ?? id;
+        toast.warning(`O núcleo não tem o cenário “${label(where)}” e usou “${label(r.scenario)}”. Atualize e reinicie o núcleo.`);
+      }
       // The core may echo characters without heavy fields (photo data URLs); keep our local copies.
       setResult({ ...r, characters: r.characters.map((c, i) => (c.photo && !c.photo.url ? chars[i] : c)) });
     } catch (e) {

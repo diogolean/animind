@@ -69,6 +69,12 @@ test("debate and lesson from 'Quem vai falar?'", async ({ page }, info) => {
     await page.goto("/");
     await expect(page.getByRole("heading", { name: "Quem vai falar?" })).toBeVisible();
     await expect(page.getByTestId("core-mode")).toHaveText(core ? /^núcleo (real|\(arte mock\))$/ : "mock de dev");
+    if (core) {
+      // A core started from an older checkout would render the era set as the studio: catch it up front.
+      const h = (await (await page.request.get("/api/health")).json()) as { core?: { scenarios?: string[] } };
+      const era = placeForPersona(PERSONA);
+      if (era && h.core?.scenarios) expect(h.core.scenarios, "core can render the persona's era set").toContain(era);
+    }
     await snap(page, info, "landing");
   });
 
