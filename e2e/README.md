@@ -2,11 +2,12 @@
 
 One user flow, asserted on what the user sees: landing → “Quem vai falar?” → persona, tema e rival →
 debate → aula. Each scene must play in the preview (canvas frames change), show the transcript
-(real quotes in “ ” with a Wikiquote/Wikisource link, paraphrases marked) and offer the downloads.
+(real quotes in “ ” with a Wikiquote/Wikisource link, each checked word for word, source and link against
+`/api/personas/sheet`; paraphrases marked and never in quotation marks; the “Roteiro conferido” self-check passed) and offer the downloads.
 
 | Project | When | Server | Checks |
 | --- | --- | --- | --- |
-| `mock` | always (CI, no keys) | `next start` with `ANIMIND_CORE_MOCK=1` | badge “mock de dev”, progress 0–100%, only paraphrases, no “MP4 do núcleo” |
+| `mock` | always (CI, no keys) | `next start` with `ANIMIND_CORE_MOCK=1` | badge “mock de dev”, progress 0–100%, real quotes only from the bundled Sócrates/Nietzsche sheets (`lib/quote-sheets.ts`), no “MP4 do núcleo” |
 | `core` | `E2E_CORE_URL` set | `next start` proxying to the real core | badge “núcleo …”, real quotes with sources, “MP4 do núcleo” served as `video/mp4` |
 
 ```bash

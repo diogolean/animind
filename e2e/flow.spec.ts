@@ -2,11 +2,12 @@ import { copyFile, mkdir } from "node:fs/promises";
 import path from "node:path";
 import { expect, test, type Page, type TestInfo } from "@playwright/test";
 import { placeForPersona } from "../lib/eras";
+import { mockSheet } from "../lib/quote-sheets";
 
 /**
  * The real user flow, asserted on what the user sees:
  * landing -> "Quem vai falar?" -> persona, topic and rival -> debate -> lesson,
- * each with a playing preview, a transcript (real quotes carry their source)
+ * each with a playing preview, a transcript (every real quote is checked word for word against the persona sheet)
  * and, with the core, the "MP4 do núcleo" download.
  *
  * E2E_SHOTS_DIR=/path also copies each step's screenshot and the run video there
@@ -193,25 +194,52 @@ async function expectSceneNotBlank(page: Page, warm: boolean) {
   if (warm) expect(st.r, "sunlit Ágora reads warm").toBeGreaterThan(st.b + 8);
 }
 
+interface Sheet { found: boolean; quotes: { id: string; text: string; source: string; url: string }[] }
+const norm = (s: string) => s.replace(/\s+/g, " ").trim();
+
+/**
+ * Every "Citação real" on screen is checked against the speaker's sheet (/api/personas/sheet): the text word for
+ * word, the source and the link. Written lines are marked "Paráfrase", and the script's self-check passed.
+ */
 async function checkTranscript(page: Page, core: boolean) {
   const transcript = page.getByTestId("transcript");
   const quotes = transcript.getByTestId("line-quote");
   const paraphrases = transcript.getByTestId("line-paraphrase");
   await expect(paraphrases.first()).toContainText("Paráfrase");
-  if (!core) {
-    // The mock has no persona sheets: nothing may be presented as a real quote.
+  await expect(transcript.getByTestId("script-qa")).toHaveAttribute("data-pass", "true");
+  await expect(transcript.getByTestId("script-qa")).toContainText("Roteiro conferido");
+  const sheets: Sheet[] = [];
+  for (const name of [PERSONA, RIVAL]) {
+    const r = await page.request.get(`/api/personas/sheet?${new URLSearchParams({ name, lang: "pt-BR" })}`);
+    expect(r.status(), `sheet of ${name}`).toBe(200);
+    sheets.push((await r.json()) as Sheet);
+  }
+  const expectQuotes = core ? sheets[0].found || sheets[1].found : !!(mockSheet(PERSONA) || mockSheet(RIVAL));
+  if (!expectQuotes) {
+    // No sheet: nothing may be presented as a real quote.
     await expect(quotes).toHaveCount(0);
     await expect(transcript.getByText("Citação real")).toHaveCount(0);
     return;
   }
-  // The core found Wikiquote sheets for real people: real quotes carry a source and a link.
   expect(await quotes.count(), "real quotes in the transcript").toBeGreaterThan(0);
   for (const q of await quotes.all()) {
     await expect(q.locator("p")).toHaveText(/^“[\s\S]+”$/);
+    const said = norm((await q.locator("p").textContent())!.replace(/^“|”$/g, ""));
+    const speaker = Number(await q.getAttribute("data-speaker"));
+    const hit = sheets[speaker]?.quotes.find((x) => norm(x.text) === said);
+    expect(hit, `quote is literally in the sheet of speaker ${speaker}: ${said}`).toBeTruthy();
+    expect(await q.getAttribute("data-quote-id")).toBe(hit!.id);
     const link = q.getByRole("link");
     await expect(link).toContainText("Citação real");
     await expect(link).toContainText(/Wiki(quote|source)/);
-    await expect(link).toHaveAttribute("href", /^https:\/\/[a-z]+\.wiki(quote|source)\.org\/wiki\//);
+    await expect(link).toHaveAttribute("href", hit!.url);
+    await expect(link).toHaveAttribute("title", hit!.source);
+    expect(hit!.url).toMatch(/^https:\/\/[a-z]+\.wiki(quote|source)\.org\/wiki\//);
+  }
+  // Written lines never pose as quotes.
+  for (const l of await paraphrases.all()) {
+    await expect(l.locator("p")).not.toHaveText(/[“”"]/);
+    expect(await l.getAttribute("data-beat")).not.toMatch(/^cita/);
   }
   await expect(transcript.getByRole("link", { name: /na Wikiquote/ }).first()).toBeVisible();
 }
