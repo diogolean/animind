@@ -15,11 +15,6 @@ async function snap(page: Page, info: TestInfo, flow: string, name: string) {
   }
 }
 
-async function fillCharacter(page: Page, name: string, prompt: string) {
-  await page.getByTestId("character-name").fill(name);
-  await page.getByTestId("character-prompt").fill(prompt);
-}
-
 async function expectPreview(page: Page) {
   const canvas = page.getByTestId("preview-canvas");
   await expect(canvas).toBeVisible({ timeout: 30_000 });
@@ -33,60 +28,51 @@ async function expectPreview(page: Page) {
   }).toPass({ timeout: 15_000 });
 }
 
-test("novo fluxo de monólogo", async ({ page }, info) => {
+test("prompt automático em um clique", async ({ page }, info) => {
   shot = 0;
   let renderRequest: Record<string, unknown> | undefined;
+  const characterRequests: Record<string, unknown>[] = [];
   page.on("request", (request) => {
     if (request.url().endsWith("/api/render") && request.method() === "POST") renderRequest = request.postDataJSON() as Record<string, unknown>;
+    if (request.url().endsWith("/api/characters") && request.method() === "POST") characterRequests.push(request.postDataJSON() as Record<string, unknown>);
   });
   await page.goto("/");
-  await expect(page.getByRole("heading", { name: "Quem vai falar?" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Imagine. Dirija. Gere." })).toBeVisible();
+  await expect(page.getByTestId("creation-prompt")).toHaveAttribute("placeholder", /Descreva sua criação/);
   await expect(page.getByTestId("core-mode")).toHaveText("mock de dev");
   await expect(page.getByTestId("automatic-toggle")).toHaveAttribute("aria-checked", "true");
-  await page.getByTestId("mode-monologue").click();
-  await page.getByTestId("type-stick").click();
-  await fillCharacter(page, "Sócrates", "filósofo idoso, túnica clara, sereno, curioso e bem-humorado");
-  await expect(page.getByTestId("auto-summary")).toContainText("Sábio");
-  await expect(page.getByTestId("auto-summary")).toContainText("fallback");
-  await snap(page, info, "monologo", "01-modo");
-  await page.getByTestId("add-character").click();
+  await snap(page, info, "automatico", "01-tela-inicial");
 
-  await expect(page.getByTestId("flow-step-1")).toBeVisible();
-  await expect(page.getByTestId("character-card")).toContainText("Sócrates");
-  await snap(page, info, "monologo", "02-personagens");
-  await page.getByTestId("continue").click();
+  await page.getByTestId("creation-prompt").fill("Uma conversa entre Jesus e o diabo debatendo temas bíblicos");
+  const chips = page.getByTestId("plan-chips");
+  await expect(chips).toBeVisible();
+  await expect(page.getByTestId("plan-chip-mode")).toContainText("Debate");
+  await expect(page.getByTestId("plan-chip-characters")).toContainText("Jesus + Diabo");
+  await expect(page.getByTestId("plan-chip-topic")).toContainText("temas bíblicos");
+  await snap(page, info, "automatico", "02-chips");
 
-  await page.getByTestId("topic").fill("Sócrates fala sobre a morte");
-  await page.getByTestId("narrative").selectOption("aula");
-  await page.getByTestId("script-prompt").fill("Abra com uma pergunta e termine com um desafio prático.");
-  await expect(page.getByTestId("auto-summary")).toContainText("Sábio");
-  await expect(page.getByTestId("auto-summary")).toContainText("Ensinar");
-  await expect(page.getByTestId("auto-summary")).toContainText("Ghibli retrô");
-  await expect(page.getByTestId("auto-summary")).toContainText("Ágora");
-  await expect(page.getByTestId("auto-summary")).toContainText("60s");
-  await snap(page, info, "monologo", "03-tema-roteiro");
-  await page.getByTestId("continue").click();
+  await page.getByTestId("plan-chip-tone").click();
+  await expect(page.getByTestId("chip-editor")).toBeVisible();
+  await page.getByTestId("plan-tone").selectOption("sabio");
+  await expect(page.getByTestId("plan-chip-tone")).toContainText("Sábio");
+  await page.getByRole("button", { name: "Fechar editor" }).click();
 
-  await expect(page.getByTestId("auto-scenario")).toContainText("Ágora");
-  await snap(page, info, "monologo", "04-cenario");
-  await page.getByTestId("continue").click();
-
-  await expect(page.getByText("Automática", { exact: true })).toBeVisible();
-  await snap(page, info, "monologo", "05-gerar");
   await page.getByTestId("generate").click();
   await expectPreview(page);
-  await expect(page.getByTestId("transcript")).toContainText("Sócrates");
+  await expect(page.getByTestId("transcript")).toContainText("Jesus");
+  await expect(page.getByTestId("transcript")).toContainText("Diabo");
+  expect(characterRequests).toHaveLength(2);
+  expect(characterRequests.map((request) => request.name)).toEqual(["Jesus", "Diabo"]);
   expect(renderRequest).toMatchObject({
     tone: "sabio",
-    objective: "ensinar",
-    style: "ghibli",
-    targetDurationSec: 60,
+    objective: "debater",
+    targetDurationSec: 90,
     configurationSource: "automatic",
   });
-  await snap(page, info, "monologo", "06-resultado");
+  await snap(page, info, "automatico", "03-resultado");
 });
 
-test("novo fluxo de diálogo com cenário por prompt", async ({ page }, info) => {
+test("controles manuais na mesma página", async ({ page }, info) => {
   shot = 0;
   let renderRequest: Record<string, unknown> | undefined;
   page.on("request", (request) => {
@@ -95,37 +81,24 @@ test("novo fluxo de diálogo com cenário por prompt", async ({ page }, info) =>
   await page.goto("/");
   await page.getByTestId("automatic-toggle").click();
   await expect(page.getByTestId("automatic-toggle")).toHaveAttribute("aria-checked", "false");
-  await page.getByTestId("mode-dialogue").click();
-  await page.getByTestId("type-illustrated").click();
-  await page.getByTestId("art-retro").click();
-  await fillCharacter(page, "Luna", "astronauta jovem, macacão laranja, cabelo curto, personalidade otimista");
-  await snap(page, info, "dialogo", "01-modo");
-  await page.getByTestId("add-character").click();
-
-  await fillCharacter(page, "Orion", "robô astrônomo antigo, metal azul gasto, preciso e desconfiado");
-  await page.getByTestId("add-character").click();
-  await expect(page.getByTestId("character-card")).toHaveCount(2);
-  await snap(page, info, "dialogo", "02-personagens");
-  await page.getByTestId("continue").click();
-
-  await page.getByTestId("topic").fill("se a humanidade deve morar em Marte");
-  await expect(page.getByTestId("tone").locator("option")).toHaveCount(5);
-  await page.getByTestId("tone").selectOption("educacional");
-  await expect(page.getByTestId("tone-fallback")).toContainText("serio");
-  await page.getByTestId("tone").selectOption("terror");
-  await page.getByTestId("objective").selectOption("convencer");
-  await page.getByTestId("duration-90").click();
-  await page.getByTestId("script-prompt").fill("Os dois discordam, mas descobrem um risco que muda a conversa.");
-  await snap(page, info, "dialogo", "03-tema-roteiro");
-  await page.getByTestId("continue").click();
-
-  await page.getByTestId("scenario-prompt").click();
-  await page.getByTestId("scenario-description").fill("nave retrofuturista com Saturno na janela e luz azul");
-  await snap(page, info, "dialogo", "04-cenario");
-  await page.getByTestId("continue").click();
-
+  await expect(page.getByTestId("manual-controls")).toBeVisible();
+  await page.getByTestId("manual-mode-debate").click();
+  await page.getByTestId("manual-character-name-0").fill("Luna");
+  await page.getByTestId("manual-character-prompt-0").fill("astronauta jovem, macacão laranja, otimista");
+  await page.getByTestId("manual-character-add").click();
+  await page.getByTestId("manual-character-name-1").fill("Orion");
+  await page.getByTestId("manual-character-prompt-1").fill("robô astrônomo azul, preciso e desconfiado");
+  await page.getByTestId("manual-type-illustrated").click();
+  await page.getByTestId("manual-art-retro").click();
+  await page.getByTestId("manual-topic").fill("se a humanidade deve morar em Marte");
+  await page.getByTestId("manual-tone").selectOption("terror");
+  await page.getByTestId("manual-objective").selectOption("convencer");
+  await page.getByTestId("manual-duration-90").click();
+  await page.getByTestId("manual-scenario-prompt").click();
+  await page.getByTestId("manual-scenario-description").fill("nave retrofuturista com Saturno na janela e luz azul");
   await page.getByTestId("format-9x16").click();
-  await snap(page, info, "dialogo", "05-gerar");
+  await snap(page, info, "manual", "01-controles-abertos");
+
   await page.getByTestId("generate").click();
   await expectPreview(page);
   await expect(page.getByTestId("scenario-fallback")).toContainText("cenário existente mais próximo");
@@ -139,5 +112,5 @@ test("novo fluxo de diálogo com cenário por prompt", async ({ page }, info) =>
     targetDurationSec: 90,
     configurationSource: "manual",
   });
-  await snap(page, info, "dialogo", "06-resultado");
+  await snap(page, info, "manual", "02-resultado");
 });

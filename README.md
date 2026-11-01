@@ -1,6 +1,6 @@
 # Animind
 
-Painel para criar personagens falantes: **modo → personagens → tema e roteiro → cenário → gerar**.
+Painel para criar personagens falantes: **descreva → revise o plano → gere**.
 PWA (Next.js 16 App Router, React 19, TypeScript, Tailwind 4, shadcn/ui, framer-motion).
 
 ## Arquitetura
@@ -11,6 +11,7 @@ PWA (Next.js 16 App Router, React 19, TypeScript, Tailwind 4, shadcn/ui, framer-
   - `POST /api/render` → `RenderJob`
   - `GET /api/jobs/:id` → `RenderJob` (com `result.script`, `audioUrl`, `videoUrl`)
   - `GET /api/tones` → catálogo de tons do núcleo (`/v1/tones`)
+  - `POST /api/plan` → prompt livre para `CreationPlan`; tenta o futuro `/v1/plan` e usa a heurística local como fallback
   - `POST /api/scenarios` → contrato do gerador de cenário; usa cenário existente como fallback enquanto `/v1/scenarios` não existe
 - Com `ANIMIND_CORE_URL` definido, as rotas fazem proxy para `${ANIMIND_CORE_URL}/v1/*` com `ANIMIND_CORE_KEY` (só no servidor). Personagens por descrição são recortados pelo núcleo; catálogo e upload continuam como rig de foto feito no app.
   - `GET /api/files/*` repassa as camadas PNG, a voz e o `preview.mp4` do núcleo pela mesma origem (o Canvas não fica “tainted” e o MediaRecorder grava).
@@ -25,24 +26,29 @@ PWA (Next.js 16 App Router, React 19, TypeScript, Tailwind 4, shadcn/ui, framer-
 - `scriptQA` (núcleo e mock, em todo template) confere cada citação palavra por palavra contra a ficha (texto, fonte e link) e reprova citação inventada, paráfrase apresentada como literal (aspas, “nas palavras de…”, “como escrevi:”) e fala escrita rotulada como citação; também confere o arco (debate: gancho, virada, fechamento memorável; aula: gancho, pergunta, citação, exemplo, virada, síntese curta). A transcrição mostra “Roteiro conferido · N citações reais conferidas” (`data-testid="script-qa"`).
 - `GET /api/personas/sheet?name=` devolve a ficha (citações literais com fonte e link) para conferir qualquer citação da tela; no núcleo é `GET /v1/personas/sheet`. O mock traz fichas reais de Sócrates e Nietzsche (`lib/quote-sheets.ts`, copiadas literalmente do cache do núcleo, Wikiquote CC BY-SA 4.0) e as usa nas falas de citação; qualquer outra persona no mock só tem paráfrases.
 - Na tela: selo “CITAÇÃO REAL · fonte · Wikiquote” ou “PARÁFRASE”, citação em itálico entre aspas, legendas em páginas de duas linhas. Abaixo do player, `components/transcript.tsx` lista o roteiro com o link de cada fonte.
-- O composer separa nome e prompt visual de cada personagem. Monólogo usa uma persona; diálogo aceita de duas a seis.
+- O plano separa nome e prompt visual de cada personagem. Monólogo usa uma persona; diálogo/debate aceita de duas a seis.
 - Tema, direção livre do roteiro, narrativa, tom e duração desejada seguem no `RenderRequest`.
 
-## Fluxo guiado e cenário
+## Prompt único, plano editável e cenário
 
-A primeira tela “Quem vai falar?” combina a escolha de monólogo/diálogo com nome e prompt livre do
-primeiro personagem. O tipo padrão é `stick`; `illustrated` identifica o pipeline complexo Aiwake.
-O campo já faz parte do contrato, mas a PR #93 do núcleo ainda não aplica `characterType` e pode devolver
-o rig Aiwake também para `stick`.
+A tela inicial tem uma única caixa “Descreva sua criação”. Com Automático ligado, `POST /api/plan`
+infere modo (monólogo, diálogo ou debate), personagens, tema, tom, objetivo, estilo, cenário e duração.
+O resultado aparece em chips editáveis; o único clique necessário depois de escrever é **Gerar**.
+Os personagens só são enviados para a factory nesse momento.
+
+`lib/planner.ts` implementa hoje o mesmo contrato com regras determinísticas. A rota tenta primeiro
+o futuro `POST /v1/plan`, portanto trocar a heurística por um planejador barato no núcleo não muda a UI.
+Com Automático desligado, os mesmos controles aparecem juntos na página, incluindo de um a seis
+personagens com nome e prompt próprios. O tipo padrão é `stick`; `illustrated` identifica o pipeline
+complexo Aiwake, ainda não aplicado pela PR #93 do núcleo.
 
 O cenário automático usa `lib/eras.ts` (por exemplo, Sócrates → Ágora). A opção por prompt chama
 `POST /api/scenarios`, que tentará o futuro `/v1/scenarios`; em 404/405/501 escolhe deterministicamente
 o cenário existente mais próximo e devolve `source: "fallback"` com uma nota visível na UI.
 
-O switch **Automático** começa ligado. `lib/auto-config.ts` usa apenas regras locais determinísticas
-sobre nomes, prompts, tema e direção para escolher tom, objetivo, estilo, cenário e duração; a tela
-expõe todas as escolhas. Por exemplo, “Sócrates fala sobre a morte” resulta em Sábio, Ensinar, Ghibli
-retrô, Ágora e 60s. Desligar o switch libera todos os controles manuais.
+O switch **Automático** começa ligado. `lib/planner.ts` extrai o elenco e o tema do prompt e delega as
+escolhas criativas para `lib/auto-config.ts`. Por exemplo, “Sócrates fala sobre a morte” resulta em
+Sábio, Ensinar, Ghibli retrô, Ágora e 60s.
 
 Os tons de produto são Humor, Terror, Educacional, Sábio e Sério. `GET /api/tones` normaliza o catálogo
 do núcleo: Humor → `comedia`, Terror → `horror` e Sério → `serio`; Educacional e Sábio aparecem com
@@ -52,7 +58,7 @@ mas a PR #93 do núcleo ainda ignora esses campos.
 
 ## Modos de persona: Rápido x Profundo
 
-O composer tem o seletor **Rápido / Profundo**, que é enviado como `personaMode` em `POST /api/render`.
+O contrato mantém **Rápido / Profundo** em `personaMode`; a interface minimalista atual envia `quick`.
 
 - **Rápido** (padrão): o personagem é inferido de poucos termos-chave. Usa uma base rasa (Wikiquote + resumo da Wikipedia), que fica em cache junto com a persona.
 - **Profundo**: dispara um job em segundo plano no núcleo (`POST /api/personas/deep`, com o status em `GET /api/personas/deep?name=`). O job indexa os textos completos da Wikipedia, Wikiquote e Wikisource, em trechos com embeddings locais, sem custo de API. A UI mostra "Base profunda: pronta · N trechos". Se a base ainda não estiver pronta, o render usa o modo rápido.
@@ -67,8 +73,7 @@ Realista, Cyberpunk e Aquarela (`ART_STYLES` em `lib/contract.ts`). O estilo vai
 estilo é só ecoado.
 
 Personagens do core real trazem `imageUrl` (perfil) e `frontImageUrl` (vista frontal gerada pelo
-Gemini com o perfil como referência). O card mostra as duas (`data-testid="front-view"`); o core usa a
-frontal nas falas para a câmera (gancho, fechamento, resumo).
+Gemini com o perfil como referência); o core usa a frontal nas falas para a câmera.
 
 ## Regras do modo foto
 
