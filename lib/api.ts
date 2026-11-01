@@ -1,5 +1,7 @@
 import type {
   Character,
+  CharacterPreview,
+  CharacterPreviewRequest,
   CreationPlan,
   CreationPlanRequest,
   CreateCharacterRequest,
@@ -22,6 +24,9 @@ async function call<T>(url: string, init?: RequestInit): Promise<T> {
 
 export const createCharacter = (body: CreateCharacterRequest) =>
   call<Character>("/api/characters", { method: "POST", body: JSON.stringify(body) });
+
+export const createPreview = (body: CharacterPreviewRequest) =>
+  call<CharacterPreview>("/api/preview", { method: "POST", body: JSON.stringify(body) });
 
 export const startRender = (body: RenderRequest) => call<RenderJob>("/api/render", { method: "POST", body: JSON.stringify(body) });
 

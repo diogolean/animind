@@ -1,6 +1,8 @@
 import {
   PARODY_DISCLAIMER,
   type Character,
+  type CharacterPreview,
+  type CharacterPreviewRequest,
   type CreateCharacterRequest,
   type RenderJob,
   type RenderRequest,
@@ -63,6 +65,20 @@ export function mockCreateCharacter(req: CreateCharacterRequest): Character {
     style: "rig",
     artStyle: req.artStyle ?? "ghibli",
     characterType: req.characterType ?? "stick",
+  };
+}
+
+export function mockCreatePreview(req: CharacterPreviewRequest): CharacterPreview {
+  const seed = hash(`${req.character.name}:${req.character.prompt}:${req.index}`);
+  const hue = 205 + (seed % 75);
+  return {
+    id: `preview_${seed.toString(36)}`,
+    index: req.index,
+    name: req.character.name || `Personagem ${req.index + 1}`,
+    kind: "stick",
+    source: "local",
+    accent: `hsl(${hue} 72% 62%)`,
+    note: "Preview local instantâneo; o núcleo pode substituir por PNG/frames.",
   };
 }
 

@@ -248,6 +248,34 @@ export interface CreationPlanRequest {
   lang?: LanguageCode;
 }
 
+/** Lightweight visual requested before the full character rig and video are ready. */
+export interface CharacterPreviewRequest {
+  character: CreationPlanCharacter;
+  characterType: CharacterType;
+  artStyle: ArtStyle;
+  language: LanguageCode;
+  index: number;
+}
+
+export interface PreviewFrames {
+  /** PNG/SVG still returned by a future POST /v1/preview implementation. */
+  idle: string;
+  blink?: string;
+  mouthOpen?: string;
+}
+
+export interface CharacterPreview {
+  id: string;
+  index: number;
+  name: string;
+  kind: "stick" | "image";
+  source: "core" | "local";
+  accent: string;
+  imageUrl?: string;
+  frames?: PreviewFrames;
+  note?: string;
+}
+
 export interface RenderRequest {
   /** 1 character for a monologue, 2+ for dialogue. */
   characters: Character[];
