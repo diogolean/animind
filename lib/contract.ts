@@ -160,9 +160,18 @@ export interface VoiceOption {
   previewUrl?: string;
 }
 
+export interface VoiceLanguage {
+  id: LanguageCode;
+  nativeName: string;
+  englishName: string;
+  flag?: string;
+}
+
 export interface VoiceCatalog {
   voices: VoiceOption[];
   defaultByGender: Record<VoiceGender, string>;
+  /** Locales advertised by GET /v1/voices, or the complete edge-tts fallback. */
+  languages: VoiceLanguage[];
   source: "core" | "fallback";
 }
 
