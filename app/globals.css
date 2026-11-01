@@ -148,27 +148,27 @@
 }
 
 @keyframes animind-blink {
-  0%, 44%, 49%, 100% { transform: scaleY(1); }
-  46%, 47% { transform: scaleY(0.08); }
+  0%, 38%, 52%, 100% { transform: scaleY(1); }
+  44%, 48% { transform: scaleY(0.08); }
 }
 @keyframes animind-mouth {
-  0%, 18%, 38%, 58%, 78%, 100% { opacity: 0; transform: scaleY(0.25); }
-  9%, 29%, 49%, 69%, 89% { opacity: 1; transform: scaleY(1); }
+  0%, 100% { opacity: 0.08; transform: scaleY(0.2); }
+  50% { opacity: 1; transform: scaleY(1.2); }
 }
 .animind-stick-eyes {
   transform-box: fill-box;
   transform-origin: center;
-  animation: animind-blink 3.2s ease-in-out infinite;
+  animation: animind-blink 2s ease-in-out infinite;
 }
 .animind-stick-mouth {
-  animation: animind-mouth 1.15s steps(1, end) infinite reverse;
+  animation: animind-mouth .62s ease-in-out infinite reverse;
 }
 .animind-stick-mouth-open,
 .animind-preview-mouth {
   transform-box: fill-box;
   transform-origin: center;
-  animation: animind-mouth 1.15s steps(1, end) infinite;
+  animation: animind-mouth .62s ease-in-out infinite;
 }
 .animind-preview-blink {
-  animation: animind-mouth 3.2s steps(1, end) infinite;
+  animation: animind-mouth 2s ease-in-out infinite;
 }

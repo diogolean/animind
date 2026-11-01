@@ -177,7 +177,7 @@ function personas(r: RenderRequest): PersonaSheet[] {
 }
 
 interface MockJobState { r: RenderRequest; c: number }
-const RENDER_MS = 2200;
+const RENDER_MS = 7000;
 
 export function mockCreateJob(req: RenderRequest): RenderJob {
   // Strip heavy fields (uploaded data URLs) from the stateless id.

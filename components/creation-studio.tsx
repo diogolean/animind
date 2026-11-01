@@ -100,6 +100,7 @@ export function CreationStudio() {
   const [scenarioResolution, setScenarioResolution] = useState<ScenarioResolution | null>(null);
   const [progressivePreviews, setProgressivePreviews] = useState<CharacterPreview[]>([]);
   const [streamScenario, setStreamScenario] = useState<string | null>(null);
+  const streamRef = useRef<HTMLDivElement>(null);
   const currentLanguage = automatic ? plan?.language ?? "en-US" : manualLanguage;
   const [voiceCatalog, setVoiceCatalog] = useState<VoiceCatalog>(fallbackVoiceCatalog("en-US"));
 
@@ -115,6 +116,11 @@ export function CreationStudio() {
       .then(setVoiceCatalog)
       .catch(() => setVoiceCatalog(fallbackVoiceCatalog(currentLanguage)));
   }, [currentLanguage]);
+
+  useEffect(() => {
+    if (rendering && progressivePreviews.length === 1)
+      requestAnimationFrame(() => streamRef.current?.scrollIntoView({ behavior: "smooth", block: "center" }));
+  }, [rendering, progressivePreviews.length]);
 
   const requestPlan = (value: string, language: LanguageCode | null = null) => {
     if (timer.current) clearTimeout(timer.current);
@@ -440,7 +446,11 @@ export function CreationStudio() {
           ) : null}
         </AnimatePresence>
 
-        {rendering && progressivePreviews.length ? <ProgressivePreview previews={progressivePreviews} scenario={streamScenario} status={status || `Renderizando · ${Math.round(progress * 100)}%`} /> : null}
+        {rendering && progressivePreviews.length ? (
+          <div ref={streamRef}>
+            <ProgressivePreview previews={progressivePreviews} scenario={streamScenario} status={status || `Renderizando · ${Math.round(progress * 100)}%`} />
+          </div>
+        ) : null}
         {scenarioResolution?.note ? <p data-testid="scenario-fallback" className="mt-3 text-sm text-amber-500">{scenarioResolution.note}</p> : null}
       </section>
 
