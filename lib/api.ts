@@ -28,3 +28,6 @@ export async function waitJob(id: string, onProgress: (j: RenderJob) => void, si
     await new Promise((r) => setTimeout(r, 500));
   }
 }
+
+/** Window event: the core’s capabilities may have changed (e.g. Gemini art fell back to mock), re-read /api/health. */
+export const HEALTH_EVENT = "animind:health";

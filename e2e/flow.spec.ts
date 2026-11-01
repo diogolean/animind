@@ -89,6 +89,8 @@ test("debate and lesson from 'Quem vai falar?'", async ({ page }, info) => {
     // A real core rig ships the Gemini front view next to the side view.
     // A mock fallback (Gemini 402 / no credit) says so on the card instead of failing the request.
     const fallback = await page.getByTestId("art-fallback").count();
+    // ...and the header badge follows: Gemini is off for the rest of this core process.
+    if (core && fallback) await expect(page.getByTestId("core-mode")).toHaveText("núcleo (arte mock)", { timeout: 15_000 });
     if (core && !fallback && (await page.getByTestId("core-mode").textContent())?.includes("real"))
       await expect(page.getByTestId("front-view")).toBeVisible({ timeout: slow });
     // The set follows the persona's era: a classical philosopher starts in the Ágora.

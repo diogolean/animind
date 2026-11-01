@@ -7,7 +7,7 @@ import { toast } from "sonner";
 import { cn } from "cn";
 import { ART_STYLES } from "@/lib/contract";
 import type { ArtStyle, Character, CharacterSource, RenderResult, Scenario, SceneTemplate, VideoFormat, PersonaMode, DeepStatus } from "@/lib/contract";
-import { createCharacter, deepStatus, startDeep, startRender, waitJob } from "@/lib/api";
+import { HEALTH_EVENT, createCharacter, deepStatus, startDeep, startRender, waitJob } from "@/lib/api";
 import { PORTRAITS, portraitImageUrl } from "@/lib/catalog";
 import { placeForPersona } from "@/lib/eras";
 import { Avatar } from "@/components/avatar";
@@ -112,6 +112,7 @@ export function Composer() {
     try {
       const c = await createCharacter({ source, artStyle: art });
       setChar(c);
+      if (c.generator === "mock" && c.generatorNote) window.dispatchEvent(new Event(HEALTH_EVENT));
       if (!placeTouched.current) setPlace(placeForPersona(c.name) ?? "studio");
     } catch (e) {
       toast.error((e as Error).message);

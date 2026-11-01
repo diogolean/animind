@@ -3,25 +3,35 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useTheme } from "next-themes";
 import { Moon, Sun } from "lucide-react";
+import { HEALTH_EVENT } from "@/lib/api";
 
 export function SiteHeader() {
   const { resolvedTheme, setTheme } = useTheme();
-  const [mode, setMode] = useState<{ label: string; tone: string } | null>(null);
+  const [mode, setMode] = useState<{ label: string; tone: string; note?: string } | null>(null);
   useEffect(() => {
-    fetch("/api/health")
-      .then((r) => r.json())
-      .then((h: { mode: string; core?: { ok?: boolean; generator?: string } }) =>
-        setMode(
-          h.mode === "core"
-            ? h.core?.ok
-              ? { label: h.core.generator === "gemini" ? "núcleo real" : "núcleo (arte mock)", tone: "text-emerald-600 dark:text-emerald-400" }
-              : { label: "núcleo fora do ar", tone: "text-red-600 dark:text-red-400" }
-            : h.mode === "mock"
-              ? { label: "mock de dev", tone: "text-amber-600 dark:text-amber-400" }
-              : { label: "núcleo não configurado", tone: "text-red-600 dark:text-red-400" },
-        ),
-      )
-      .catch(() => {});
+    const load = () =>
+      fetch("/api/health", { cache: "no-store" })
+        .then((r) => r.json())
+        .then((h: { mode: string; core?: { ok?: boolean; generator?: string; generatorNote?: string } }) =>
+          setMode(
+            h.mode === "core"
+              ? h.core?.ok
+                ? {
+                    label: h.core.generator === "gemini" ? "núcleo real" : "núcleo (arte mock)",
+                    tone: "text-emerald-600 dark:text-emerald-400",
+                    note: h.core.generatorNote,
+                  }
+                : { label: "núcleo fora do ar", tone: "text-red-600 dark:text-red-400" }
+              : h.mode === "mock"
+                ? { label: "mock de dev", tone: "text-amber-600 dark:text-amber-400" }
+                : { label: "núcleo não configurado", tone: "text-red-600 dark:text-red-400" },
+          ),
+        )
+        .catch(() => {});
+    load();
+    // A character whose art fell back to mock (Gemini 402 mid-session) changes what the core can do: re-read it.
+    window.addEventListener(HEALTH_EVENT, load);
+    return () => window.removeEventListener(HEALTH_EVENT, load);
   }, []);
   return (
     <header className="mx-auto flex h-14 w-full max-w-5xl items-center justify-between px-6">
@@ -30,7 +40,7 @@ export function SiteHeader() {
         animind
       </Link>
       {mode && (
-        <span data-testid="core-mode" className={`ml-auto mr-3 text-xs ${mode.tone}`}>
+        <span data-testid="core-mode" title={mode.note} className={`ml-auto mr-3 text-xs ${mode.tone}`}>
           {mode.label}
         </span>
       )}
