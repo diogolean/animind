@@ -552,6 +552,126 @@ function lowerThird(g: CanvasRenderingContext2D, r: RenderResult, line: ScriptLi
   g.restore();
 }
 
+// ------------------------------------------------------------ film titles (core titles.py)
+const MATTE = 2.39, MATTE_EASE_S = 0.8, DIP_FLOOR = 0.32, CHAPTER_HOLD_S = 2.8;
+const ROMAN = ["I", "II", "III", "IV", "V", "VI"];
+const ACT_LABEL: Record<string, string> = { abertura: "Abertura", confronto: "O confronto", desenvolvimento: "Desenvolvimento", virada: "A virada", fechamento: "Fechamento" };
+const KIND_LABEL: Record<string, string> = { debate: "Um debate", lesson: "Uma aula", solo: "Um monólogo" };
+
+interface Titles { titleEnd: number; endStart: number | null; breaks: { a: number; b: number; act: string; numeral: string }[] }
+const titlesCache = new WeakMap<RenderResult, Titles>();
+
+/** Same plan as the core: a cold open while no one speaks yet, dips in the silent gaps that open an act, an end card. */
+export function planTitles(r: RenderResult): Titles {
+  const hit = titlesCache.get(r);
+  if (hit) return hit;
+  const s = r.script, first = s.length ? s[0].startMs / 1000 : 0, last = s.length ? s[s.length - 1].endMs / 1000 : 0;
+  const breaks: Titles["breaks"] = [];
+  let seen = s[0]?.act ? 1 : 0;
+  s.forEach((l, i) => {
+    if (!i || !l.act || l.act === s[i - 1].act) return;
+    seen += 1;
+    const a = s[i - 1].endMs / 1000, b = l.startMs / 1000;
+    if (b - a >= 0.6) breaks.push({ a, b, act: l.act, numeral: ROMAN[Math.min(seen, ROMAN.length) - 1] });
+  });
+  const out = { titleEnd: first >= 1 ? first : 0, endStart: s.length && r.durationMs / 1000 - last >= 1.5 ? last + 0.3 : null, breaks };
+  titlesCache.set(r, out);
+  return out;
+}
+
+export function dipAt(r: RenderResult, t: number): number {
+  let level = 1;
+  for (const { a, b } of planTitles(r).breaks) if (a < t && t < b) level = Math.min(level, 1 - (1 - DIP_FLOOR) * Math.sin((Math.PI * (t - a)) / (b - a)) ** 2);
+  return level;
+}
+
+function tracked(g: CanvasRenderingContext2D, text: string, x: number, y: number, track: number) {
+  g.letterSpacing = `${track}px`;
+  g.fillText(text, x, y);
+  g.letterSpacing = "0px";
+}
+
+/** Scope matte plus the title / end card, drawn under the fade like the core. */
+function filmTitles(g: CanvasRenderingContext2D, r: RenderResult, t: number, FW: number, FH: number, vert: boolean, ks: number) {
+  const p = planTitles(r);
+  let m = p.titleEnd ? 1 - ease((t - p.titleEnd) / MATTE_EASE_S) : 0;
+  if (p.endStart !== null) m = Math.max(m, ease((t - p.endStart) / MATTE_EASE_S));
+  const bar = vert ? 0 : Math.round(((FH - FW / MATTE) / 2) * m);
+  if (bar > 0) {
+    g.fillStyle = "#000";
+    g.fillRect(0, 0, FW, bar);
+    g.fillRect(0, FH - bar, FW, bar);
+  }
+  const aTitle = p.titleEnd ? 1 - ease((t - (p.titleEnd - 0.3)) / 0.4) : 0;
+  const aEnd = p.endStart !== null ? ease((t - p.endStart - 0.25) / 0.5) : 0;
+  const a = Math.max(aTitle, aEnd);
+  if (a <= 0.01) return;
+  const k = vert ? ks : 0.86, cy = FH * (vert ? 0.785 : 0.757);
+  const names = r.characters.slice(0, r.template === "debate" ? 2 : 1).map((c) => prettyName(c.name).toUpperCase()).join("  ×  ");
+  const topicRaw = r.topic || "";
+  const topic = topicRaw.charAt(0).toUpperCase() + topicRaw.slice(1);
+  g.save();
+  g.globalAlpha = a;
+  g.textAlign = "center";
+  g.textBaseline = "middle";
+  g.filter = `blur(${Math.round(30 * k)}px)`;
+  g.fillStyle = "rgba(4,4,8,.59)";
+  g.beginPath();
+  g.roundRect(FW / 2 - 380 * k, cy - 100 * k, 760 * k, 200 * k, 40 * k);
+  g.fill();
+  g.filter = "none";
+  g.shadowColor = "rgba(0,0,0,.8)";
+  g.shadowBlur = 8;
+  g.fillStyle = ACCENT[r.scenario];
+  g.font = `600 ${Math.round(15 * k)}px Geist, ui-sans-serif, system-ui`;
+  tracked(g, (aEnd > aTitle ? "FIM" : KIND_LABEL[r.template] || "").toUpperCase(), FW / 2, cy - 62 * k, 6 * k);
+  g.fillStyle = "#fff";
+  g.font = `700 ${Math.round(30 * k)}px Geist, ui-sans-serif, system-ui`;
+  tracked(g, names, FW / 2, cy - 22 * k, 7 * k);
+  g.fillStyle = ACCENT[r.scenario];
+  g.fillRect(FW / 2 - 28 * k, cy + 4 * k, 56 * k, Math.max(1, 2 * k));
+  g.fillStyle = "#fff8ec";
+  g.font = `italic 400 ${Math.round(58 * k)}px "EB Garamond", Garamond, Georgia, serif`;
+  g.fillText(topic, FW / 2, cy + 46 * k, FW * 0.8);
+  g.restore();
+}
+
+/** Chapter mark for the act that just started (top left, from the bottom of the dip). */
+function chapterCard(g: CanvasRenderingContext2D, r: RenderResult, t: number, vert: boolean, ks: number) {
+  for (const { a, b, act, numeral } of planTitles(r).breaks) {
+    const t0 = (a + b) / 2;
+    if (t < t0 || t > t0 + CHAPTER_HOLD_S + 0.5) continue;
+    const al = ease((t - t0) / 0.4) * (1 - ease((t - t0 - CHAPTER_HOLD_S) / 0.5));
+    if (al <= 0.01) continue;
+    const k = vert ? ks : 1, x = 24 - 10 * (1 - al), y = vert ? 190 : 66, h = 64 * k;
+    const label = (ACT_LABEL[act] || act).toUpperCase();
+    g.save();
+    g.globalAlpha = al;
+    g.font = `600 ${Math.round(14 * k)}px Geist, ui-sans-serif, system-ui`;
+    g.letterSpacing = `${4.2 * k}px`;
+    const lw = g.measureText(label).width;
+    g.letterSpacing = "0px";
+    g.font = `italic 400 ${Math.round(40 * k)}px "EB Garamond", Garamond, Georgia, serif`;
+    const nw = g.measureText(numeral).width, w = nw + lw + 110 * k;
+    g.filter = `blur(${Math.round(8 * k)}px)`;
+    g.fillStyle = "rgba(6,6,10,.59)";
+    g.beginPath();
+    g.roundRect(x + 6 * k, y + 6 * k, w - 12 * k, h - 12 * k, 16 * k);
+    g.fill();
+    g.filter = "none";
+    g.textBaseline = "middle";
+    g.textAlign = "left";
+    g.fillStyle = "#fff8ec";
+    g.fillText(numeral, x + 24 * k, y + h / 2 + 2 * k);
+    const rx = x + 40 * k + nw;
+    g.fillStyle = ACCENT[r.scenario];
+    g.fillRect(rx, y + h / 2 - k, 26 * k, Math.max(1, 2 * k));
+    g.font = `600 ${Math.round(14 * k)}px Geist, ui-sans-serif, system-ui`;
+    tracked(g, label, rx + 40 * k, y + h / 2, 4.2 * k);
+    g.restore();
+  }
+}
+
 export function drawFrame(g: CanvasRenderingContext2D, r: RenderResult, img: Images, track: Track | null, tMs: number) {
   const t = tMs / 1000;
   const k = Math.min(Math.floor(t * FPS_ENV), (track?.env.length ?? 1) - 1);
@@ -588,7 +708,8 @@ export function drawFrame(g: CanvasRenderingContext2D, r: RenderResult, img: Ima
     g.globalAlpha = 1;
   });
   grade(g, r.scenario, focusOf(r, takes[takes.length - 1][1], vert));
-  const fade = ease(t / FADE_IN_S) * ease((r.durationMs / 1000 - t) / FADE_OUT_S);
+  filmTitles(g, r, t, FW, FH, vert, ks);
+  const fade = ease(t / FADE_IN_S) * ease((r.durationMs / 1000 - t) / FADE_OUT_S) * dipAt(r, t);
   if (fade < 0.999) {
     g.fillStyle = `rgba(0,0,0,${1 - fade})`;
     g.fillRect(0, 0, FW, FH);
@@ -600,6 +721,7 @@ export function drawFrame(g: CanvasRenderingContext2D, r: RenderResult, img: Ima
   sc.addColorStop(1, "rgba(0,0,0,.6)");
   g.fillStyle = sc;
   g.fillRect(0, FH * s0, FW, FH * (1 - s0));
+  chapterCard(g, r, t, vert, ks);
   const line = lineAt(r, tMs);
   const kind = takes[takes.length - 1][1].kind;
   // vertical: the 16:9 chip and lower third, scaled to the narrower frame (chip below the top chrome)

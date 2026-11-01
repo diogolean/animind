@@ -126,11 +126,12 @@ function script(req: RenderRequest): ScriptLine[] {
             [0, "tese", `Hoje eu quero falar sobre ${t}.`],
             [0, "fechamento", "Curtiu? Então compartilha com alguém!"],
           ];
-  let t0 = 400;
+  let t0 = 1800; // silent cold open for the title card, like the core (titles.TITLE_S)
   const view = (speaker: number, i: number): ViewName =>
     req.template === "debate" ? (speaker === 0 ? "right" : "left") : i === 1 ? (req.template === "lesson" ? "right" : "left") : "front";
   return lines.map(([speaker, beat, said, act, idea], i) => {
     const text = typeof said === "string" ? said : said.text;
+    if (i && act && act !== lines[i - 1][3]) t0 += 700; // act break: the dip and its chapter card (titles.ACT_GAP_S)
     const dur = Math.max(1400, text.length * 62);
     const line: ScriptLine = { speaker, text, beat, kind: typeof said === "string" ? "paraphrase" : "quote", startMs: t0, endMs: t0 + dur, view: view(speaker, i) };
     if (typeof said !== "string") line.quote = said;
@@ -180,7 +181,7 @@ export function mockGetJob(id: string): RenderJob {
       scenario: r.scenario,
       characters: r.characters,
       script: lines,
-      durationMs: (lines.at(-1)?.endMs ?? 0) + 800,
+      durationMs: (lines.at(-1)?.endMs ?? 0) + 2400, // end card (titles.END_S)
       audioUrl: null,
       videoUrl: null,
       disclaimer: PARODY_DISCLAIMER,
