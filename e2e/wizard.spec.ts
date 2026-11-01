@@ -35,13 +35,19 @@ async function expectPreview(page: Page) {
 
 test("novo fluxo de monólogo", async ({ page }, info) => {
   shot = 0;
+  let renderRequest: Record<string, unknown> | undefined;
+  page.on("request", (request) => {
+    if (request.url().endsWith("/api/render") && request.method() === "POST") renderRequest = request.postDataJSON() as Record<string, unknown>;
+  });
   await page.goto("/");
   await expect(page.getByRole("heading", { name: "Quem vai falar?" })).toBeVisible();
   await expect(page.getByTestId("core-mode")).toHaveText("mock de dev");
+  await expect(page.getByTestId("automatic-toggle")).toHaveAttribute("aria-checked", "true");
   await page.getByTestId("mode-monologue").click();
   await page.getByTestId("type-stick").click();
-  await page.getByTestId("art-ghibli").click();
   await fillCharacter(page, "Sócrates", "filósofo idoso, túnica clara, sereno, curioso e bem-humorado");
+  await expect(page.getByTestId("auto-summary")).toContainText("Sábio");
+  await expect(page.getByTestId("auto-summary")).toContainText("fallback");
   await snap(page, info, "monologo", "01-modo");
   await page.getByTestId("add-character").click();
 
@@ -50,29 +56,45 @@ test("novo fluxo de monólogo", async ({ page }, info) => {
   await snap(page, info, "monologo", "02-personagens");
   await page.getByTestId("continue").click();
 
-  await page.getByTestId("topic").fill("como fazer perguntas melhores");
-  await page.getByTestId("tone").selectOption("comedia");
+  await page.getByTestId("topic").fill("Sócrates fala sobre a morte");
   await page.getByTestId("narrative").selectOption("aula");
-  await page.getByTestId("duration-30").click();
   await page.getByTestId("script-prompt").fill("Abra com uma pergunta e termine com um desafio prático.");
+  await expect(page.getByTestId("auto-summary")).toContainText("Sábio");
+  await expect(page.getByTestId("auto-summary")).toContainText("Ensinar");
+  await expect(page.getByTestId("auto-summary")).toContainText("Ghibli retrô");
+  await expect(page.getByTestId("auto-summary")).toContainText("Ágora");
+  await expect(page.getByTestId("auto-summary")).toContainText("60s");
   await snap(page, info, "monologo", "03-tema-roteiro");
   await page.getByTestId("continue").click();
 
-  await page.getByTestId("scenario-auto").click();
+  await expect(page.getByTestId("auto-scenario")).toContainText("Ágora");
   await snap(page, info, "monologo", "04-cenario");
   await page.getByTestId("continue").click();
 
-  await expect(page.getByText("Automático por época", { exact: true })).toBeVisible();
+  await expect(page.getByText("Automática", { exact: true })).toBeVisible();
   await snap(page, info, "monologo", "05-gerar");
   await page.getByTestId("generate").click();
   await expectPreview(page);
   await expect(page.getByTestId("transcript")).toContainText("Sócrates");
+  expect(renderRequest).toMatchObject({
+    tone: "sabio",
+    objective: "ensinar",
+    style: "ghibli",
+    targetDurationSec: 60,
+    configurationSource: "automatic",
+  });
   await snap(page, info, "monologo", "06-resultado");
 });
 
 test("novo fluxo de diálogo com cenário por prompt", async ({ page }, info) => {
   shot = 0;
+  let renderRequest: Record<string, unknown> | undefined;
+  page.on("request", (request) => {
+    if (request.url().endsWith("/api/render") && request.method() === "POST") renderRequest = request.postDataJSON() as Record<string, unknown>;
+  });
   await page.goto("/");
+  await page.getByTestId("automatic-toggle").click();
+  await expect(page.getByTestId("automatic-toggle")).toHaveAttribute("aria-checked", "false");
   await page.getByTestId("mode-dialogue").click();
   await page.getByTestId("type-illustrated").click();
   await page.getByTestId("art-retro").click();
@@ -87,7 +109,11 @@ test("novo fluxo de diálogo com cenário por prompt", async ({ page }, info) =>
   await page.getByTestId("continue").click();
 
   await page.getByTestId("topic").fill("se a humanidade deve morar em Marte");
-  await page.getByTestId("tone").selectOption("ficcao");
+  await expect(page.getByTestId("tone").locator("option")).toHaveCount(5);
+  await page.getByTestId("tone").selectOption("educacional");
+  await expect(page.getByTestId("tone-fallback")).toContainText("serio");
+  await page.getByTestId("tone").selectOption("terror");
+  await page.getByTestId("objective").selectOption("convencer");
   await page.getByTestId("duration-90").click();
   await page.getByTestId("script-prompt").fill("Os dois discordam, mas descobrem um risco que muda a conversa.");
   await snap(page, info, "dialogo", "03-tema-roteiro");
@@ -106,5 +132,12 @@ test("novo fluxo de diálogo com cenário por prompt", async ({ page }, info) =>
   await expect(page.getByTestId("preview-canvas")).toHaveAttribute("width", "1080");
   await expect(page.getByTestId("transcript")).toContainText("Luna");
   await expect(page.getByTestId("transcript")).toContainText("Orion");
+  expect(renderRequest).toMatchObject({
+    tone: "terror",
+    objective: "convencer",
+    style: "retro",
+    targetDurationSec: 90,
+    configurationSource: "manual",
+  });
   await snap(page, info, "dialogo", "06-resultado");
 });

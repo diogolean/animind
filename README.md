@@ -39,6 +39,17 @@ O cenário automático usa `lib/eras.ts` (por exemplo, Sócrates → Ágora). A 
 `POST /api/scenarios`, que tentará o futuro `/v1/scenarios`; em 404/405/501 escolhe deterministicamente
 o cenário existente mais próximo e devolve `source: "fallback"` com uma nota visível na UI.
 
+O switch **Automático** começa ligado. `lib/auto-config.ts` usa apenas regras locais determinísticas
+sobre nomes, prompts, tema e direção para escolher tom, objetivo, estilo, cenário e duração; a tela
+expõe todas as escolhas. Por exemplo, “Sócrates fala sobre a morte” resulta em Sábio, Ensinar, Ghibli
+retrô, Ágora e 60s. Desligar o switch libera todos os controles manuais.
+
+Os tons de produto são Humor, Terror, Educacional, Sábio e Sério. `GET /api/tones` normaliza o catálogo
+do núcleo: Humor → `comedia`, Terror → `horror` e Sério → `serio`; Educacional e Sábio aparecem com
+um selo de fallback e usam `serio` enquanto o núcleo não os oferecer. O objetivo (`ensinar`, `debater`,
+`entreter` ou `convencer`), `configurationSource`, direção e duração são enviados no `RenderRequest`,
+mas a PR #93 do núcleo ainda ignora esses campos.
+
 ## Modos de persona: Rápido x Profundo
 
 O composer tem o seletor **Rápido / Profundo**, que é enviado como `personaMode` em `POST /api/render`.

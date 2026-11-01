@@ -2,11 +2,12 @@
 
 Two complete user flows are asserted on what the user sees:
 
-- monólogo: modo + prompt → personagem → tema/roteiro → cenário automático por época → gerar;
-- diálogo: modo + prompts de dois personagens → tema/roteiro → cenário por prompt com fallback → gerar em 9:16.
+- monólogo com Automático ligado: “Sócrates fala sobre a morte” infere Sábio + Ensinar + Ghibli retrô + Ágora + 60s;
+- diálogo com Automático desligado: tom, objetivo, estilo, cenário por prompt e duração são escolhidos manualmente.
 
 Each scene must animate in the preview, show both the transcript and a passing “Roteiro conferido”
-self-check. Every step in both flows is captured when `E2E_SHOTS_DIR` is set.
+self-check. The tests also inspect the `/api/render` payload and the visible tone fallback. Every step
+in both flows is captured when `E2E_SHOTS_DIR` is set.
 
 | Project | When | Server | Checks |
 | --- | --- | --- | --- |
