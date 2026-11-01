@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import type { ReactNode } from "react";
 import { Geist } from "next/font/google";
 import { ThemeProvider } from "next-themes";
 import { Toaster } from "@/components/ui/sonner";
@@ -10,7 +11,7 @@ const geist = Geist({ variable: "--font-sans", subsets: ["latin"] });
 
 export const metadata: Metadata = {
   title: { default: "Animind", template: "%s · Animind" },
-  description: "Personagens falantes em três cliques.",
+  description: "Crie personagens, roteiros e cenários para animações falantes.",
   applicationName: "Animind",
   appleWebApp: { capable: true, title: "Animind", statusBarStyle: "black-translucent" },
   icons: { icon: "/icons/192", apple: "/icons/180" },
@@ -23,7 +24,7 @@ export const viewport: Viewport = {
   ],
 };
 
-export default function RootLayout({ children }: LayoutProps<"/">) {
+export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="pt-BR" suppressHydrationWarning className={`${geist.variable} h-full antialiased`}>
       <body className="flex min-h-full flex-col">

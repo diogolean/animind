@@ -1,59 +1,58 @@
 "use client";
-/* eslint-disable @next/next/no-img-element */
-import { useRef, useState } from "react";
+
+import { useEffect, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { ArrowUp, Loader2, Plus, X } from "lucide-react";
+import { Loader2, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "cn";
 import { ART_STYLES } from "@/lib/contract";
-import type { ArtStyle, Character, CharacterSource, RenderResult, Scenario, SceneTemplate, VideoFormat, PersonaMode, DeepStatus } from "@/lib/contract";
-import { HEALTH_EVENT, createCharacter, deepStatus, startDeep, startRender, waitJob } from "@/lib/api";
-import { PORTRAITS, portraitImageUrl } from "@/lib/catalog";
-import { placeForPersona } from "@/lib/eras";
-import { Avatar } from "@/components/avatar";
+import type {
+  ArtStyle,
+  Character,
+  CharacterType,
+  Narrative,
+  RenderResult,
+  ScenarioRequest,
+  ScenarioResolution,
+  Tone,
+  VideoFormat,
+} from "@/lib/contract";
+import { HEALTH_EVENT, createCharacter, getTones, resolveScenario, startRender, waitJob } from "@/lib/api";
 import { Player } from "@/components/player";
 import { Transcript } from "@/components/transcript";
-import { Checkbox } from "@/components/ui/checkbox";
+import { CharacterForm, type CharacterDraft } from "@/components/flow/character-form";
+import { ChoiceCard } from "@/components/flow/choice-card";
+import { Stepper } from "@/components/flow/stepper";
 
-const SCENES: { id: SceneTemplate; label: string }[] = [
-  { id: "debate", label: "Debate" },
-  { id: "lesson", label: "Aula" },
-  { id: "solo", label: "Solo" },
-];
-const FORMATS: { id: VideoFormat; label: string }[] = [
-  { id: "16:9", label: "16:9" },
-  { id: "9:16", label: "9:16 vertical" },
-];
+type CreationMode = "monologue" | "dialogue";
+type ScenarioMode = "auto" | "prompt";
 
-/** "auto" lets the core cast a voice from the persona (gender, age, temper). */
-const VOICES = [
-  { id: "auto", label: "Voz automática" },
-  { id: "pt-BR-AntonioNeural", label: "Antonio (masc.)" },
-  { id: "en-US-AndrewMultilingualNeural", label: "Andrew (masc.)" },
-  { id: "fr-FR-RemyMultilingualNeural", label: "Rémy (masc., grave)" },
-  { id: "en-US-BrianMultilingualNeural", label: "Brian (masc.)" },
-  { id: "pt-BR-FranciscaNeural", label: "Francisca (fem.)" },
-  { id: "pt-BR-ThalitaMultilingualNeural", label: "Thalita (fem.)" },
-  { id: "en-US-AvaMultilingualNeural", label: "Ava (fem.)" },
+const DEFAULT_DRAFT: CharacterDraft = { name: "", prompt: "" };
+const FALLBACK_TONES = [
+  { id: "comedia" as const, label: "Comédia" },
+  { id: "ficcao" as const, label: "Ficção" },
+  { id: "horror" as const, label: "Horror" },
+  { id: "serio" as const, label: "Sério" },
+];
+const NARRATIVES: { id: Narrative; label: string }[] = [
+  { id: "direto", label: "Direto para a câmera" },
+  { id: "historia", label: "História com começo, virada e fim" },
+  { id: "aula", label: "Aula explicativa" },
+  { id: "debate", label: "Debate com réplicas" },
 ];
 
-const PLACES: { id: Scenario; label: string }[] = [
-  { id: "studio", label: "Estúdio" },
-  { id: "classroom", label: "Sala" },
-  { id: "arena", label: "Arena" },
-  { id: "space", label: "Espaço" },
-  { id: "agora", label: "Ágora" },
-];
-const ease = [0.22, 1, 0.36, 1] as const;
+function FieldLabel({ children }: { children: React.ReactNode }) {
+  return <span className="mb-2 block text-xs font-medium uppercase tracking-wide text-muted-foreground">{children}</span>;
+}
 
-function Chip({ active, children, ...p }: React.ComponentProps<"button"> & { active?: boolean }) {
+function ContinueButton({ onClick, disabled, children = "Continuar" }: { onClick: () => void; disabled?: boolean; children?: React.ReactNode }) {
   return (
     <button
-      {...p}
-      className={cn(
-        "h-8 rounded-full border px-3.5 text-sm transition-colors disabled:opacity-40",
-        active ? "border-[var(--accent-brand)] bg-[var(--accent-brand)] text-white" : "border-border text-muted-foreground hover:border-foreground/30 hover:text-foreground",
-      )}
+      type="button"
+      data-testid="continue"
+      disabled={disabled}
+      onClick={onClick}
+      className="mt-6 h-11 rounded-full bg-foreground px-6 text-sm font-medium text-background disabled:opacity-30"
     >
       {children}
     </button>
@@ -61,356 +60,421 @@ function Chip({ active, children, ...p }: React.ComponentProps<"button"> & { act
 }
 
 export function Composer() {
-  const [q, setQ] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [char, setChar] = useState<Character | null>(null);
-  const [scene, setScene] = useState<SceneTemplate | null>(null);
-  const [place, setPlace] = useState<Scenario>("studio");
-  // Set picked by hand; until then the set follows the persona's era (Sócrates -> Ágora).
-  const placeTouched = useRef(false);
+  const [step, setStep] = useState(0);
+  const [maxStep, setMaxStep] = useState(0);
+  const [mode, setMode] = useState<CreationMode>("monologue");
+  const [draft, setDraft] = useState<CharacterDraft>(DEFAULT_DRAFT);
+  const [characters, setCharacters] = useState<Character[]>([]);
+  const [characterType, setCharacterType] = useState<CharacterType>("stick");
+  const [artStyle, setArtStyle] = useState<ArtStyle>("ghibli");
+  const [busyCharacter, setBusyCharacter] = useState(false);
+  const [topic, setTopic] = useState("");
+  const [scriptPrompt, setScriptPrompt] = useState("");
+  const [tone, setTone] = useState<Tone>("comedia");
+  const [tones, setTones] = useState(FALLBACK_TONES);
+  const [narrative, setNarrative] = useState<Narrative>("direto");
+  const [duration, setDuration] = useState<30 | 60 | 90>(60);
+  const [scenarioMode, setScenarioMode] = useState<ScenarioMode>("auto");
+  const [scenarioPrompt, setScenarioPrompt] = useState("");
+  const [scenarioResolution, setScenarioResolution] = useState<ScenarioResolution | null>(null);
   const [format, setFormat] = useState<VideoFormat>("16:9");
-  const [voice, setVoice] = useState("auto");
-  const [art, setArt] = useState<ArtStyle>("cartoon");
-  const [pmode, setPmode] = useState<PersonaMode>("quick");
-  const [deep, setDeep] = useState<DeepStatus | null>(null);
-
-  async function chooseDeep() {
-    setPmode("deep");
-    if (!char) return;
-    try {
-      let st = await startDeep(char.name);
-      setDeep(st);
-      for (let i = 0; i < 150 && st.status === "building"; i++) {
-        await new Promise((r) => setTimeout(r, 2000));
-        st = await deepStatus(char.name);
-        setDeep(st);
-      }
-    } catch (e) {
-      setDeep({ name: char.name, lang: "pt-BR", status: "failed", error: (e as Error).message });
-    }
-  }
   const [result, setResult] = useState<RenderResult | null>(null);
+  const [rendering, setRendering] = useState(false);
   const [progress, setProgress] = useState(0);
   const [audio, setAudio] = useState<AudioContext | null>(null);
-  const [portraits, setPortraits] = useState(false);
-  const [upload, setUpload] = useState<string | null>(null);
-  const [rights, setRights] = useState(false);
-  const file = useRef<HTMLInputElement>(null);
-  const [topic, setTopic] = useState("");
-  const [rival, setRival] = useState("O cético");
-  // One rival character per name, so a second debate does not pay for a new one.
-  const rivals = useRef(new Map<string, Character>());
 
-  const ensureAudio = () => {
-    if (audio) return audio;
-    const a = new AudioContext();
-    setAudio(a);
-    return a;
+  useEffect(() => {
+    getTones()
+      .then((catalog) => {
+        setTones(catalog.tones);
+        setTone(catalog.default);
+      })
+      .catch(() => {});
+  }, []);
+
+  const go = (next: number) => {
+    setStep(next);
+    setMaxStep((current) => Math.max(current, next));
   };
 
-  async function pick(source: CharacterSource) {
-    setBusy(true);
-    setResult(null);
-    setScene(null);
-    setPortraits(false);
+  async function addCharacter(advance = false) {
+    if (!draft.name.trim() || !draft.prompt.trim()) return;
+    setBusyCharacter(true);
     try {
-      const c = await createCharacter({ source, artStyle: art });
-      setChar(c);
-      if (c.generator === "mock" && c.generatorNote) window.dispatchEvent(new Event(HEALTH_EVENT));
-      if (!placeTouched.current) setPlace(placeForPersona(c.name) ?? "studio");
-    } catch (e) {
-      toast.error((e as Error).message);
+      const character = await createCharacter({
+        name: draft.name.trim(),
+        source: { kind: "prompt", prompt: draft.prompt.trim() },
+        characterType,
+        artStyle,
+      });
+      setCharacters((current) => [...current, character]);
+      setDraft(DEFAULT_DRAFT);
+      if (character.generator === "mock" && character.generatorNote) window.dispatchEvent(new Event(HEALTH_EVENT));
+      if (advance) go(1);
+    } catch (error) {
+      toast.error((error as Error).message);
     } finally {
-      setBusy(false);
+      setBusyCharacter(false);
     }
   }
 
-  async function render(tpl: SceneTemplate, where = place) {
-    if (!char) return;
-    ensureAudio();
-    setScene(tpl);
+  async function generate() {
+    const request: ScenarioRequest =
+      scenarioMode === "prompt"
+        ? { mode: "prompt", prompt: scenarioPrompt.trim(), characterNames: characters.map((character) => character.name) }
+        : { mode: "auto", characterNames: characters.map((character) => character.name) };
+    setRendering(true);
     setResult(null);
     setProgress(0);
+    if (!audio) setAudio(new AudioContext());
     try {
-      const chars = [char];
-      if (tpl === "debate") {
-        const name = rival.trim() || "O cético";
-        let other = rivals.current.get(name);
-        if (!other) {
-          other = await createCharacter({ source: { kind: "prompt", prompt: name }, artStyle: art });
-          rivals.current.set(name, other);
-        }
-        chars.push(other);
-      }
-      const job = await startRender({ characters: chars, template: tpl, scenario: where, topic: topic.trim() || undefined, lang: "pt-BR", format, voices: [voice === "auto" ? null : { voice }], personaMode: pmode, style: art });
-      const done = await waitJob(job.id, (j) => setProgress(j.progress));
-      const r = done.result!;
-      window.dispatchEvent(new Event(HEALTH_EVENT)); // a render may have hit a Gemini 402 (script writer): refresh the badge
-      // An older core renders an unknown scenario as the studio: say so instead of silently showing another set.
-      if (r.scenario && r.scenario !== where) {
-        const label = (id: string) => PLACES.find((p) => p.id === id)?.label ?? id;
-        toast.warning(`O núcleo não tem o cenário “${label(where)}” e usou “${label(r.scenario)}”. Atualize e reinicie o núcleo.`);
-      }
-      // The core may echo characters without heavy fields (photo data URLs); keep our local copies.
-      setResult({ ...r, characters: r.characters.map((c, i) => (c.photo && !c.photo.url ? chars[i] : c)) });
-    } catch (e) {
-      toast.error((e as Error).message);
-      setScene(null);
+      const resolved = await resolveScenario(request);
+      setScenarioResolution(resolved);
+      const template = mode === "dialogue" ? "debate" : narrative === "aula" ? "lesson" : "solo";
+      const cast = mode === "monologue" ? characters.slice(0, 1) : characters;
+      const job = await startRender({
+        characters: cast,
+        template,
+        scenario: resolved.scenario,
+        scenarioRequest: request,
+        topic: topic.trim(),
+        scriptPrompt: scriptPrompt.trim() || undefined,
+        tone,
+        narrative,
+        targetDurationSec: duration,
+        lang: "pt-BR",
+        format,
+        personaMode: "quick",
+        style: artStyle,
+      });
+      const done = await waitJob(job.id, (state) => setProgress(state.progress));
+      setResult(done.result!);
+      window.dispatchEvent(new Event(HEALTH_EVENT));
+    } catch (error) {
+      toast.error((error as Error).message);
+    } finally {
+      setRendering(false);
     }
   }
 
-  const reset = () => {
-    setChar(null);
-    setResult(null);
-    setScene(null);
-    setQ("");
-  };
+  const enoughCharacters = mode === "monologue" ? characters.length >= 1 : characters.length >= 2;
 
   return (
-    <div className="mx-auto flex w-full max-w-2xl flex-1 flex-col px-6">
-      <motion.div layout="position" transition={{ duration: 0.5, ease }} className={cn("flex flex-col", char ? "pt-8" : "flex-1 justify-center pb-24")}>
-        {!char && (
-          <motion.h1 layout="position" className="mb-8 text-center text-4xl font-semibold tracking-tight sm:text-5xl">
-            Quem vai falar?
-          </motion.h1>
-        )}
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            if (q.trim()) pick({ kind: "prompt", prompt: q.trim() });
-          }}
-          className="group relative"
+    <main className="mx-auto w-full max-w-4xl flex-1 px-5 py-8 sm:px-8 sm:py-12">
+      <Stepper current={step} maxStep={maxStep} onSelect={setStep} />
+      <AnimatePresence mode="wait">
+        <motion.section
+          key={step}
+          data-testid={`flow-step-${step}`}
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -6 }}
+          transition={{ duration: 0.22 }}
         >
-          <input
-            data-testid="prompt"
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            placeholder="Um pirata filósofo, Darwin, sua avó…"
-            autoFocus
-            className="h-14 w-full rounded-full border border-border bg-transparent pr-14 pl-6 text-base outline-none transition-colors placeholder:text-muted-foreground/60 focus:border-foreground/25"
-          />
-          <button
-            data-testid="create"
-            disabled={!q.trim() || busy}
-            aria-label="Criar"
-            className="absolute top-2 right-2 grid size-10 place-items-center rounded-full bg-foreground text-background transition-opacity disabled:opacity-20"
-          >
-            {busy ? <Loader2 className="size-4 animate-spin" /> : <ArrowUp className="size-4" />}
-          </button>
-        </form>
-        <div className="mt-3 flex flex-wrap items-center justify-center gap-1" title="Estilo de animação: desenho do personagem e visual da cena">
-          {ART_STYLES.map((s) => (
-            <button
-              key={s.id}
-              type="button"
-              data-testid={`art-${s.id}`}
-              onClick={() => setArt(s.id)}
-              className={cn("h-7 rounded-full px-3 text-xs transition-colors", art === s.id ? "bg-muted text-foreground" : "text-muted-foreground hover:text-foreground")}
-            >
-              {s.label}
-            </button>
-          ))}
-        </div>
-        {!char && (
-          <button onClick={() => setPortraits((v) => !v)} className="mx-auto mt-5 text-sm text-muted-foreground transition-colors hover:text-foreground">
-            {portraits ? "Fechar" : "ou use um retrato"}
-          </button>
-        )}
-        <AnimatePresence>
-          {portraits && !char && (
-            <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.3, ease }} className="mt-8">
-              <div className="flex gap-3 overflow-x-auto pb-2">
-                {PORTRAITS.map((p) => (
-                  <button key={p.id} data-testid={`portrait-${p.id}`} onClick={() => pick({ kind: "catalog", portraitId: p.id })} className="group w-24 shrink-0 text-left">
-                    <img src={portraitImageUrl(p.id)} alt={p.name} className="aspect-[4/5] w-full rounded-xl object-cover grayscale transition group-hover:grayscale-0" />
-                    <div className="mt-1.5 truncate text-xs">{p.name}</div>
-                    <a href={p.attribution.sourceUrl} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} className="block truncate text-[10px] text-muted-foreground hover:underline">
-                      {p.attribution.license} · Wikimedia
-                    </a>
-                  </button>
-                ))}
-                <button onClick={() => file.current?.click()} className="grid aspect-[4/5] w-24 shrink-0 place-items-center overflow-hidden rounded-xl border border-dashed border-border text-muted-foreground hover:text-foreground">
-                  {upload ? <img src={upload} alt="Sua foto" className="size-full object-cover" /> : <Plus className="size-5" />}
-                </button>
-                <input
-                  ref={file}
-                  type="file"
-                  accept="image/*"
-                  hidden
-                  onChange={(e) => {
-                    const f = e.target.files?.[0];
-                    if (!f) return;
-                    const r = new FileReader();
-                    r.onload = () => setUpload(String(r.result));
-                    r.readAsDataURL(f);
-                  }}
-                />
-              </div>
-              {upload && (
-                <div className="mt-4 flex items-start justify-between gap-4">
-                  <label className="flex items-start gap-2.5 text-xs text-muted-foreground">
-                    <Checkbox data-testid="rights" checked={rights} onCheckedChange={(v) => setRights(!!v)} className="mt-0.5" />
-                    Tenho os direitos sobre esta imagem e ela não retrata uma pessoa famosa viva.
-                  </label>
-                  <button
-                    data-testid="use-upload"
-                    disabled={!rights}
-                    onClick={() => pick({ kind: "upload", imageDataUrl: upload, name: "Sua foto", rightsConfirmed: true })}
-                    className="h-8 shrink-0 rounded-full bg-foreground px-4 text-sm text-background disabled:opacity-20"
-                  >
-                    Usar
-                  </button>
-                </div>
-              )}
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </motion.div>
+          {step === 0 ? (
+            <>
+              <p className="text-sm font-medium text-[var(--accent-brand)]">Passo 1 de 5</p>
+              <h1 className="mt-2 text-4xl font-semibold tracking-tight sm:text-5xl">Quem vai falar?</h1>
+              <p className="mt-3 max-w-2xl text-muted-foreground">Escolha o formato e descreva livremente o primeiro personagem.</p>
 
-      <AnimatePresence>
-        {char && (
-          <motion.section initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, ease, delay: 0.1 }} className="py-10">
-            {!result && (
-              <div className="mx-auto mb-10 w-40">
-                <Avatar character={char} loading={!!scene} />
-                <div className="mt-3 flex items-center justify-center gap-1.5 text-sm">
-                  {char.name}
-                  <button onClick={reset} aria-label="Trocar" className="text-muted-foreground hover:text-foreground">
-                    <X className="size-3.5" />
-                  </button>
-                </div>
-                {char.frontImageUrl && char.imageUrl && (
-                  <div data-testid="front-view" className="mt-2 grid grid-cols-2 gap-1">
-                    <img src={char.imageUrl} alt={`${char.name} de perfil`} className="rounded-md bg-muted" />
-                    <img src={char.frontImageUrl} alt={`${char.name} de frente`} className="rounded-md bg-muted" />
-                    <div className="text-center text-[10px] text-muted-foreground">perfil</div>
-                    <div className="text-center text-[10px] text-muted-foreground">frente</div>
+              <div className="mt-8 grid gap-3 sm:grid-cols-2">
+                <ChoiceCard
+                  data-testid="mode-monologue"
+                  active={mode === "monologue"}
+                  onClick={() => {
+                    setMode("monologue");
+                    setNarrative("direto");
+                  }}
+                  title="Monólogo"
+                  description="Um avatar fala diretamente para a câmera."
+                  badge="1 personagem"
+                />
+                <ChoiceCard
+                  data-testid="mode-dialogue"
+                  active={mode === "dialogue"}
+                  onClick={() => {
+                    setMode("dialogue");
+                    setNarrative("debate");
+                  }}
+                  title="Diálogo"
+                  description="Dois ou mais personagens conversam em cena."
+                  badge="2+ personagens"
+                />
+              </div>
+
+              <div className="mt-8 grid gap-6 lg:grid-cols-[1fr_1.25fr]">
+                <div className="space-y-6">
+                  <div>
+                    <FieldLabel>Tipo de personagem</FieldLabel>
+                    <div className="grid gap-2">
+                      <ChoiceCard
+                        data-testid="type-stick"
+                        active={characterType === "stick"}
+                        onClick={() => setCharacterType("stick")}
+                        title="Stick figure"
+                        description="Leve, expressivo e prioridade do MVP."
+                        badge="padrão"
+                      />
+                      <ChoiceCard
+                        data-testid="type-illustrated"
+                        active={characterType === "illustrated"}
+                        onClick={() => setCharacterType("illustrated")}
+                        title="Ilustrado complexo"
+                        description="Pipeline de personagem detalhado no padrão Aiwake."
+                        badge="experimental"
+                      />
+                    </div>
+                    {characterType === "stick" ? (
+                      <p className="mt-2 text-xs text-amber-600 dark:text-amber-400">
+                        O contrato já envia “stick”; o núcleo atual pode usar o rig Aiwake até implementar esse tipo.
+                      </p>
+                    ) : null}
                   </div>
-                )}
-                {char.generator === "mock" && char.generatorNote && (
-                  <p data-testid="art-fallback" title={char.generatorNote} className="mt-2 text-center text-[11px] leading-snug text-amber-600 dark:text-amber-400">
-                    Arte provisória: {/402|depleted|cr[eé]dit/i.test(char.generatorNote) ? "Gemini sem crédito" : "sem gerador de imagem"}
-                  </p>
-                )}
-                {char.reviewSheetUrl && (
-                  <a data-testid="review-sheet" href={char.reviewSheetUrl} target="_blank" rel="noreferrer" className="mt-1 block text-center text-[11px] text-muted-foreground hover:underline">
-                    Folha de revisão (bocas e olhos)
-                  </a>
-                )}
-                {char.photo?.attribution && (
-                  <a href={char.photo.attribution.sourceUrl} target="_blank" rel="noreferrer" className="block text-center text-[11px] text-muted-foreground hover:underline">
-                    {char.photo.attribution.author} · {char.photo.attribution.license}
-                  </a>
-                )}
-              </div>
-            )}
-            {result && audio && (
-              <div className="mb-8">
-                <Player result={result} audioCtx={audio} fileName={`animind-${char.name.toLowerCase().replace(/\W+/g, "-")}`} />
-                <Transcript result={result} />
-                {char.reviewSheetUrl && (
-                  <details className="mt-4 text-xs text-muted-foreground">
-                    <summary className="cursor-pointer">Folha de revisão do personagem</summary>
-                    <img data-testid="review-sheet-img" src={char.reviewSheetUrl} alt={`Folha de revisão: ${char.name}`} className="mt-2 w-full rounded-lg border" />
-                  </details>
-                )}
-              </div>
-            )}
-            <div className="flex flex-col items-center gap-3">
-              <div className="flex w-full max-w-md flex-col gap-2 sm:flex-row">
-                <input
-                  data-testid="topic"
-                  value={topic}
-                  onChange={(e) => setTopic(e.target.value)}
-                  maxLength={120}
-                  placeholder="Tema (ex.: a verdade)"
-                  className="h-9 flex-1 rounded-full border bg-transparent px-4 text-sm outline-none focus:border-foreground/40"
-                />
-                <input
-                  data-testid="rival"
-                  value={rival}
-                  onChange={(e) => setRival(e.target.value)}
-                  maxLength={60}
-                  placeholder="Rival no debate"
-                  title="Rival no debate"
-                  className="h-9 rounded-full border bg-transparent px-4 text-sm outline-none focus:border-foreground/40 sm:w-44"
+                  <div>
+                    <FieldLabel>Estilo da ilustração</FieldLabel>
+                    <div className="flex flex-wrap gap-2">
+                      {ART_STYLES.map((style) => (
+                        <button
+                          key={style.id}
+                          type="button"
+                          data-testid={`art-${style.id}`}
+                          onClick={() => setArtStyle(style.id)}
+                          className={cn(
+                            "rounded-full border px-3 py-1.5 text-sm transition-colors",
+                            artStyle === style.id
+                              ? "border-[var(--accent-brand)] bg-[var(--accent-brand)] text-white"
+                              : "text-muted-foreground hover:text-foreground",
+                          )}
+                        >
+                          {style.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+                <CharacterForm
+                  value={draft}
+                  onChange={setDraft}
+                  busy={busyCharacter}
+                  onSubmit={() => addCharacter(true)}
+                  submitLabel="Criar e continuar"
                 />
               </div>
-              <div className="flex flex-wrap justify-center gap-2">
-                {SCENES.map((s) => (
-                  <Chip key={s.id} data-testid={`tpl-${s.id}`} active={scene === s.id} disabled={!!scene && !result} onClick={() => render(s.id)}>
-                    {scene === s.id && !result ? <Loader2 className="mr-1 inline size-3 animate-spin" /> : null}
-                    {s.label}
-                  </Chip>
+            </>
+          ) : null}
+
+          {step === 1 ? (
+            <>
+              <p className="text-sm font-medium text-[var(--accent-brand)]">Passo 2 de 5</p>
+              <h1 className="mt-2 text-3xl font-semibold tracking-tight">Personagens</h1>
+              <p className="mt-2 text-muted-foreground">
+                {mode === "dialogue" ? "Defina pelo menos mais uma voz para a conversa." : "Revise quem vai conduzir o monólogo."}
+              </p>
+              <div className="mt-7 grid gap-3 sm:grid-cols-2">
+                {characters.map((character, index) => (
+                  <article key={character.id} data-testid="character-card" className="flex items-center justify-between rounded-2xl border p-4">
+                    <div>
+                      <p className="font-medium">{character.name}</p>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {characterType === "stick" ? "Stick figure" : "Ilustrado Aiwake"} · {ART_STYLES.find((style) => style.id === artStyle)?.label}
+                      </p>
+                    </div>
+                    {(mode === "dialogue" || index > 0) && (
+                      <button
+                        type="button"
+                        aria-label={`Remover ${character.name}`}
+                        onClick={() => setCharacters((current) => current.filter((item) => item.id !== character.id))}
+                        className="grid size-9 place-items-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground"
+                      >
+                        <Trash2 className="size-4" />
+                      </button>
+                    )}
+                  </article>
                 ))}
               </div>
-              <div className="flex flex-wrap justify-center gap-1">
-                {PLACES.map((p) => (
-                  <button
-                    key={p.id}
-                    data-testid={`place-${p.id}`}
-                    onClick={() => {
-                      placeTouched.current = true;
-                      setPlace(p.id);
-                      if (scene && result) render(scene, p.id);
-                    }}
-                    className={cn("h-7 rounded-full px-3 text-xs transition-colors", place === p.id ? "bg-muted text-foreground" : "text-muted-foreground hover:text-foreground")}
+              {mode === "dialogue" && characters.length < 6 ? (
+                <div className="mt-5">
+                  <CharacterForm value={draft} onChange={setDraft} onSubmit={() => addCharacter()} busy={busyCharacter} />
+                </div>
+              ) : null}
+              <ContinueButton onClick={() => go(2)} disabled={!enoughCharacters}>
+                Ir para tema e roteiro
+              </ContinueButton>
+            </>
+          ) : null}
+
+          {step === 2 ? (
+            <>
+              <p className="text-sm font-medium text-[var(--accent-brand)]">Passo 3 de 5</p>
+              <h1 className="mt-2 text-3xl font-semibold tracking-tight">Tema e roteiro</h1>
+              <div className="mt-7 grid gap-5 sm:grid-cols-2">
+                <label>
+                  <FieldLabel>Tema</FieldLabel>
+                  <input
+                    data-testid="topic"
+                    value={topic}
+                    onChange={(event) => setTopic(event.target.value)}
+                    maxLength={120}
+                    placeholder="Ex.: por que temos medo do futuro?"
+                    className="h-11 w-full rounded-xl border bg-transparent px-3 outline-none focus:border-foreground/30"
+                  />
+                </label>
+                <label>
+                  <FieldLabel>Tom</FieldLabel>
+                  <select
+                    data-testid="tone"
+                    value={tone}
+                    onChange={(event) => setTone(event.target.value as Tone)}
+                    className="h-11 w-full rounded-xl border bg-background px-3 outline-none"
                   >
-                    {p.label}
+                    {tones.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
+                  </select>
+                </label>
+                <label>
+                  <FieldLabel>Narrativa</FieldLabel>
+                  <select
+                    data-testid="narrative"
+                    value={narrative}
+                    onChange={(event) => setNarrative(event.target.value as Narrative)}
+                    className="h-11 w-full rounded-xl border bg-background px-3 outline-none"
+                  >
+                    {NARRATIVES.filter((item) => mode === "dialogue" ? item.id === "debate" || item.id === "historia" : item.id !== "debate").map((item) => (
+                      <option key={item.id} value={item.id}>{item.label}</option>
+                    ))}
+                  </select>
+                </label>
+                <div>
+                  <FieldLabel>Duração desejada</FieldLabel>
+                  <div className="flex gap-2">
+                    {([30, 60, 90] as const).map((seconds) => (
+                      <button
+                        key={seconds}
+                        type="button"
+                        data-testid={`duration-${seconds}`}
+                        onClick={() => setDuration(seconds)}
+                        className={cn(
+                          "h-11 flex-1 rounded-xl border text-sm",
+                          duration === seconds ? "border-[var(--accent-brand)] bg-[var(--accent-brand)] text-white" : "text-muted-foreground",
+                        )}
+                      >
+                        {seconds}s
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <label className="sm:col-span-2">
+                  <FieldLabel>Direção do roteiro (opcional)</FieldLabel>
+                  <textarea
+                    data-testid="script-prompt"
+                    value={scriptPrompt}
+                    onChange={(event) => setScriptPrompt(event.target.value)}
+                    maxLength={600}
+                    rows={4}
+                    placeholder="Falas, objetivo, estrutura ou mensagem que precisa aparecer…"
+                    className="w-full resize-none rounded-xl border bg-transparent p-3 outline-none focus:border-foreground/30"
+                  />
+                </label>
+              </div>
+              <p className="mt-3 text-xs text-muted-foreground">Duração e direção são metas; o núcleo pode ajustar ao tempo real da voz.</p>
+              <ContinueButton onClick={() => go(3)} disabled={!topic.trim()}>
+                Escolher cenário
+              </ContinueButton>
+            </>
+          ) : null}
+
+          {step === 3 ? (
+            <>
+              <p className="text-sm font-medium text-[var(--accent-brand)]">Passo 4 de 5</p>
+              <h1 className="mt-2 text-3xl font-semibold tracking-tight">Cenário</h1>
+              <p className="mt-2 text-muted-foreground">Use a época dos personagens ou dirija a ambientação com suas palavras.</p>
+              <div className="mt-7 grid gap-3 sm:grid-cols-2">
+                <ChoiceCard
+                  data-testid="scenario-auto"
+                  active={scenarioMode === "auto"}
+                  onClick={() => setScenarioMode("auto")}
+                  title="Automático por época"
+                  description="A Ágora entra automaticamente para personas clássicas; outros casos usam o estúdio."
+                  badge="recomendado"
+                />
+                <ChoiceCard
+                  data-testid="scenario-prompt"
+                  active={scenarioMode === "prompt"}
+                  onClick={() => setScenarioMode("prompt")}
+                  title="Descrever cenário"
+                  description="Escreva a época, local, luz e atmosfera desejados."
+                />
+              </div>
+              {scenarioMode === "prompt" ? (
+                <label className="mt-5 block">
+                  <FieldLabel>Prompt do cenário</FieldLabel>
+                  <textarea
+                    data-testid="scenario-description"
+                    value={scenarioPrompt}
+                    onChange={(event) => setScenarioPrompt(event.target.value)}
+                    rows={4}
+                    placeholder="Ex.: nave retrofuturista, janelas para Saturno, luz azul suave…"
+                    className="w-full resize-none rounded-xl border bg-transparent p-3 outline-none focus:border-foreground/30"
+                  />
+                  <span className="mt-2 block text-xs text-amber-600 dark:text-amber-400">
+                    O endpoint de geração por prompt ainda não existe no núcleo. A API tentará usá-lo e cairá para o cenário existente mais próximo.
+                  </span>
+                </label>
+              ) : null}
+              <ContinueButton onClick={() => go(4)} disabled={scenarioMode === "prompt" && !scenarioPrompt.trim()}>
+                Revisar e gerar
+              </ContinueButton>
+            </>
+          ) : null}
+
+          {step === 4 ? (
+            <>
+              <p className="text-sm font-medium text-[var(--accent-brand)]">Passo 5 de 5</p>
+              <h1 className="mt-2 text-3xl font-semibold tracking-tight">Pronto para gerar</h1>
+              <div className="mt-7 grid gap-3 rounded-2xl border p-5 text-sm sm:grid-cols-2">
+                <div><span className="text-muted-foreground">Modo</span><p className="mt-1 font-medium">{mode === "monologue" ? "Monólogo" : `Diálogo · ${characters.length} personagens`}</p></div>
+                <div><span className="text-muted-foreground">Elenco</span><p className="mt-1 font-medium">{characters.map((character) => character.name).join(", ")}</p></div>
+                <div><span className="text-muted-foreground">Tema</span><p className="mt-1 font-medium">{topic}</p></div>
+                <div><span className="text-muted-foreground">Tom e duração</span><p className="mt-1 font-medium">{tones.find((item) => item.id === tone)?.label} · {duration}s</p></div>
+                <div><span className="text-muted-foreground">Visual</span><p className="mt-1 font-medium">{characterType === "stick" ? "Stick figure" : "Ilustrado Aiwake"} · {ART_STYLES.find((item) => item.id === artStyle)?.label}</p></div>
+                <div><span className="text-muted-foreground">Cenário</span><p className="mt-1 font-medium">{scenarioMode === "auto" ? "Automático por época" : scenarioPrompt}</p></div>
+              </div>
+              <div className="mt-4 flex flex-wrap items-center gap-2">
+                <FieldLabel>Formato</FieldLabel>
+                {(["16:9", "9:16"] as const).map((item) => (
+                  <button
+                    key={item}
+                    type="button"
+                    data-testid={`format-${item.replace(":", "x")}`}
+                    onClick={() => setFormat(item)}
+                    className={cn("rounded-full border px-3 py-1.5 text-sm", format === item && "border-[var(--accent-brand)] text-[var(--accent-brand)]")}
+                  >
+                    {item}
                   </button>
                 ))}
               </div>
-              <div className="flex flex-wrap items-center justify-center gap-1">
-                {FORMATS.map((f) => (
-                  <button
-                    key={f.id}
-                    data-testid={`format-${f.id.replace(":", "x")}`}
-                    onClick={() => setFormat(f.id)}
-                    className={cn("h-7 rounded-full px-3 text-xs transition-colors", format === f.id ? "bg-muted text-foreground" : "text-muted-foreground hover:text-foreground")}
-                  >
-                    {f.label}
-                  </button>
-                ))}
-                <select
-                  data-testid="voice"
-                  value={voice}
-                  onChange={(e) => setVoice(e.target.value)}
-                  title="Voz do personagem"
-                  className="ml-2 h-7 rounded-full border bg-transparent px-2 text-xs text-muted-foreground outline-none"
-                >
-                  {VOICES.map((v) => (
-                    <option key={v.id} value={v.id}>{v.label}</option>
-                  ))}
-                </select>
-                <div className="ml-2 flex items-center gap-1" title="Rápido: termos-chave. Profundo: base de textos completos (Wikipedia/Wikiquote/Wikisource)">
-                  {(["quick", "deep"] as const).map((m) => (
-                    <button
-                      key={m}
-                      data-testid={`persona-${m}`}
-                      onClick={() => (m === "deep" ? chooseDeep() : setPmode("quick"))}
-                      className={cn("h-7 rounded-full px-3 text-xs transition-colors", pmode === m ? "bg-muted text-foreground" : "text-muted-foreground hover:text-foreground")}
-                    >
-                      {m === "quick" ? "Rápido" : "Profundo"}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              {pmode === "deep" && deep ? (
-                <div data-testid="deep-status" className="text-[11px] text-muted-foreground">
-                  Base profunda: {{ ready: "pronta", building: "construindo…", failed: "falhou (usando rápido)", missing: "ainda não criada" }[deep.status]}
-                  {deep.chunks ? ` · ${deep.chunks} trechos` : ""}
+              <button
+                type="button"
+                data-testid="generate"
+                disabled={rendering}
+                onClick={generate}
+                className="mt-4 flex h-12 items-center gap-2 rounded-full bg-[var(--accent-brand)] px-6 font-medium text-white disabled:opacity-50"
+              >
+                {rendering ? <Loader2 className="size-4 animate-spin" /> : null}
+                {rendering ? `Gerando… ${Math.round(progress * 100)}%` : result ? "Gerar novamente" : "Gerar animação"}
+              </button>
+              {scenarioResolution?.note ? (
+                <p data-testid="scenario-fallback" className="mt-3 text-sm text-amber-600 dark:text-amber-400">{scenarioResolution.note}</p>
+              ) : null}
+              {result && audio ? (
+                <div className="mt-8" data-testid="render-result">
+                  <Player result={result} audioCtx={audio} fileName={`animind-${characters[0].name.toLowerCase().replace(/\W+/g, "-")}`} />
+                  <Transcript result={result} />
                 </div>
               ) : null}
-              {result?.voices?.length ? (
-                <div className="text-[11px] text-muted-foreground" data-testid="voices">
-                  Vozes: {result.voices.map((v, i) => `${result.characters[i]?.name ?? i + 1}: ${v.label ?? v.voice.replace(/^[a-z]{2}-[A-Z]{2}-|(Multilingual)?Neural$/g, "")}${v.auto ? " (auto)" : ""}`).join(" · ")}
-                </div>
-              ) : null}
-              {scene && !result && <div className="mt-2 text-xs text-muted-foreground tabular-nums">{Math.round(progress * 100)}%</div>}
-            </div>
-          </motion.section>
-        )}
+            </>
+          ) : null}
+        </motion.section>
       </AnimatePresence>
-    </div>
+    </main>
   );
 }
