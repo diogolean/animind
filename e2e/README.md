@@ -1,14 +1,17 @@
 # E2E (Playwright)
 
-One user flow, asserted on what the user sees: landing → “Quem vai falar?” → persona, tema e rival →
-debate → aula. Each scene must play in the preview (canvas frames change), show the transcript
-(real quotes in “ ” with a Wikiquote/Wikisource link, each checked word for word, source and link against
-`/api/personas/sheet`; paraphrases marked and never in quotation marks; the “Roteiro conferido” self-check passed) and offer the downloads.
+Two complete user flows are asserted on what the user sees:
+
+- monólogo: modo + prompt → personagem → tema/roteiro → cenário automático por época → gerar;
+- diálogo: modo + prompts de dois personagens → tema/roteiro → cenário por prompt com fallback → gerar em 9:16.
+
+Each scene must animate in the preview, show both the transcript and a passing “Roteiro conferido”
+self-check. Every step in both flows is captured when `E2E_SHOTS_DIR` is set.
 
 | Project | When | Server | Checks |
 | --- | --- | --- | --- |
-| `mock` | always (CI, no keys) | `next start` with `ANIMIND_CORE_MOCK=1` | badge “mock de dev”, progress 0–100%, real quotes only from the bundled Sócrates/Nietzsche sheets (`lib/quote-sheets.ts`), no “MP4 do núcleo” |
-| `core` | `E2E_CORE_URL` set | `next start` proxying to the real core | badge “núcleo …”, real quotes with sources, “MP4 do núcleo” served as `video/mp4` |
+| `mock` | always (CI, no keys) | `next start` with `ANIMIND_CORE_MOCK=1` | both wizard modes, core catalogs, scenario fallback, animated preview and transcript |
+| `core` | `E2E_CORE_URL` set | `next start` proxying to the real core | the same wizard against the real character and render jobs |
 
 ```bash
 npx playwright install chromium         # once
@@ -23,7 +26,5 @@ npm run test:e2e:mock                   # fast, ~1 min
 E2E_CORE_URL=http://127.0.0.1:8787 E2E_CORE_KEY=$KEY npm run test:e2e
 ```
 
-Options: `E2E_PERSONA` (default `Sócrates`), `E2E_RIVAL` (`Nietzsche`), `E2E_TOPIC` (`a verdade`),
-`E2E_MOCK_PORT`/`E2E_APP_PORT` (3311/3312), `E2E_SHOTS_DIR` (copies the step screenshots and the run video
-there as `9-e2e-<project>-*`). Videos, traces and reports stay in `test-results/` and `playwright-report/`
-(gitignored).
+Options: `E2E_MOCK_PORT`/`E2E_APP_PORT` (3311/3312) and `E2E_SHOTS_DIR` (copies named screenshots
+for every step). Videos, traces and reports stay in `test-results/` and `playwright-report/` (gitignored).

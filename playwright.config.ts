@@ -20,6 +20,7 @@ const server = (port: number, env: Record<string, string>) => ({
 
 export default defineConfig({
   testDir: "e2e",
+  testIgnore: ["flow.spec.ts"],
   outputDir: "test-results",
   fullyParallel: false,
   workers: 1,

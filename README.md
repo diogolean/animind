@@ -1,6 +1,6 @@
 # Animind
 
-Personagens falantes animados em até 3 cliques: **descreva → escolha a cena → baixe**.
+Painel para criar personagens falantes: **modo → personagens → tema e roteiro → cenário → gerar**.
 PWA (Next.js 16 App Router, React 19, TypeScript, Tailwind 4, shadcn/ui, framer-motion).
 
 ## Arquitetura
@@ -10,6 +10,8 @@ PWA (Next.js 16 App Router, React 19, TypeScript, Tailwind 4, shadcn/ui, framer-
   - `POST /api/characters` → `Character` (camadas: cabeça, olhos, sobrancelhas, visemas da boca, corpo; ou rig de foto com mandíbula)
   - `POST /api/render` → `RenderJob`
   - `GET /api/jobs/:id` → `RenderJob` (com `result.script`, `audioUrl`, `videoUrl`)
+  - `GET /api/tones` → catálogo de tons do núcleo (`/v1/tones`)
+  - `POST /api/scenarios` → contrato do gerador de cenário; usa cenário existente como fallback enquanto `/v1/scenarios` não existe
 - Com `ANIMIND_CORE_URL` definido, as rotas fazem proxy para `${ANIMIND_CORE_URL}/v1/*` com `ANIMIND_CORE_KEY` (só no servidor). Personagens por descrição são recortados pelo núcleo; catálogo e upload continuam como rig de foto feito no app.
   - `GET /api/files/*` repassa as camadas PNG, a voz e o `preview.mp4` do núcleo pela mesma origem (o Canvas não fica “tainted” e o MediaRecorder grava).
   - `GET /api/health` diz o modo (`core`, `mock` ou `off`); o cabeçalho mostra “núcleo real”, “mock de dev” ou “núcleo não configurado”.
@@ -23,7 +25,19 @@ PWA (Next.js 16 App Router, React 19, TypeScript, Tailwind 4, shadcn/ui, framer-
 - `scriptQA` (núcleo e mock, em todo template) confere cada citação palavra por palavra contra a ficha (texto, fonte e link) e reprova citação inventada, paráfrase apresentada como literal (aspas, “nas palavras de…”, “como escrevi:”) e fala escrita rotulada como citação; também confere o arco (debate: gancho, virada, fechamento memorável; aula: gancho, pergunta, citação, exemplo, virada, síntese curta). A transcrição mostra “Roteiro conferido · N citações reais conferidas” (`data-testid="script-qa"`).
 - `GET /api/personas/sheet?name=` devolve a ficha (citações literais com fonte e link) para conferir qualquer citação da tela; no núcleo é `GET /v1/personas/sheet`. O mock traz fichas reais de Sócrates e Nietzsche (`lib/quote-sheets.ts`, copiadas literalmente do cache do núcleo, Wikiquote CC BY-SA 4.0) e as usa nas falas de citação; qualquer outra persona no mock só tem paráfrases.
 - Na tela: selo “CITAÇÃO REAL · fonte · Wikiquote” ou “PARÁFRASE”, citação em itálico entre aspas, legendas em páginas de duas linhas. Abaixo do player, `components/transcript.tsx` lista o roteiro com o link de cada fonte.
-- O composer pede o tema e o nome do rival do debate. O rival fica em cache por nome na sessão, então trocar de cena não cria outro personagem.
+- O composer separa nome e prompt visual de cada personagem. Monólogo usa uma persona; diálogo aceita de duas a seis.
+- Tema, direção livre do roteiro, narrativa, tom e duração desejada seguem no `RenderRequest`.
+
+## Fluxo guiado e cenário
+
+A primeira tela “Quem vai falar?” combina a escolha de monólogo/diálogo com nome e prompt livre do
+primeiro personagem. O tipo padrão é `stick`; `illustrated` identifica o pipeline complexo Aiwake.
+O campo já faz parte do contrato, mas a PR #93 do núcleo ainda não aplica `characterType` e pode devolver
+o rig Aiwake também para `stick`.
+
+O cenário automático usa `lib/eras.ts` (por exemplo, Sócrates → Ágora). A opção por prompt chama
+`POST /api/scenarios`, que tentará o futuro `/v1/scenarios`; em 404/405/501 escolhe deterministicamente
+o cenário existente mais próximo e devolve `source: "fallback"` com uma nota visível na UI.
 
 ## Modos de persona: Rápido x Profundo
 
@@ -36,8 +50,8 @@ Nos dois modos, os trechos servem só de contexto para as falas escritas. Citaç
 
 ## Estilos de arte e vista frontal
 
-Abaixo do campo de prompt há um seletor de estilo: Cartoon, Anime, Retrô, Realista, Cyberpunk e
-Aquarela (`ART_STYLES` em `lib/contract.ts`). O estilo vai como `artStyle` no `POST /api/characters`
+O seletor de estilo começa em Ghibli retrô (padrão do núcleo) e também oferece Cartoon, Anime, Retrô,
+Realista, Cyberpunk e Aquarela (`ART_STYLES` em `lib/contract.ts`). O estilo vai como `artStyle` no `POST /api/characters`
 (entra no prompt do Gemini) e como `style` no render (visual da cena: paleta, LUT, textura). No mock o
 estilo é só ecoado.
 

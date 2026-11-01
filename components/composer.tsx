@@ -160,7 +160,7 @@ export function Composer() {
   const enoughCharacters = mode === "monologue" ? characters.length >= 1 : characters.length >= 2;
 
   return (
-    <main className="mx-auto w-full max-w-4xl flex-1 px-5 py-8 sm:px-8 sm:py-12">
+    <div className="mx-auto w-full max-w-4xl flex-1 px-5 py-8 sm:px-8 sm:py-12">
       <Stepper current={step} maxStep={maxStep} onSelect={setStep} />
       <AnimatePresence mode="wait">
         <motion.section
@@ -475,6 +475,6 @@ export function Composer() {
           ) : null}
         </motion.section>
       </AnimatePresence>
-    </main>
+    </div>
   );
 }
