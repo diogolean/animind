@@ -146,3 +146,29 @@
   background: linear-gradient(90deg, transparent 30%, oklch(1 0 0 / 0.06) 50%, transparent 70%) 0 0 / 200% 100%, var(--muted);
   animation: shimmer 1.8s ease-in-out infinite;
 }
+
+@keyframes animind-blink {
+  0%, 44%, 49%, 100% { transform: scaleY(1); }
+  46%, 47% { transform: scaleY(0.08); }
+}
+@keyframes animind-mouth {
+  0%, 18%, 38%, 58%, 78%, 100% { opacity: 0; transform: scaleY(0.25); }
+  9%, 29%, 49%, 69%, 89% { opacity: 1; transform: scaleY(1); }
+}
+.animind-stick-eyes {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: animind-blink 3.2s ease-in-out infinite;
+}
+.animind-stick-mouth {
+  animation: animind-mouth 1.15s steps(1, end) infinite reverse;
+}
+.animind-stick-mouth-open,
+.animind-preview-mouth {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: animind-mouth 1.15s steps(1, end) infinite;
+}
+.animind-preview-blink {
+  animation: animind-mouth 3.2s steps(1, end) infinite;
+}
