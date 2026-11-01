@@ -11,9 +11,16 @@ export function Transcript({ result }: { result: RenderResult }) {
   const names = result.characters.map((c, i) => pretty(result.personas?.[i]?.name || c.name.split(/[,(:;]| - /)[0].trim()));
   return (
     <div data-testid="transcript" className="mt-6 space-y-3 text-sm">
+      {result.scriptQA && <ScriptCheck qa={result.scriptQA} quotes={result.script.filter((l) => l.kind === "quote").length} />}
       <ol className="space-y-2.5">
         {result.script.map((l, i) => (
-          <li key={i} data-testid={`line-${l.kind ?? "line"}`} className="grid grid-cols-[6.5rem_1fr] gap-3">
+          <li
+            key={i}
+            data-testid={`line-${l.kind ?? "line"}`}
+            data-speaker={l.speaker}
+            data-beat={l.beat}
+            data-quote-id={l.quote?.id}
+            className="grid grid-cols-[6.5rem_1fr] gap-3">
             <div className="pt-0.5 text-[11px] uppercase tracking-wider text-muted-foreground">
               <div className="truncate font-medium text-foreground/80">{names[l.speaker] ?? names[0]}</div>
               {l.beat}
@@ -50,6 +57,29 @@ export function Transcript({ result }: { result: RenderResult }) {
           ))}{" "}
           ({result.personas.find((p) => p.license)?.license ?? "CC BY-SA 4.0"}). Paródia gerada por IA: as falas não são da pessoa, exceto as citações marcadas.
         </p>
+      )}
+    </div>
+  );
+}
+
+/** The script's self-check: real quotes verified word for word against the sheets, and the arc. */
+function ScriptCheck({ qa, quotes }: { qa: NonNullable<RenderResult["scriptQA"]>; quotes: number }) {
+  return (
+    <div data-testid="script-qa" data-pass={qa.pass} className="text-[11px] text-muted-foreground">
+      {qa.pass ? (
+        <span>
+          <span className="font-semibold text-[var(--accent-brand)]">Roteiro conferido</span> ·{" "}
+          {quotes === 0 ? "sem citações: todas as falas são paráfrases marcadas" : `${quotes} ${quotes === 1 ? "citação real conferida" : "citações reais conferidas"} palavra por palavra com a ficha`}
+        </span>
+      ) : (
+        <details>
+          <summary className="cursor-pointer font-semibold text-destructive">Roteiro com {qa.problems.length} {qa.problems.length === 1 ? "problema" : "problemas"}</summary>
+          <ul className="mt-1 list-disc pl-4">
+            {qa.problems.map((p) => (
+              <li key={p}>{p}</li>
+            ))}
+          </ul>
+        </details>
       )}
     </div>
   );
