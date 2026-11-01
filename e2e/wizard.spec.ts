@@ -32,16 +32,19 @@ test("prompt automático em um clique", async ({ page }, info) => {
   shot = 0;
   let renderRequest: Record<string, unknown> | undefined;
   const characterRequests: Record<string, unknown>[] = [];
+  const previewRequests: Record<string, unknown>[] = [];
   page.on("request", (request) => {
     if (request.url().endsWith("/api/render") && request.method() === "POST") renderRequest = request.postDataJSON() as Record<string, unknown>;
     if (request.url().endsWith("/api/characters") && request.method() === "POST") characterRequests.push(request.postDataJSON() as Record<string, unknown>);
+    if (request.url().endsWith("/api/preview") && request.method() === "POST") previewRequests.push(request.postDataJSON() as Record<string, unknown>);
   });
   await page.goto("/");
-  await expect(page.getByRole("heading", { name: "Imagine. Dirija. Gere." })).toBeVisible();
   await expect(page.getByTestId("creation-prompt")).toHaveAttribute("placeholder", /Descreva sua criação/);
   await expect(page.getByTestId("core-mode")).toHaveText("mock de dev");
   await expect(page.getByTestId("automatic-toggle")).toHaveAttribute("aria-checked", "true");
-  await expect(page.getByTestId("language-selector")).toHaveAttribute("data-value", "en-US");
+  await expect(page.getByTestId("generate")).toBeVisible();
+  await expect(page.getByTestId("details-panel")).toHaveCount(0);
+  await expect(page.getByTestId("plan-chips")).toHaveCount(0);
   const japaneseCatalog = await (await page.request.get("/api/voices?lang=ja-JP")).json();
   expect(japaneseCatalog.languages.length).toBeGreaterThan(70);
   expect(japaneseCatalog.voices).toEqual(expect.arrayContaining([
@@ -55,39 +58,39 @@ test("prompt automático em um clique", async ({ page }, info) => {
   expect(japanesePlan.language).toBe("ja-JP");
   await snap(page, info, "automatico", "01-tela-inicial");
 
-  await page.getByTestId("language-selector").click();
-  const suggestedOptions = page.getByRole("option");
-  await expect(suggestedOptions.nth(0)).toContainText("English");
-  await expect(suggestedOptions.nth(1)).toContainText("Português BR");
-  await expect(suggestedOptions.nth(2)).toContainText("Español");
-  await page.getByTestId("language-selector-search").press("Escape");
-
   await page.getByTestId("creation-prompt").fill("Uma conversa entre Jesus e o diabo debatendo temas bíblicos");
+  await expect(page.getByTestId("generate")).toBeEnabled();
+  await expect(page.getByTestId("plan-chips")).toHaveCount(0);
+  await snap(page, info, "automatico", "02-prompt-pronto");
+
+  await page.getByTestId("details-toggle").click();
   const chips = page.getByTestId("plan-chips");
   await expect(chips).toBeVisible();
   await expect(page.getByTestId("plan-chip-mode")).toContainText("Debate");
   await expect(page.getByTestId("plan-chip-characters")).toContainText("Jesus + Diabo");
   await expect(page.getByTestId("plan-chip-topic")).toContainText("temas bíblicos");
   await expect(page.getByTestId("plan-chip-language")).toContainText("Português BR");
-  await expect(page.getByTestId("language-selector")).toHaveAttribute("data-value", "pt-BR");
   await expect(page.getByTestId("plan-chip-voice-0")).toContainText("Masc. · Auto");
-  await snap(page, info, "automatico", "02-chips");
+  await snap(page, info, "automatico", "03-detalhes");
 
-  await page.getByTestId("language-selector").click();
-  const languageSearch = page.getByTestId("language-selector-search");
+  await page.getByTestId("plan-chip-language").click();
+  await page.getByTestId("plan-language").click();
+  const suggestedOptions = page.getByRole("option");
+  await expect(suggestedOptions.nth(0)).toContainText("English");
+  await expect(suggestedOptions.nth(1)).toContainText("Português BR");
+  await expect(suggestedOptions.nth(2)).toContainText("Español");
+  const languageSearch = page.getByTestId("plan-language-search");
   await languageSearch.fill("Japonês");
-  await expect(page.getByTestId("language-selector-option-ja-JP")).toContainText("日本語");
-  await snap(page, info, "automatico", "03-busca-idioma");
+  await expect(page.getByTestId("plan-language-option-ja-JP")).toContainText("日本語");
   await languageSearch.press("Enter");
-  await expect(page.getByTestId("language-selector")).toHaveAttribute("data-value", "ja-JP");
   await expect(page.getByTestId("plan-chip-language")).toContainText("日本語");
+  await page.getByRole("button", { name: "Fechar editor" }).click();
 
   await page.getByTestId("plan-chip-voice-0").click();
   await page.getByTestId("plan-voice-gender-0-female").click();
   await page.getByTestId("plan-voice-select-0").selectOption("ja-JP-NanamiNeural");
   await page.getByTestId("plan-voice-preview-0").click();
   await expect(page.getByTestId("plan-chip-voice-0")).toContainText("Fem. · Nanami");
-  await snap(page, info, "automatico", "04-voz-editavel");
   await page.getByRole("button", { name: "Fechar editor" }).click();
   await expect(page.getByTestId("chip-editor")).toHaveCount(0);
 
@@ -96,13 +99,32 @@ test("prompt automático em um clique", async ({ page }, info) => {
   await page.getByTestId("plan-tone").selectOption("sabio");
   await expect(page.getByTestId("plan-chip-tone")).toContainText("Sábio");
   await page.getByRole("button", { name: "Fechar editor" }).click();
+  await page.getByTestId("details-toggle").click();
+  await expect(page.getByTestId("details-panel")).toHaveCount(0);
 
+  const startedAt = Date.now();
   await page.getByTestId("generate").click();
+  const firstCharacter = page.getByTestId("stream-character-0");
+  await expect(firstCharacter).toBeVisible({ timeout: 2_000 });
+  expect(Date.now() - startedAt).toBeLessThan(2_000);
+  await expect(page.getByTestId("render-result")).toHaveCount(0);
+  await snap(page, info, "automatico", "04-primeiro-personagem");
+  await expect(async () => {
+    const first = await firstCharacter.screenshot();
+    await page.waitForTimeout(350);
+    const second = await firstCharacter.screenshot();
+    expect(Buffer.compare(first, second), "stick figure should blink or move its mouth").not.toBe(0);
+  }).toPass({ timeout: 4_000 });
+  await expect(page.getByTestId("stream-character-1")).toBeVisible({ timeout: 2_000 });
+  await expect(page.getByTestId("stream-scenario")).toHaveAttribute("data-ready", "true", { timeout: 3_000 });
+  await snap(page, info, "automatico", "05-elenco-e-cenario");
   await expectPreview(page);
   await expect(page.getByTestId("transcript")).toContainText("Jesus");
   await expect(page.getByTestId("transcript")).toContainText("Diabo");
   expect(characterRequests).toHaveLength(2);
   expect(characterRequests.map((request) => request.name)).toEqual(["Jesus", "Diabo"]);
+  expect(previewRequests).toHaveLength(2);
+  expect(previewRequests.map((request) => request.index)).toEqual([0, 1]);
   expect(renderRequest).toMatchObject({
     tone: "sabio",
     objective: "debater",
@@ -114,7 +136,7 @@ test("prompt automático em um clique", async ({ page }, info) => {
       { voice: "ja-JP-KeitaNeural", auto: true },
     ],
   });
-  await snap(page, info, "automatico", "05-resultado");
+  await snap(page, info, "automatico", "06-resultado");
 });
 
 test("controles manuais na mesma página", async ({ page }, info) => {
