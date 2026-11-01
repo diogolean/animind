@@ -3,6 +3,7 @@
 import { Pencil } from "lucide-react";
 import type { CreationPlan, ToneOption, VoiceCatalog } from "@/lib/contract";
 import { ART_STYLES } from "@/lib/contract";
+import { languageLabel } from "@/components/flow/language-combobox";
 
 export type PlanField = "language" | "mode" | "characters" | "topic" | "tone" | "objective" | "style" | "scenario" | "duration" | `voice-${number}`;
 
@@ -11,7 +12,7 @@ const OBJECTIVES = { ensinar: "Ensinar", debater: "Debater", entreter: "Entreter
 
 export function PlanChips({ plan, tones, voices, onEdit }: { plan: CreationPlan; tones: ToneOption[]; voices: VoiceCatalog; onEdit: (field: PlanField) => void }) {
   const chips: { field: PlanField; label: string; value: string }[] = [
-    { field: "language", label: "Idioma", value: plan.language === "pt-BR" ? "Português BR" : plan.language === "en-US" ? "English" : plan.language },
+    { field: "language", label: "Idioma", value: languageLabel(voices.languages.find((language) => language.id === plan.language), plan.language) },
     { field: "mode", label: "Modo", value: MODES[plan.mode] },
     { field: "characters", label: "Elenco", value: plan.characters.map((character) => character.name).join(" + ") },
     ...plan.characters.map((character, index) => {

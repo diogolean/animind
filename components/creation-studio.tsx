@@ -29,6 +29,7 @@ import { fallbackVoiceCatalog } from "@/lib/voices";
 import { CharacterListEditor } from "@/components/flow/character-list-editor";
 import { CharacterVoicesEditor } from "@/components/flow/character-voices-editor";
 import { ChoiceCard } from "@/components/flow/choice-card";
+import { LanguageCombobox } from "@/components/flow/language-combobox";
 import { PlanChips, type PlanField } from "@/components/flow/plan-chips";
 import { Player } from "@/components/player";
 import { Transcript } from "@/components/transcript";
@@ -51,11 +52,6 @@ const SCENARIO_PROMPTS = {
   space: { label: "Espaço", prompt: "nave no espaço entre planetas" },
   agora: { label: "Ágora", prompt: "ágora clássica com colunas gregas" },
 } as const;
-const LANGUAGES: { id: LanguageCode; label: string }[] = [
-  { id: "en-US", label: "English" },
-  { id: "pt-BR", label: "Português BR" },
-];
-
 function Label({ children }: { children: React.ReactNode }) {
   return <span className="mb-2 block text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">{children}</span>;
 }
@@ -281,12 +277,11 @@ export function CreationStudio() {
               <p className="text-xs text-muted-foreground">{automatic ? "A IA organiza tudo a partir do prompt." : "Controles completos abertos."}</p>
             </div>
             <div className="flex items-center gap-3">
-              <select
-                data-testid="language-selector"
-                aria-label="Idioma"
+              <LanguageCombobox
+                testId="language-selector"
                 value={currentLanguage}
-                onChange={(event) => {
-                  const language = event.target.value as LanguageCode;
+                languages={voiceCatalog.languages}
+                onChange={(language) => {
                   if (automatic) {
                     setLanguageOverride(language);
                     setPlan((current) => current ? { ...current, language, characters: current.characters.map((character) => ({ ...character, voiceId: undefined })) } : current);
@@ -296,10 +291,7 @@ export function CreationStudio() {
                     setManualCharacters((characters) => characters.map((character) => ({ ...character, voiceId: undefined })));
                   }
                 }}
-                className="h-9 rounded-full border border-white/10 bg-background px-3 text-xs"
-              >
-                {LANGUAGES.map((language) => <option key={language.id} value={language.id}>{language.label}</option>)}
-              </select>
+              />
               <button
                 type="button"
                 role="switch"
@@ -446,17 +438,15 @@ function PlanEditor({
 }) {
   if (field === "language")
     return (
-      <select
-        data-testid="plan-language"
+      <LanguageCombobox
+        testId="plan-language"
         value={plan.language}
-        onChange={(event) => onChange({
-          language: event.target.value as LanguageCode,
+        languages={voices.languages}
+        onChange={(language) => onChange({
+          language,
           characters: plan.characters.map((character) => ({ ...character, voiceId: undefined })),
         })}
-        className="h-11 w-full rounded-xl border bg-background px-3"
-      >
-        {LANGUAGES.map((language) => <option key={language.id} value={language.id}>{language.label}</option>)}
-      </select>
+      />
     );
   if (field.startsWith("voice-")) {
     const index = Number(field.split("-")[1]);
@@ -557,17 +547,15 @@ function ManualControls(props: ManualControlsProps) {
     <>
       <section className="max-w-xs">
         <Label>Idioma</Label>
-        <select
-          data-testid="manual-language"
+        <LanguageCombobox
+          testId="manual-language"
           value={props.language}
-          onChange={(event) => {
-            props.onLanguage(event.target.value as LanguageCode);
+          languages={props.voices.languages}
+          onChange={(language) => {
+            props.onLanguage(language);
             props.onCharacters(props.characters.map((character) => ({ ...character, voiceId: undefined })));
           }}
-          className="h-11 w-full rounded-xl border bg-background px-3"
-        >
-          {LANGUAGES.map((language) => <option key={language.id} value={language.id}>{language.label}</option>)}
-        </select>
+        />
       </section>
       <section>
         <Label>Modo</Label>
