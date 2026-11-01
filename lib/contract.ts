@@ -151,6 +151,7 @@ export interface VoicePick {
 
 export type SceneTemplate = "debate" | "lesson" | "solo";
 export type Scenario = "studio" | "classroom" | "arena" | "space" | "agora";
+export type CreationMode = "monologue" | "dialogue" | "debate";
 /** Product-facing tone ids; adapters map these to the ids advertised by the core. */
 export type Tone = "humor" | "terror" | "educacional" | "sabio" | "serio";
 export type Objective = "ensinar" | "debater" | "entreter" | "convencer";
@@ -187,6 +188,32 @@ export interface ScenarioResolution {
   source: "core" | "era" | "fallback";
   prompt?: string;
   note?: string;
+}
+
+export interface CreationPlanCharacter {
+  name: string;
+  prompt: string;
+}
+
+/** Prompt-to-controls contract, ready for a future POST /v1/plan planner. */
+export interface CreationPlan {
+  prompt: string;
+  mode: CreationMode;
+  characters: CreationPlanCharacter[];
+  topic: string;
+  tone: Tone;
+  objective: Objective;
+  artStyle: ArtStyle;
+  characterType: CharacterType;
+  scenarioRequest: ScenarioRequest;
+  scenarioLabel: string;
+  duration: 30 | 60 | 90;
+  source: "core" | "local";
+}
+
+export interface CreationPlanRequest {
+  prompt: string;
+  lang?: "pt-BR" | "en-US";
 }
 
 export interface RenderRequest {

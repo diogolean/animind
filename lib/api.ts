@@ -1,5 +1,7 @@
 import type {
   Character,
+  CreationPlan,
+  CreationPlanRequest,
   CreateCharacterRequest,
   DeepStatus,
   RenderJob,
@@ -20,6 +22,9 @@ export const createCharacter = (body: CreateCharacterRequest) =>
   call<Character>("/api/characters", { method: "POST", body: JSON.stringify(body) });
 
 export const startRender = (body: RenderRequest) => call<RenderJob>("/api/render", { method: "POST", body: JSON.stringify(body) });
+
+export const planCreation = (body: CreationPlanRequest) =>
+  call<CreationPlan>("/api/plan", { method: "POST", body: JSON.stringify(body) });
 
 export const getTones = () => call<ToneCatalog>("/api/tones");
 
