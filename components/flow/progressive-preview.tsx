@@ -28,7 +28,41 @@ function StickFigure({ preview }: { preview: CharacterPreview }) {
   );
 }
 
+function Cutout({ preview }: { preview: CharacterPreview }) {
+  const view = preview.cutout;
+  if (!view || view.layers.length === 0) {
+    if (!preview.imageUrl) return null;
+    return <img data-testid="stream-cutout" src={preview.imageUrl} alt={preview.name} className="h-52 w-40 object-contain" />;
+  }
+  const { w, h } = view.canvas;
+  const mouth = view.visemes.X;
+  const parts = [...view.layers, ...(mouth ? [mouth] : [])].sort((a, b) => a.z - b.z);
+  return (
+    <div data-testid="stream-cutout" className="relative h-52" style={{ aspectRatio: `${w} / ${h}` }} aria-label={`Recorte de ${preview.name}`}>
+      {parts.map((layer) => (
+        <img
+          key={`${layer.name}-${layer.url}`}
+          src={layer.url}
+          alt=""
+          className="absolute max-w-none"
+          style={{
+            left: `${(layer.x / w) * 100}%`,
+            top: `${(layer.y / h) * 100}%`,
+            width: `${(layer.w / w) * 100}%`,
+            height: `${(layer.h / h) * 100}%`,
+          }}
+        />
+      ))}
+    </div>
+  );
+}
+
 function CorePreview({ preview }: { preview: CharacterPreview }) {
+  if (preview.source === "core") {
+    const cutout = <Cutout preview={preview} />;
+    if (cutout) return cutout;
+  }
+  if (preview.source === "loading" || preview.source === "local") return <StickFigure preview={preview} />;
   const idle = preview.frames?.idle ?? preview.imageUrl;
   if (!idle) return <StickFigure preview={preview} />;
   return (
@@ -38,6 +72,12 @@ function CorePreview({ preview }: { preview: CharacterPreview }) {
       {preview.frames?.mouthOpen ? <img src={preview.frames.mouthOpen} alt="" className="animind-preview-mouth absolute inset-0 size-full object-contain" /> : null}
     </div>
   );
+}
+
+function sourceLabel(preview: CharacterPreview) {
+  if (preview.source === "loading") return "Gerando no núcleo";
+  if (preview.source === "local") return "Prévia local";
+  return "Recorte do núcleo";
 }
 
 export function ProgressivePreview({
@@ -72,23 +112,28 @@ export function ProgressivePreview({
         <div className="relative flex min-h-60 items-end justify-center gap-3 sm:gap-10">
           {previews.map((preview) => (
             <motion.div
-              key={preview.id}
+              key={`${preview.index}-${preview.source}`}
               data-testid={`stream-character-${preview.index}`}
+              data-source={preview.source}
               initial={{ opacity: 0, y: 26, scale: 0.94 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               transition={{ type: "spring", stiffness: 170, damping: 18 }}
-              className="flex flex-col items-center"
+              className="flex max-w-44 flex-col items-center"
             >
               <CorePreview preview={preview} />
               <span className="mt-1 rounded-full border border-white/10 bg-black/30 px-3 py-1 text-xs font-medium backdrop-blur">
                 {preview.name}
               </span>
+              <span data-testid={`stream-badge-${preview.index}`} className="mt-1 text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
+                {sourceLabel(preview)}
+              </span>
+              {preview.note ? <span className="mt-1 line-clamp-2 max-w-40 text-center text-[10px] text-amber-500/90">{preview.note}</span> : null}
             </motion.div>
           ))}
         </div>
       </div>
       <div className="relative flex items-center justify-between gap-3 border-t border-white/8 px-5 py-3 text-xs text-muted-foreground">
-        <span className="flex min-w-0 items-center gap-2"><Loader2 className="size-3.5 shrink-0 animate-spin" /><span className="truncate">{status || "Preparando animação"}</span></span>
+        <span data-testid="job-status" className="flex min-w-0 items-center gap-2"><Loader2 className="size-3.5 shrink-0 animate-spin" /><span className="truncate">{status || "Preparando animação"}</span></span>
         {scenario ? <motion.span initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="shrink-0 text-foreground/70">{scenario}</motion.span> : null}
       </div>
     </motion.section>

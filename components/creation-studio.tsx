@@ -25,6 +25,7 @@ import type {
   VideoFormat,
 } from "@/lib/contract";
 import { HEALTH_EVENT, createCharacter, createPreview, getTones, getVoices, planCreation, resolveScenario, startRender, waitJob } from "@/lib/api";
+import { previewFromCharacter, stickPreview } from "@/lib/character-preview";
 import { normalizeToneCatalog } from "@/lib/tones";
 import { fallbackVoiceCatalog } from "@/lib/voices";
 import { CharacterListEditor } from "@/components/flow/character-list-editor";
@@ -56,15 +57,13 @@ const SCENARIO_PROMPTS = {
 } as const;
 
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
-const PREVIEW_ACCENTS = ["hsl(218 75% 64%)", "hsl(275 67% 68%)", "hsl(163 61% 55%)", "hsl(30 80% 62%)"];
-const optimisticPreview = (character: CreationPlanCharacter, index: number): CharacterPreview => ({
-  id: `local-${index}-${character.name}`,
-  index,
-  name: character.name || `Personagem ${index + 1}`,
-  kind: "stick",
-  source: "local",
-  accent: PREVIEW_ACCENTS[index % PREVIEW_ACCENTS.length],
-});
+
+function showPreview(current: CharacterPreview[], next: CharacterPreview) {
+  const existing = current.find((item) => item.index === next.index);
+  // A finished core cut-out is never replaced by the local silhouette.
+  if (existing?.source === "core" && next.source !== "core") return current;
+  return [...current.filter((item) => item.index !== next.index), next].sort((a, b) => a.index - b.index);
+}
 function Label({ children }: { children: React.ReactNode }) {
   return <span className="mb-2 block text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">{children}</span>;
 }
@@ -210,13 +209,13 @@ export function CreationStudio() {
     setStreamScenario(null);
     setProgress(0);
     const drafts = activePlan.mode === "monologue" ? activePlan.characters.slice(0, 1) : activePlan.characters;
-    setProgressivePreviews([optimisticPreview(drafts[0], 0)]);
+    setProgressivePreviews([stickPreview(drafts[0], 0, "loading")]);
     try {
       const previewFlow = (async () => {
         for (let index = 0; index < drafts.length; index++) {
           if (index > 0) {
             await wait(850);
-            setProgressivePreviews((current) => [...current, optimisticPreview(drafts[index], index)]);
+            setProgressivePreviews((current) => showPreview(current, stickPreview(drafts[index], index, "loading")));
           }
           const preview = await createPreview({
             character: drafts[index],
@@ -225,11 +224,8 @@ export function CreationStudio() {
             language: activePlan.language,
             index,
           }).catch(() => null);
-          if (preview) {
-            setProgressivePreviews((current) =>
-              [...current.filter((item) => item.index !== index), preview].sort((a, b) => a.index - b.index),
-            );
-          }
+          // Only the explicit mock fallback may draw a local SVG. The core has no SVG preview.
+          if (preview?.source === "local") setProgressivePreviews((current) => showPreview(current, preview));
         }
       })();
       const availableVoices = await getVoices(activePlan.language).catch(() => fallbackVoiceCatalog(activePlan.language));
@@ -242,8 +238,12 @@ export function CreationStudio() {
           source: { kind: "prompt", prompt: drafts[index].prompt.trim() },
           characterType: activePlan.characterType,
           artStyle: activePlan.artStyle,
+          ...(drafts[index].gender ? { gender: drafts[index].gender } : {}),
+          ...(drafts[index].voiceId ? { voiceId: drafts[index].voiceId } : {}),
         });
         cast.push(character);
+        const cutout = previewFromCharacter(character, index);
+        if (cutout) setProgressivePreviews((current) => showPreview(current, cutout));
         if (character.generator === "mock" && character.generatorNote) window.dispatchEvent(new Event(HEALTH_EVENT));
       }
       await previewFlow;
@@ -289,6 +289,9 @@ export function CreationStudio() {
     } catch (error) {
       toast.error((error as Error).message);
       setStatus("");
+      setProgressivePreviews((current) =>
+        current.map((item) => (item.source === "loading" ? stickPreview({ name: item.name }, item.index, "local") : item)),
+      );
     } finally {
       setRendering(false);
     }

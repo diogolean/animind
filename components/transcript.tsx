@@ -11,6 +11,9 @@ export function Transcript({ result }: { result: RenderResult }) {
   const names = result.characters.map((c, i) => pretty(result.personas?.[i]?.name || c.name.split(/[,(:;]| - /)[0].trim()));
   return (
     <div data-testid="transcript" className="mt-6 space-y-3 text-sm">
+      {result.videoUrl && result.writer ? (
+        <p data-testid="script-writer" className="text-xs text-muted-foreground">Roteiro do núcleo · {result.writer}</p>
+      ) : null}
       {result.scriptQA && <ScriptCheck qa={result.scriptQA} quotes={result.script.filter((l) => l.kind === "quote").length} />}
       <ol className="space-y-2.5">
         {result.script.map((l, i) => (

@@ -68,7 +68,10 @@ export function Player({ result, audioCtx, fileName }: { result: RenderResult; a
     [audioCtx, result],
   );
 
+  const coreVideo = result.videoUrl;
+
   useEffect(() => {
+    if (coreVideo) return;
     let alive = true;
     (async () => {
       const img = await loadImages(result.characters);
@@ -83,7 +86,33 @@ export function Player({ result, audioCtx, fileName }: { result: RenderResult; a
       alive = false;
       cancelAnimationFrame(raf.current);
     };
-  }, [result, audioCtx, run]);
+  }, [result, audioCtx, run, coreVideo]);
+
+  if (coreVideo) {
+    return (
+      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.4 }} className="space-y-3">
+        <video
+          data-testid="core-player"
+          src={coreVideo}
+          controls
+          autoPlay
+          playsInline
+          preload="auto"
+          className={vertical ? "mx-auto aspect-[9/16] w-full max-w-xs rounded-2xl bg-black" : "aspect-video w-full rounded-2xl bg-black"}
+        />
+        <div className="flex items-center justify-center gap-2">
+          <a
+            data-testid="download-core"
+            href={coreVideo}
+            download={`${fileName}-hd.mp4`}
+            className="inline-flex h-8 items-center gap-1.5 rounded-full bg-foreground px-4 text-sm font-medium text-background transition-opacity hover:opacity-90"
+          >
+            <Film className="size-3.5" /> MP4 do núcleo
+          </a>
+        </div>
+      </motion.div>
+    );
+  }
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.4 }} className="space-y-3">
