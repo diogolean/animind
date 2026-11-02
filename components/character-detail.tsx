@@ -21,6 +21,16 @@ export function CharacterDetail() {
   const [character, setCharacter] = useState<LibraryCharacter | null>(null);
   const [error, setError] = useState("");
   const [pending, setPending] = useState(false);
+  const [sheetOpen, setSheetOpen] = useState(false);
+
+  useEffect(() => {
+    if (!sheetOpen) return;
+    function onKey(event: KeyboardEvent) {
+      if (event.key === "Escape") setSheetOpen(false);
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [sheetOpen]);
 
   useEffect(() => {
     let cancelled = false;
@@ -97,6 +107,8 @@ export function CharacterDetail() {
   }
 
   const ready = character.status === "ready";
+  const availableViews = VIEWS.filter((view) => character.views[view.id]);
+  const viewColumns = availableViews.length >= 3 ? "sm:grid-cols-3" : availableViews.length === 2 ? "sm:grid-cols-2" : "";
   return (
     <div data-testid="character-detail" className="mx-auto w-full max-w-5xl flex-1 px-5 py-10 sm:px-8">
       <Link href="/characters" className="text-sm text-muted-foreground hover:text-foreground">
@@ -135,30 +147,53 @@ export function CharacterDetail() {
         </div>
       </div>
 
-      <div className="mt-8 grid gap-4 sm:grid-cols-3">
-        {VIEWS.map((view) => {
-          const url = character.views[view.id];
-          return (
-            <figure key={view.id} data-testid={view.testId} className="overflow-hidden rounded-[1.5rem] border border-white/10 bg-black/30">
-              <div className="flex aspect-[4/5] items-center justify-center">
-                {url ? <img src={url} alt={view.label} className="size-full object-contain" /> : <span className="text-xs text-muted-foreground">Sem imagem</span>}
-              </div>
-              <figcaption className="px-4 py-3 text-sm">{view.label}</figcaption>
-            </figure>
-          );
-        })}
+      <div className={`mt-8 grid gap-4 ${viewColumns}`}>
+        {availableViews.map((view) => (
+          <figure key={view.id} data-testid={view.testId} className="overflow-hidden rounded-[1.5rem] border border-white/10 bg-black/30">
+            <div className="flex aspect-[9/16] items-center justify-center bg-black">
+              <img src={character.views[view.id]} alt={view.label} className="size-full object-contain" />
+            </div>
+            <figcaption className="px-4 py-3 text-sm">{view.label}</figcaption>
+          </figure>
+        ))}
       </div>
 
       <section className="mt-8">
         <h2 className="text-sm font-medium">Ficha de emoções</h2>
         <div data-testid="emotion-sheet" className="mt-3 overflow-hidden rounded-[1.5rem] border border-white/10 bg-black/30">
           {character.emotionSheetUrl ? (
-            <img src={character.emotionSheetUrl} alt="Ficha de emoções" className="max-h-[32rem] w-full object-contain" />
+            <button type="button" data-testid="emotion-sheet-zoom" onClick={() => setSheetOpen(true)} className="block w-full cursor-zoom-in text-left">
+              <img src={character.emotionSheetUrl} alt="Ficha de emoções" className="w-full" />
+              <span className="block px-4 py-3 text-sm text-muted-foreground">Clique para ver em tamanho real</span>
+            </button>
           ) : (
             <p className="px-4 py-10 text-sm text-muted-foreground">Esta pasta não trouxe uma ficha de emoções.</p>
           )}
         </div>
       </section>
+      {sheetOpen && character.emotionSheetUrl ? (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Ficha de emoções em tamanho real"
+          data-testid="emotion-sheet-lightbox"
+          className="fixed inset-0 z-50 overflow-auto bg-black/90 p-4 sm:p-8"
+          onClick={() => setSheetOpen(false)}
+        >
+          <div className="mb-4 flex justify-end">
+            <button type="button" onClick={() => setSheetOpen(false)} className="rounded-full border border-white/20 px-4 py-2 text-sm">
+              Fechar
+            </button>
+          </div>
+          <img
+            data-testid="emotion-sheet-full"
+            src={character.emotionSheetUrl}
+            alt="Ficha de emoções em tamanho real"
+            className="mx-auto h-auto w-auto max-w-none"
+            onClick={(event) => event.stopPropagation()}
+          />
+        </div>
+      ) : null}
 
       {character.layers.length ? (
         <p className="mt-4 text-xs text-muted-foreground">{character.layers.length} camadas no armazenamento de objetos.</p>

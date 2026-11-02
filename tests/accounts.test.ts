@@ -235,6 +235,59 @@ describe("accounts and character library", { concurrency: false }, () => {
     assert.equal(owner && (await charactersFor(owner))[0]?.name, "Einstein");
   });
 
+  it("imports a view folder without a profile and resolves layers/<view>/ urls", async () => {
+    const owner = await upsertPilotSuperAdmin(`views-${randomBytes(3).toString("hex")}@example.com`, randomBytes(12).toString("base64url"));
+    const puppet = {
+      name: "Albert Einstein",
+      views: {
+        front: {
+          base: "layers/front/",
+          rest: "views/front.png",
+          canvas: { w: 32, h: 48 },
+          layers: [{ name: "torso", url: "torso.png", x: 0, y: 0, w: 8, h: 8, z: 0 }],
+          visemes: { X: { name: "mouth_X", url: "mouths/X.png", x: 1, y: 1, w: 4, h: 4, z: 10 } },
+        },
+        "three-quarter": {
+          base: "layers/three-quarter/",
+          rest: "views/three-quarter.png",
+          canvas: { w: 32, h: 48 },
+          layers: [{ name: "head", url: "head.png", x: 0, y: 0, w: 8, h: 8, z: 1 }],
+          visemes: {},
+        },
+      },
+    };
+    const imported = await importCharacterPackage({
+      ownerId: owner.id,
+      files: [
+        { path: "albert_einstein/puppet.json", bytes: Buffer.from(JSON.stringify(puppet)) },
+        { path: "albert_einstein/layers/front/torso.png", bytes: PNG },
+        { path: "albert_einstein/layers/front/mouths/X.png", bytes: PNG },
+        { path: "albert_einstein/layers/three-quarter/head.png", bytes: PNG },
+        { path: "albert_einstein/views/front.png", bytes: PNG },
+        { path: "albert_einstein/views/three-quarter.png", bytes: PNG },
+        { path: "albert_einstein/emotion-sheet.png", bytes: PNG },
+        { path: "albert_einstein/persona.txt", bytes: Buffer.from("Albert Einstein: warm, playful theoretical physicist.\n") },
+      ],
+    });
+    assert.equal(imported.views.profile, undefined);
+    assert.ok(imported.views.front?.endsWith("/views/front.png"));
+    assert.ok(imported.views.three_quarter?.endsWith("/views/three-quarter.png"));
+    assert.ok(imported.emotionSheetUrl?.endsWith("/emotion-sheet.png"));
+    assert.equal(imported.personaSheetRef, "Albert Einstein: warm, playful theoretical physicist.");
+    const stored = JSON.parse((await readObject(keyFromAssetUrl(imported.puppetUrl)!))!.toString("utf8")) as {
+      views: {
+        front: { layers: { url: string }[]; visemes: { X: { url: string } } };
+        "three-quarter": { layers: { url: string }[] };
+      };
+    };
+    assert.match(stored.views.front.layers[0]!.url, /\/layers\/front\/torso\.png$/);
+    assert.match(stored.views.front.visemes.X.url, /\/layers\/front\/mouths\/X\.png$/);
+    assert.match(stored.views["three-quarter"].layers[0]!.url, /\/layers\/three-quarter\/head\.png$/);
+    const rig = puppetToRig(imported, stored);
+    assert.equal(rig.views.left.layers[0]?.name, "head");
+    assert.equal(rig.views.right.layers.length, 0);
+  });
+
   it("accepts the folder prefix a directory picker adds", async () => {
     const owner = await upsertPilotSuperAdmin(`picker-${randomBytes(3).toString("hex")}@example.com`, randomBytes(12).toString("base64url"));
     const imported = await importCharacterPackage({

@@ -161,7 +161,7 @@ export function MyCharacters() {
 
       <form onSubmit={onImport} data-testid="import-character" className="mt-12 rounded-[1.5rem] border border-white/10 bg-white/[0.025] p-5">
         <h2 className="text-sm font-medium">Importar pasta</h2>
-        <p className="mt-1 text-sm text-muted-foreground">puppet.json, vistas (frente, 3/4, perfil), ficha de emoções e PNGs das camadas.</p>
+        <p className="mt-1 text-sm text-muted-foreground">puppet.json, as vistas que a pasta tiver (frente e 3/4; perfil se houver), ficha de emoções e PNGs em layers/&lt;vista&gt;/.</p>
         <div className="mt-4 grid gap-3 sm:grid-cols-2">
           <input name="name" placeholder="Nome (opcional)" className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm outline-none" />
           <input name="persona" placeholder="Ref. da ficha (opcional)" className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm outline-none" />

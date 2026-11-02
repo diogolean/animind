@@ -123,15 +123,15 @@ SEED_SUPERADMIN_PASSWORD=
 npm run seed
 ```
 
-A biblioteca guarda nome, referência da ficha, vistas (frente, 3/4, perfil), URL do `puppet.json`, URLs das camadas e o status (`draft`, `ready`, `archived`). Os PNG e o `puppet.json` vão para o armazenamento de objetos em `ANIMIND_DATA_DIR/objects` (padrão `./.data`, no `.gitignore`) e a ficha só guarda a URL `/api/library/assets/...`.
+A biblioteca guarda nome, referência da ficha, as vistas que a pasta trouxer (frente, 3/4 e perfil; o perfil é opcional), URL do `puppet.json`, URLs das camadas e o status (`draft`, `ready`, `archived`). Os PNG e o `puppet.json` vão para o armazenamento de objetos em `ANIMIND_DATA_DIR/objects` (padrão `./.data`, no `.gitignore`) e a ficha só guarda a URL `/api/library/assets/...`.
 
-Importar uma pasta já gerada (Einstein primeiro) para a conta do Diogo:
+Importar uma pasta já gerada para a conta do Diogo:
 
 ```bash
-npm run import-character -- --dir /caminho/do/einstein --email "$SEED_SUPERADMIN_EMAIL"
+npm run import-character -- --dir /caminho/do/personagem --email "$SEED_SUPERADMIN_EMAIL"
 ```
 
-A pasta precisa de `puppet.json`. Vistas por nome (`views/front.png`, `views/three-quarter.png` ou `3-4.png`, `views/profile.png`), `emotion-sheet.png` e `persona.txt` (uma linha com a referência da ficha) são opcionais. O mesmo envio existe em `POST /api/library/import` (multipart, campo `file` repetido com o caminho relativo) e na página **Meus personagens**. Dali, **Novo vídeo** e **Debate** abrem o estúdio com esse personagem.
+A pasta precisa de `puppet.json`. As fotos de galeria saem de `views/front.png`, `views/three-quarter.png` (ou `3-4.png`) e, se existir, `views/profile.png`, ou do campo `rest` de cada vista no puppet. As camadas podem ficar em `layers/<vista>/` (`layers/front/torso.png`, `layers/three-quarter/mouths/X.png`): o import resolve cada `url` relativo ao `base` da vista. `emotion-sheet.png` e `persona.txt` (uma linha com a referência da ficha) são opcionais. O mesmo envio existe em `POST /api/library/import` (multipart, campo `file` repetido com o caminho relativo) e na página **Meus personagens**. Dali, **Novo vídeo** e **Debate** abrem o estúdio com esse personagem. A ficha do personagem mostra só as vistas presentes e a ficha de emoções em tamanho grande; um clique abre a imagem inteira.
 
 `npm test` cobre papéis, seed, importação e o fato de os bytes não irem parar no JSON. O E2E da biblioteca (`e2e/library.spec.ts`) só roda com `E2E_AUTH_SECRET`, `E2E_DATA_DIR`, `E2E_SUPERADMIN_EMAIL` e `E2E_SUPERADMIN_PASSWORD`.
 

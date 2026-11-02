@@ -82,15 +82,26 @@ function collectImageRefs(value: unknown, into: Set<string>): void {
   }
 }
 
-function rewrite(value: unknown, urls: Map<string, string>): unknown {
-  if (typeof value === "string") {
-    const rel = normalizeRel(value.replace(/^\.\//, ""));
-    return rel && urls.has(rel) ? urls.get(rel)! : value;
-  }
-  if (Array.isArray(value)) return value.map((item) => rewrite(item, urls));
+function lookupAsset(value: string, urls: Map<string, string>, base?: string): string {
+  const cleaned = value.replace(/^\.\//, "");
+  const direct = normalizeRel(cleaned);
+  if (direct && urls.has(direct)) return urls.get(direct)!;
+  if (!base) return value;
+  const joined = normalizeRel(`${base.replace(/\/$/, "")}/${cleaned}`);
+  return joined && urls.has(joined) ? urls.get(joined)! : value;
+}
+
+/** Rewrites image paths to object URLs. Strings inside a view resolve against that view's `base` (`layers/front/torso.png`). */
+function rewrite(value: unknown, urls: Map<string, string>, base?: string): unknown {
+  if (typeof value === "string") return lookupAsset(value, urls, base);
+  if (Array.isArray(value)) return value.map((item) => rewrite(item, urls, base));
   if (value && typeof value === "object") {
+    const record = value as Record<string, unknown>;
+    const nextBase = typeof record.base === "string" ? record.base : base;
     const out: Record<string, unknown> = {};
-    for (const [key, item] of Object.entries(value)) out[key] = rewrite(item, urls);
+    for (const [key, item] of Object.entries(record)) {
+      out[key] = rewrite(item, urls, key === "base" ? undefined : nextBase);
+    }
     return out;
   }
   return value;
@@ -134,17 +145,30 @@ function pickEmotion(files: ImportFile[], urls: Map<string, string>): string | n
   return matches[0] ? (urls.get(matches[0].path) ?? null) : null;
 }
 
+function viewNameOf(key: string): LibraryViewName | undefined {
+  return VIEW_BASENAMES[key.toLowerCase().replace(/[\s_]+/g, "-")];
+}
+
 function overlayPuppetViews(puppet: Record<string, unknown>, urls: Map<string, string>, views: LibraryCharacter["views"]): void {
-  const bags = [puppet.presentation, puppet.viewImages, puppet.views];
-  for (const bag of bags) {
+  for (const bag of [puppet.presentation, puppet.viewImages]) {
     if (!bag || typeof bag !== "object") continue;
     for (const [key, value] of Object.entries(bag)) {
       if (typeof value !== "string") continue;
       const rel = normalizeRel(value.replace(/^\.\//, ""));
       const url = rel ? urls.get(rel) : undefined;
-      const view = VIEW_BASENAMES[key.toLowerCase().replace(/\s+/g, "-")];
+      const view = viewNameOf(key);
       if (view && url) views[view] = url;
     }
+  }
+  if (!puppet.views || typeof puppet.views !== "object") return;
+  for (const [key, value] of Object.entries(puppet.views)) {
+    const view = viewNameOf(key);
+    if (!view) continue;
+    const raw = typeof value === "string" ? value : value && typeof value === "object" ? (value as { rest?: unknown }).rest : undefined;
+    if (typeof raw !== "string") continue;
+    const rel = normalizeRel(raw.replace(/^\.\//, ""));
+    const url = rel ? urls.get(rel) : undefined;
+    if (url) views[view] = url;
   }
 }
 
