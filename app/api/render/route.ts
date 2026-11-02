@@ -33,7 +33,13 @@ export async function POST(req: Request) {
     } catch {
       // The documented fallback mapping keeps render available.
     }
-    const coreBody = { ...adaptedBody, requestedTone: body.tone, tone: coreToneId(body.tone, catalog) };
+    const coreBody = {
+      ...adaptedBody,
+      // The core reads `duration` in seconds. `targetDurationSec` stays for the app contract.
+      duration: body.targetDurationSec,
+      requestedTone: body.tone,
+      tone: coreToneId(body.tone, catalog),
+    };
     return proxyJson("/render", { method: "POST", body: JSON.stringify(coreBody) });
   }
   return json(mockCreateJob(adaptedBody), 202);

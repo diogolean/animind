@@ -88,10 +88,14 @@ export interface CreateCharacterRequest {
   source: CharacterSource;
   /** Display/persona name, kept separate from the visual prompt. */
   name?: string;
-  /** MVP defaults to a lightweight stick figure. */
+  /** MVP defaults to a lightweight stick figure. The core calls this `type` (`stick` or `rig`). */
   characterType?: CharacterType;
   /** Drawing style for generated (prompt) characters. Default ghibli. */
   artStyle?: ArtStyle;
+  /** Passed through so the core casts an edge-tts voice of this gender. */
+  gender?: VoiceGender;
+  /** Explicit edge-tts voice; absent means the core casts from `gender`. */
+  voiceId?: string;
 }
 
 export interface Character {
@@ -269,9 +273,12 @@ export interface CharacterPreview {
   index: number;
   name: string;
   kind: "stick" | "image";
-  source: "core" | "local";
+  /** `loading` is a local silhouette while the core cuts layers. `local` is an explicit fallback, never a fake result. */
+  source: "core" | "local" | "loading";
   accent: string;
   imageUrl?: string;
+  /** Front cut-out from the core (`views.front`), drawn as soon as the character exists. */
+  cutout?: CharacterView;
   frames?: PreviewFrames;
   note?: string;
 }

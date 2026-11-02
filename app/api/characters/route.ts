@@ -26,7 +26,17 @@ export async function POST(req: Request) {
   const mode = coreMode();
   if (mode === "off") return coreOff();
   // Prompt characters are cut by the core. Catalog/upload are photo rigs the app builds itself.
-  if (mode === "core" && s.kind === "prompt") return proxyJson("/characters", { method: "POST", body: JSON.stringify(body) });
+  // The core's field is `type`: stick (procedural or avatar) or rig (Aiwake factory).
+  if (mode === "core" && s.kind === "prompt") {
+    const type = body.characterType === "stick" ? "stick" : "rig";
+    const coreBody = {
+      ...body,
+      type,
+      ...(body.gender ? { gender: body.gender } : {}),
+      ...(body.voiceId ? { voiceId: body.voiceId } : {}),
+    };
+    return proxyJson("/characters", { method: "POST", body: JSON.stringify(coreBody) });
+  }
   try {
     return json(mockCreateCharacter(body), 201);
   } catch (e) {

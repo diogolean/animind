@@ -19,6 +19,7 @@ export async function POST(req: Request) {
   const mode = coreMode();
   if (mode === "off") return coreOff();
   if (mode === "core") {
+    // The live core has no /v1/preview. A local SVG must not stand in for the cut-out.
     try {
       const response = await coreFetch("/preview", { method: "POST", body: JSON.stringify(body) });
       if (response.ok) {
@@ -27,10 +28,12 @@ export async function POST(req: Request) {
           headers: { "content-type": "application/json" },
         });
       }
-      if (![404, 405, 501].includes(response.status))
-        return json({ error: `Erro do núcleo ${response.status}` }, response.status);
-    } catch {
-      // The optimistic local stick remains visible if the optional endpoint is unavailable.
+      return json(
+        { error: "O núcleo não oferece uma prévia SVG. O personagem aparece quando o recorte fica pronto." },
+        [404, 405, 501].includes(response.status) ? 501 : response.status,
+      );
+    } catch (error) {
+      return json({ error: `Núcleo indisponível: ${(error as Error).message}` }, 502);
     }
   }
   return json(mockCreatePreview(body), 201);

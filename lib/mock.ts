@@ -78,7 +78,7 @@ export function mockCreatePreview(req: CharacterPreviewRequest): CharacterPrevie
     kind: "stick",
     source: "local",
     accent: `hsl(${hue} 72% 62%)`,
-    note: "Preview local instantâneo; o núcleo pode substituir por PNG/frames.",
+    note: "Prévia local: o núcleo não está neste processo.",
   };
 }
 

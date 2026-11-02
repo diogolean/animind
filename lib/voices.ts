@@ -211,7 +211,7 @@ export function normalizeVoiceCatalog(data: unknown, language: LanguageCode, sou
   const voices = Array.isArray(raw)
     ? raw.flatMap((item) => {
         const value = item as Record<string, unknown>;
-        const id = String(value.id ?? value.voice ?? value.shortName ?? value.ShortName ?? value.name ?? value.Name ?? "");
+        const id = String(value.id ?? value.voiceId ?? value.voice ?? value.shortName ?? value.ShortName ?? value.name ?? value.Name ?? "");
         if (!id) return [];
         const voiceLanguage = String(value.language ?? value.lang ?? value.locale ?? value.Locale ?? language) as LanguageCode;
         return [{
