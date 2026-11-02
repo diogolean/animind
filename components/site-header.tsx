@@ -1,10 +1,16 @@
 "use client";
 import Link from "next/link";
+import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { HEALTH_EVENT } from "@/lib/api";
+import { ROLE_LABEL } from "@/lib/accounts/labels";
+import type { PublicUser } from "@/lib/accounts/types";
 
 export function SiteHeader() {
+  const pathname = usePathname();
+  const router = useRouter();
   const [mode, setMode] = useState<{ label: string; tone: string; note?: string } | null>(null);
+  const [user, setUser] = useState<PublicUser | null>(null);
   useEffect(() => {
     const load = () =>
       fetch("/api/health", { cache: "no-store" })
@@ -26,16 +32,60 @@ export function SiteHeader() {
         )
         .catch(() => {});
     load();
-    // A character whose art fell back to mock (Gemini 402 mid-session) changes what the core can do: re-read it.
     window.addEventListener(HEALTH_EVENT, load);
     return () => window.removeEventListener(HEALTH_EVENT, load);
   }, []);
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/auth/me", { cache: "no-store" })
+      .then(async (response) => {
+        if (!response.ok) return null;
+        const data = (await response.json()) as { user?: PublicUser | null };
+        return data.user ?? null;
+      })
+      .then((next) => {
+        if (!cancelled) setUser(next);
+      })
+      .catch(() => {
+        if (!cancelled) setUser(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [pathname]);
+
+  async function logout() {
+    await fetch("/api/auth/logout", { method: "POST" });
+    setUser(null);
+    router.push("/login");
+    router.refresh();
+  }
+
   return (
-    <header className="mx-auto flex h-14 w-full max-w-5xl items-center px-6">
+    <header className="mx-auto flex h-14 w-full max-w-5xl items-center gap-4 px-6">
       <Link href="/" className="flex items-center gap-2 text-sm font-medium tracking-tight">
         <span className="size-2 rounded-full bg-[var(--accent-brand)]" />
         animind
       </Link>
+      <span className="flex-1" />
+      {user ? (
+        <>
+          <Link href="/characters" data-testid="my-characters-link" className="text-sm text-muted-foreground hover:text-foreground">
+            Meus personagens
+          </Link>
+          <span className="hidden text-sm text-muted-foreground sm:inline">{user.name}</span>
+          <span data-testid="account-role" data-role={user.role} className="rounded-full border border-white/10 px-2 py-0.5 text-[10px] uppercase tracking-wide text-muted-foreground">
+            {ROLE_LABEL[user.role]}
+          </span>
+          <button type="button" data-testid="logout" onClick={logout} className="text-sm text-muted-foreground hover:text-foreground">
+            Sair
+          </button>
+        </>
+      ) : (
+        <Link href="/login" data-testid="login-link" className="text-sm text-muted-foreground hover:text-foreground">
+          Entrar
+        </Link>
+      )}
       {mode && (
         <span data-testid="core-mode" title={mode.note} className="sr-only">
           {mode.label}

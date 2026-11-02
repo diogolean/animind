@@ -108,6 +108,33 @@ npm run dev                  # sem núcleo: ANIMIND_CORE_MOCK=1 npm run dev
 
 Testes E2E (Playwright, projeto `mock` sem chaves e `core` contra o núcleo real): veja [`e2e/README.md`](e2e/README.md).
 
+## Contas e biblioteca
+
+Papéis: `user`, `admin`, `super_admin`. Cada personagem pertence a uma conta. Um `super_admin` vê e gerencia a biblioteca de todo mundo; os outros papéis só a própria. A senha fica com scrypt e a sessão é um cookie assinado (`ANIMIND_AUTH_SECRET`, mínimo 16 caracteres). Nada disso entra no git.
+
+O script de seed cria o piloto **Diogo** como `super_admin`. E-mail e senha vêm só do ambiente:
+
+```bash
+# .env.local (ignorado pelo git) — nunca grave a senha no repositório
+ANIMIND_DATA_DIR=.data
+ANIMIND_AUTH_SECRET=
+SEED_SUPERADMIN_EMAIL=
+SEED_SUPERADMIN_PASSWORD=
+npm run seed
+```
+
+A biblioteca guarda nome, referência da ficha, vistas (frente, 3/4, perfil), URL do `puppet.json`, URLs das camadas e o status (`draft`, `ready`, `archived`). Os PNG e o `puppet.json` vão para o armazenamento de objetos em `ANIMIND_DATA_DIR/objects` (padrão `./.data`, no `.gitignore`) e a ficha só guarda a URL `/api/library/assets/...`.
+
+Importar uma pasta já gerada (Einstein primeiro) para a conta do Diogo:
+
+```bash
+npm run import-character -- --dir /caminho/do/einstein --email "$SEED_SUPERADMIN_EMAIL"
+```
+
+A pasta precisa de `puppet.json`. Vistas por nome (`views/front.png`, `views/three-quarter.png` ou `3-4.png`, `views/profile.png`), `emotion-sheet.png` e `persona.txt` (uma linha com a referência da ficha) são opcionais. O mesmo envio existe em `POST /api/library/import` (multipart, campo `file` repetido com o caminho relativo) e na página **Meus personagens**. Dali, **Novo vídeo** e **Debate** abrem o estúdio com esse personagem.
+
+`npm test` cobre papéis, seed, importação e o fato de os bytes não irem parar no JSON. O E2E da biblioteca (`e2e/library.spec.ts`) só roda com `E2E_AUTH_SECRET`, `E2E_DATA_DIR`, `E2E_SUPERADMIN_EMAIL` e `E2E_SUPERADMIN_PASSWORD`.
+
 Com o núcleo, o player oferece dois downloads: a gravação do Canvas (WebM/MP4 do navegador) e o “MP4 do núcleo” (H.264 1280×720 renderizado pelo Rigly).
 
 ## Contrato v2 (formato do core)

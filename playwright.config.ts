@@ -10,6 +10,11 @@ import { defineConfig, devices } from "@playwright/test";
 const coreUrl = process.env.E2E_CORE_URL?.replace(/\/$/, "");
 const MOCK_PORT = Number(process.env.E2E_MOCK_PORT ?? 3311);
 const CORE_PORT = Number(process.env.E2E_APP_PORT ?? 3312);
+const mockEnv: Record<string, string> = { ANIMIND_CORE_MOCK: "1", ANIMIND_CORE_URL: "", CORE_URL: "" };
+if (process.env.E2E_AUTH_SECRET && process.env.E2E_DATA_DIR) {
+  mockEnv.ANIMIND_AUTH_SECRET = process.env.E2E_AUTH_SECRET;
+  mockEnv.ANIMIND_DATA_DIR = process.env.E2E_DATA_DIR;
+}
 
 const server = (port: number, env: Record<string, string>) => ({
   command: `npx next start -p ${port}`,
@@ -43,7 +48,7 @@ export default defineConfig({
       : []),
   ],
   webServer: [
-    server(MOCK_PORT, { ANIMIND_CORE_MOCK: "1", ANIMIND_CORE_URL: "", CORE_URL: "" }),
+    server(MOCK_PORT, mockEnv),
     ...(coreUrl
       ? [server(CORE_PORT, { ANIMIND_CORE_URL: coreUrl, ANIMIND_CORE_KEY: process.env.E2E_CORE_KEY ?? "", ANIMIND_CORE_MOCK: "" })]
       : []),

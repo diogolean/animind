@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
 import { Ellipsis, Loader2, Sparkles, X } from "lucide-react";
 import { toast } from "sonner";
@@ -24,6 +25,7 @@ import type {
   VoiceCatalog,
   VideoFormat,
 } from "@/lib/contract";
+import type { LibraryCharacter } from "@/lib/accounts/types";
 import { HEALTH_EVENT, createCharacter, createPreview, getTones, getVoices, planCreation, resolveScenario, startRender, waitJob } from "@/lib/api";
 import { previewFromCharacter, stickPreview } from "@/lib/character-preview";
 import { normalizeToneCatalog } from "@/lib/tones";
@@ -69,6 +71,12 @@ function Label({ children }: { children: React.ReactNode }) {
 }
 
 export function CreationStudio() {
+  const searchParams = useSearchParams();
+  const libraryId = searchParams.get("library");
+  const libraryIntent = searchParams.get("intent") === "debate" ? "debate" : libraryId ? "video" : null;
+  const libraryRigRef = useRef<Character | null>(null);
+  const hadLibrary = useRef(false);
+  const [libraryCharacter, setLibraryCharacter] = useState<LibraryCharacter | null>(null);
   const [prompt, setPrompt] = useState("");
   const [automatic, setAutomatic] = useState(true);
   const [plan, setPlan] = useState<CreationPlan | null>(null);
@@ -115,6 +123,53 @@ export function CreationStudio() {
       .then(setVoiceCatalog)
       .catch(() => setVoiceCatalog(fallbackVoiceCatalog(currentLanguage)));
   }, [currentLanguage]);
+
+  useEffect(() => {
+    if (!libraryId) {
+      if (hadLibrary.current) {
+        hadLibrary.current = false;
+        setLibraryCharacter(null);
+        libraryRigRef.current = null;
+        setPrompt("");
+        setAutomatic(true);
+        setDetailsOpen(false);
+        setPlan(null);
+      }
+      return;
+    }
+    hadLibrary.current = true;
+    let cancelled = false;
+    fetch(`/api/library/${encodeURIComponent(libraryId)}`, { cache: "no-store" })
+      .then(async (response) => {
+        const data = (await response.json().catch(() => ({}))) as { error?: string; character?: LibraryCharacter; rig?: Character | null };
+        if (!response.ok || !data.character) throw new Error(data.error ?? "Personagem indisponível");
+        return data;
+      })
+      .then((data) => {
+        if (cancelled || !data.character) return;
+        const name = data.character.name;
+        const persona = data.character.personaSheetRef || name;
+        setLibraryCharacter(data.character);
+        libraryRigRef.current = data.rig ?? null;
+        setAutomatic(false);
+        setDetailsOpen(true);
+        setManualMode(libraryIntent === "debate" ? "debate" : "monologue");
+        setManualObjective(libraryIntent === "debate" ? "debater" : "entreter");
+        setManualTopic(name);
+        setManualCharacters(
+          libraryIntent === "debate"
+            ? [{ name, prompt: persona }, { name: "Convidado", prompt: "um interlocutor" }]
+            : [{ name, prompt: persona }],
+        );
+        setPrompt(libraryIntent === "debate" ? `Um debate com ${name}` : `Um vídeo com ${name}`);
+      })
+      .catch((error) => {
+        if (!cancelled) toast.error((error as Error).message);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [libraryId, libraryIntent]);
 
   useEffect(() => {
     if (rendering && progressivePreviews.length === 1)
@@ -233,6 +288,13 @@ export function CreationStudio() {
       const cast: Character[] = [];
       for (let index = 0; index < drafts.length; index++) {
         setStatus(`Criando ${drafts[index].name} · ${index + 1}/${drafts.length}`);
+        if (index === 0 && libraryRigRef.current) {
+          const character = { ...libraryRigRef.current, name: drafts[index].name.trim() || libraryRigRef.current.name };
+          cast.push(character);
+          const cutout = previewFromCharacter(character, index);
+          if (cutout) setProgressivePreviews((current) => showPreview(current, cutout));
+          continue;
+        }
         const character = await createCharacter({
           name: drafts[index].name.trim(),
           source: { kind: "prompt", prompt: drafts[index].prompt.trim() },
@@ -300,6 +362,12 @@ export function CreationStudio() {
   return (
     <div className="mx-auto w-full max-w-5xl flex-1 px-5 pt-[12vh] pb-16 sm:px-8 sm:pt-[16vh]">
       <section className="mx-auto max-w-3xl">
+        {libraryCharacter ? (
+          <p data-testid="library-character" className="mb-4 text-sm text-muted-foreground">
+            Usando <span className="text-foreground">{libraryCharacter.name}</span> da sua biblioteca
+            {libraryIntent === "debate" ? " neste debate." : " neste vídeo."}
+          </p>
+        ) : null}
         <div className="rounded-[2rem] border border-white/10 bg-white/[0.025] p-3 shadow-2xl shadow-black/20 sm:p-4">
           <textarea
             autoFocus

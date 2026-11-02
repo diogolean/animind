@@ -28,5 +28,7 @@ npm run test:e2e:mock                   # fast, ~1 min
 E2E_CORE_URL=http://127.0.0.1:8787 E2E_CORE_KEY=$KEY npm run test:e2e
 ```
 
+`e2e/library.spec.ts` cobre login de super admin, a página Meus personagens e o uso de um personagem importado num debate. Fica skipped sem `E2E_AUTH_SECRET`, `E2E_DATA_DIR`, `E2E_SUPERADMIN_EMAIL` e `E2E_SUPERADMIN_PASSWORD` (o servidor mock só recebe o segredo e o diretório quando essas variáveis existem).
+
 Options: `E2E_MOCK_PORT`/`E2E_APP_PORT` (3311/3312) and `E2E_SHOTS_DIR` (copies named screenshots).
 Videos, traces and reports stay in `test-results/` and `playwright-report/` (gitignored).

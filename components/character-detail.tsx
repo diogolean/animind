@@ -1,0 +1,187 @@
+"use client";
+
+/* eslint-disable @next/next/no-img-element */
+import { useEffect, useState } from "react";
+import Link from "next/link";
+import { useParams, useRouter } from "next/navigation";
+import { Loader2 } from "lucide-react";
+import { STATUS_LABEL } from "@/lib/accounts/labels";
+import type { LibraryCharacter, LibraryStatus, LibraryViewName } from "@/lib/accounts/types";
+
+const VIEWS: { id: LibraryViewName; label: string; testId: string }[] = [
+  { id: "front", label: "Frente", testId: "view-front" },
+  { id: "three_quarter", label: "3/4", testId: "view-three-quarter" },
+  { id: "profile", label: "Perfil", testId: "view-profile" },
+];
+
+export function CharacterDetail() {
+  const router = useRouter();
+  const params = useParams<{ id: string }>();
+  const id = params.id;
+  const [character, setCharacter] = useState<LibraryCharacter | null>(null);
+  const [error, setError] = useState("");
+  const [pending, setPending] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch(`/api/library/${encodeURIComponent(id)}`, { cache: "no-store" })
+      .then(async (response) => {
+        if (response.status === 401) {
+          router.replace(`/login?next=/characters/${id}`);
+          return null;
+        }
+        const data = (await response.json().catch(() => ({}))) as { error?: string; character?: LibraryCharacter };
+        if (!response.ok) throw new Error(data.error ?? "Personagem não encontrado");
+        return data.character ?? null;
+      })
+      .then((next) => {
+        if (!cancelled && next) setCharacter(next);
+      })
+      .catch((cause) => {
+        if (!cancelled) setError((cause as Error).message);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [id, router]);
+
+  async function changeStatus(status: LibraryStatus) {
+    setPending(true);
+    try {
+      const response = await fetch(`/api/library/${encodeURIComponent(id)}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ status }),
+      });
+      const data = (await response.json().catch(() => ({}))) as { error?: string; character?: LibraryCharacter };
+      if (!response.ok) throw new Error(data.error ?? "Não foi possível atualizar");
+      if (data.character) setCharacter(data.character);
+    } catch (cause) {
+      setError((cause as Error).message);
+    } finally {
+      setPending(false);
+    }
+  }
+
+  async function remove() {
+    setPending(true);
+    try {
+      const response = await fetch(`/api/library/${encodeURIComponent(id)}`, { method: "DELETE" });
+      if (!response.ok) {
+        const data = (await response.json().catch(() => ({}))) as { error?: string };
+        throw new Error(data.error ?? "Não foi possível apagar");
+      }
+      router.push("/characters");
+    } catch (cause) {
+      setError((cause as Error).message);
+      setPending(false);
+    }
+  }
+
+  if (error && !character) {
+    return (
+      <div className="mx-auto w-full max-w-5xl px-5 py-16">
+        <p className="text-sm text-red-400">{error}</p>
+        <Link href="/characters" className="mt-4 inline-block text-sm underline">
+          Voltar
+        </Link>
+      </div>
+    );
+  }
+  if (!character) {
+    return (
+      <p className="mx-auto flex w-full max-w-5xl items-center gap-2 px-5 py-16 text-sm text-muted-foreground">
+        <Loader2 className="size-4 animate-spin" /> Carregando
+      </p>
+    );
+  }
+
+  const ready = character.status === "ready";
+  return (
+    <div data-testid="character-detail" className="mx-auto w-full max-w-5xl flex-1 px-5 py-10 sm:px-8">
+      <Link href="/characters" className="text-sm text-muted-foreground hover:text-foreground">
+        Meus personagens
+      </Link>
+      <div className="mt-4 flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-medium tracking-tight">{character.name}</h1>
+          <p className="mt-2 text-sm text-muted-foreground">
+            Ficha: {character.personaSheetRef ? <span data-testid="persona-ref">{character.personaSheetRef}</span> : "sem referência"}
+          </p>
+          {character.owner ? (
+            <p data-testid="character-owner" className="mt-1 text-sm text-muted-foreground">
+              Conta: {character.owner.name} · {character.owner.email}
+            </p>
+          ) : null}
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <label className="text-xs uppercase tracking-wide text-muted-foreground" htmlFor="character-status">
+            Status
+          </label>
+          <select
+            id="character-status"
+            data-testid="character-status"
+            value={character.status}
+            disabled={pending}
+            onChange={(event) => changeStatus(event.target.value as LibraryStatus)}
+            className="rounded-full border border-white/10 bg-black/30 px-3 py-2 text-sm"
+          >
+            {(Object.keys(STATUS_LABEL) as LibraryStatus[]).map((status) => (
+              <option key={status} value={status}>
+                {STATUS_LABEL[status]}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      <div className="mt-8 grid gap-4 sm:grid-cols-3">
+        {VIEWS.map((view) => {
+          const url = character.views[view.id];
+          return (
+            <figure key={view.id} data-testid={view.testId} className="overflow-hidden rounded-[1.5rem] border border-white/10 bg-black/30">
+              <div className="flex aspect-[4/5] items-center justify-center">
+                {url ? <img src={url} alt={view.label} className="size-full object-contain" /> : <span className="text-xs text-muted-foreground">Sem imagem</span>}
+              </div>
+              <figcaption className="px-4 py-3 text-sm">{view.label}</figcaption>
+            </figure>
+          );
+        })}
+      </div>
+
+      <section className="mt-8">
+        <h2 className="text-sm font-medium">Ficha de emoções</h2>
+        <div data-testid="emotion-sheet" className="mt-3 overflow-hidden rounded-[1.5rem] border border-white/10 bg-black/30">
+          {character.emotionSheetUrl ? (
+            <img src={character.emotionSheetUrl} alt="Ficha de emoções" className="max-h-[32rem] w-full object-contain" />
+          ) : (
+            <p className="px-4 py-10 text-sm text-muted-foreground">Esta pasta não trouxe uma ficha de emoções.</p>
+          )}
+        </div>
+      </section>
+
+      {character.layers.length ? (
+        <p className="mt-4 text-xs text-muted-foreground">{character.layers.length} camadas no armazenamento de objetos.</p>
+      ) : null}
+      {error ? <p className="mt-4 text-sm text-red-400">{error}</p> : null}
+
+      <div className="mt-8 flex flex-wrap gap-3">
+        {ready ? (
+          <>
+            <Link href={`/?library=${encodeURIComponent(character.id)}&intent=video`} data-testid="use-video" className="rounded-full bg-white px-5 py-2.5 text-sm font-medium text-black">
+              Novo vídeo
+            </Link>
+            <Link href={`/?library=${encodeURIComponent(character.id)}&intent=debate`} data-testid="use-debate" className="rounded-full border border-white/15 px-5 py-2.5 text-sm font-medium">
+              Debate
+            </Link>
+          </>
+        ) : (
+          <p className="text-sm text-muted-foreground">Marque o personagem como pronto para usá-lo num vídeo ou debate.</p>
+        )}
+        <button type="button" data-testid="delete-character" disabled={pending} onClick={remove} className="rounded-full px-4 py-2.5 text-sm text-red-400">
+          Apagar
+        </button>
+      </div>
+    </div>
+  );
+}
