@@ -5,16 +5,23 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Loader2 } from "lucide-react";
 
 function nextPath(value: string | null): string {
-  if (!value || !value.startsWith("/") || value.startsWith("//")) return "/characters";
+  if (!value || !value.startsWith("/") || value.startsWith("//") || value.includes("\\") || value.includes("://")) return "/characters";
   return value;
 }
+
+const GOOGLE_ERRORS: Record<string, string> = {
+  google_unconfigured: "O login com Google ainda não está configurado.",
+  google_denied: "O Google não autorizou a entrada.",
+  google_unverified: "O Google não confirmou esse e-mail.",
+  google_state: "A entrada com Google expirou. Tente de novo.",
+};
 
 export function LoginForm() {
   const router = useRouter();
   const params = useSearchParams();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [error, setError] = useState("");
+  const [error, setError] = useState(GOOGLE_ERRORS[params.get("error") ?? ""] ?? "");
   const [pending, setPending] = useState(false);
 
   async function submit(event: React.FormEvent) {
@@ -83,6 +90,18 @@ export function LoginForm() {
           {pending ? <Loader2 className="size-4 animate-spin" /> : null}
           Entrar
         </button>
+        <div className="mt-5 flex items-center gap-3 text-xs uppercase tracking-[0.12em] text-muted-foreground">
+          <span className="h-px flex-1 bg-white/10" />
+          ou
+          <span className="h-px flex-1 bg-white/10" />
+        </div>
+        <a
+          data-testid="login-google"
+          href={`/api/auth/google?next=${encodeURIComponent(nextPath(params.get("next")))}`}
+          className="mt-5 flex h-11 w-full items-center justify-center rounded-full border border-white/15 text-sm font-medium hover:bg-white/5"
+        >
+          Entrar com Google
+        </a>
       </form>
     </div>
   );

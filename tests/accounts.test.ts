@@ -9,7 +9,10 @@ import { canAssignRole, canSeeAll, canSeeCharacter } from "../lib/accounts/acces
 import { StoreConfigError, databaseUrl, usesBlob } from "../lib/accounts/config";
 import { importCharacterPackage } from "../lib/accounts/import-character";
 import { isSafeObjectKey, keyFromAssetUrl, readObject } from "../lib/accounts/object-store";
-import { PILOT_SUPERADMIN_NAME, assetsFor, charactersFor, createAccount, deleteCharacterFor, saveAsset, updateCharacterStatus, upsertPilotSuperAdmin, verifyLogin } from "../lib/accounts/store";
+import { GET as finishGoogle } from "../app/api/auth/google/callback/route";
+import { GET as startGoogle } from "../app/api/auth/google/route";
+import { authOrigin, googleAuthorizeUrl, readOAuthState, safeNext, signOAuthState } from "../lib/accounts/google";
+import { PILOT_SUPERADMIN_NAME, accountForVerifiedGoogle, assetsFor, charactersFor, createAccount, deleteCharacterFor, saveAsset, updateCharacterStatus, upsertPilotSuperAdmin, verifyLogin } from "../lib/accounts/store";
 import { captureGeneration } from "../lib/library-capture";
 import { puppetToRig } from "../lib/accounts/rig";
 import { authSecret, cookieSecure, readSession, signSession } from "../lib/accounts/session";
@@ -40,6 +43,9 @@ beforeEach(async () => {
   delete process.env.BLOB_READ_WRITE_TOKEN;
   delete process.env.BLOB_STORE_ID;
   delete process.env.VERCEL;
+  delete process.env.GOOGLE_CLIENT_ID;
+  delete process.env.GOOGLE_CLIENT_SECRET;
+  delete process.env.ANIMIND_AUTH_URL;
   secret();
 });
 
@@ -124,6 +130,9 @@ describe("accounts and character library", { concurrency: false }, () => {
       "POSTGRES_URL",
       "BLOB_READ_WRITE_TOKEN",
       "BLOB_STORE_ID",
+      "ANIMIND_AUTH_URL",
+      "GOOGLE_CLIENT_ID",
+      "GOOGLE_CLIENT_SECRET",
     ]) {
       assert.match(example, new RegExp(`^${name}=$`, "m"));
     }
@@ -409,6 +418,162 @@ describe("accounts and character library", { concurrency: false }, () => {
     assert.equal(user.role, "super_admin");
     const accounts = JSON.parse(await readFile(path.join(dir, "accounts.json"), "utf8")) as { users: { email: string }[] };
     assert.equal(accounts.users[0]?.email, email);
+  });
+
+  it("links a verified Google email to the seeded super admin and creates other people as user", async () => {
+    const clientSecret = `secret-${randomBytes(8).toString("hex")}`;
+    process.env.GOOGLE_CLIENT_ID = "test-client";
+    process.env.GOOGLE_CLIENT_SECRET = clientSecret;
+    process.env.ANIMIND_AUTH_URL = "https://preview.example.com/ignored-path";
+    const key = secret();
+    const email = `pilot-${randomBytes(4).toString("hex")}@example.com`;
+    const password = randomBytes(18).toString("base64url");
+    await upsertPilotSuperAdmin(email, password);
+    const before = JSON.parse(await readFile(path.join(dir, "accounts.json"), "utf8")) as {
+      users: { email: string; role: string; name: string; passwordHash: string }[];
+    };
+
+    const bounced = await startGoogle(new Request("http://127.0.0.1:3000/api/auth/google?next=/biblioteca"));
+    assert.equal(bounced.status, 307);
+    assert.equal(bounced.headers.get("location"), "https://preview.example.com/api/auth/google?next=%2Fbiblioteca");
+    assert.equal(bounced.headers.get("set-cookie"), null);
+
+    const started = await startGoogle(new Request("https://preview.example.com/api/auth/google?next=/biblioteca"));
+    const authorize = new URL(started.headers.get("location") ?? "");
+    assert.equal(`${authorize.origin}${authorize.pathname}`, "https://accounts.google.com/o/oauth2/v2/auth");
+    assert.equal(authorize.searchParams.get("client_id"), "test-client");
+    assert.equal(authorize.searchParams.get("redirect_uri"), "https://preview.example.com/api/auth/google/callback");
+    assert.equal(authorize.searchParams.get("response_type"), "code");
+    assert.equal(authorize.searchParams.get("scope"), "openid email profile");
+    assert.equal(authorize.searchParams.has("client_secret"), false);
+    const state = authorize.searchParams.get("state") ?? "";
+    assert.equal(state.includes(clientSecret), false);
+    assert.equal(started.headers.get("set-cookie")?.includes(clientSecret), false);
+    const stateCookie = started.cookies.get("animind_google_state")?.value;
+    assert.equal(stateCookie, state);
+
+    const original = globalThis.fetch;
+    const seen: string[] = [];
+    globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+      const target = String(input);
+      seen.push(target);
+      if (target === "https://oauth2.googleapis.com/token") {
+        const params = new URLSearchParams(String(init?.body));
+        assert.equal(params.get("client_secret"), clientSecret);
+        assert.equal(params.get("redirect_uri"), "https://preview.example.com/api/auth/google/callback");
+        assert.equal(params.get("grant_type"), "authorization_code");
+        return new Response(JSON.stringify({ access_token: "access-token" }), { status: 200 });
+      }
+      if (target === "https://openidconnect.googleapis.com/v1/userinfo") {
+        assert.equal((init?.headers as { authorization?: string }).authorization, "Bearer access-token");
+        return new Response(JSON.stringify({ email: email.toUpperCase(), email_verified: true, name: "Not Diogo" }), { status: 200 });
+      }
+      throw new Error(`unexpected ${target}`);
+    }) as typeof fetch;
+    try {
+      const done = await finishGoogle(
+        new Request(`https://preview.example.com/api/auth/google/callback?code=abc&state=${encodeURIComponent(state)}`, {
+          headers: { cookie: `animind_google_state=${state}` },
+        }),
+      );
+      assert.equal(done.status, 307);
+      assert.equal(done.headers.get("location"), "https://preview.example.com/biblioteca");
+      const session = done.cookies.get("animind_session")?.value ?? "";
+      assert.equal(readSession(session, key)?.sub.length ? true : false, true);
+      const linked = await verifyLogin(email, password);
+      assert.equal(linked?.role, "super_admin");
+      assert.equal(linked?.name, "Diogo");
+      assert.equal(readSession(session, key)?.sub, linked?.id);
+      const after = JSON.parse(await readFile(path.join(dir, "accounts.json"), "utf8")) as typeof before;
+      assert.equal(after.users.length, 1);
+      assert.equal(after.users[0]?.passwordHash, before.users[0]?.passwordHash);
+      assert.equal(after.users[0]?.role, "super_admin");
+
+      const freshEmail = `new-${randomBytes(4).toString("hex")}@example.com`;
+      globalThis.fetch = (async (input: string | URL | Request) => {
+        const target = String(input);
+        if (target === "https://oauth2.googleapis.com/token") return new Response(JSON.stringify({ access_token: "access-token" }), { status: 200 });
+        if (target === "https://openidconnect.googleapis.com/v1/userinfo") {
+          return new Response(JSON.stringify({ email: freshEmail, email_verified: true, name: "  Ada Lovelace  " }), { status: 200 });
+        }
+        throw new Error(`unexpected ${target}`);
+      }) as typeof fetch;
+      const created = await finishGoogle(
+        new Request(`https://preview.example.com/api/auth/google/callback?code=def&state=${encodeURIComponent(state)}`, {
+          headers: { cookie: `animind_google_state=${state}` },
+        }),
+      );
+      assert.equal(created.headers.get("location"), "https://preview.example.com/biblioteca");
+      const newbie = JSON.parse(await readFile(path.join(dir, "accounts.json"), "utf8")) as typeof before;
+      const row = newbie.users.find((user) => user.email === freshEmail);
+      assert.equal(row?.role, "user");
+      assert.equal(row?.name, "Ada Lovelace");
+      assert.equal(await verifyLogin(freshEmail, password), null);
+      assert.equal(await verifyLogin(freshEmail, "not-a-real-password"), null);
+    } finally {
+      globalThis.fetch = original;
+    }
+    assert.deepEqual(seen, ["https://oauth2.googleapis.com/token", "https://openidconnect.googleapis.com/v1/userinfo"]);
+  });
+
+  it("refuses unverified Google emails, a mismatched state, and a missing client", async () => {
+    process.env.GOOGLE_CLIENT_ID = "test-client";
+    process.env.GOOGLE_CLIENT_SECRET = "test-secret";
+    process.env.ANIMIND_AUTH_URL = "https://preview.example.com";
+    const email = `pilot-${randomBytes(4).toString("hex")}@example.com`;
+    await upsertPilotSuperAdmin(email, randomBytes(18).toString("base64url"));
+    const started = await startGoogle(new Request("https://preview.example.com/api/auth/google"));
+    const state = new URL(started.headers.get("location") ?? "").searchParams.get("state") ?? "";
+
+    const original = globalThis.fetch;
+    let calls = 0;
+    globalThis.fetch = (async (input: string | URL | Request) => {
+      calls += 1;
+      const target = String(input);
+      if (target === "https://oauth2.googleapis.com/token") return new Response(JSON.stringify({ access_token: "access-token" }), { status: 200 });
+      return new Response(JSON.stringify({ email: `other-${randomBytes(3).toString("hex")}@example.com`, email_verified: false, name: "Nope" }), { status: 200 });
+    }) as typeof fetch;
+    try {
+      const unverified = await finishGoogle(
+        new Request(`https://preview.example.com/api/auth/google/callback?code=abc&state=${encodeURIComponent(state)}`, {
+          headers: { cookie: `animind_google_state=${state}` },
+        }),
+      );
+      assert.equal(new URL(unverified.headers.get("location") ?? "").searchParams.get("error"), "google_unverified");
+      const mismatch = await finishGoogle(
+        new Request(`https://preview.example.com/api/auth/google/callback?code=abc&state=${encodeURIComponent(state)}`, {
+          headers: { cookie: "animind_google_state=not-the-state" },
+        }),
+      );
+      assert.equal(new URL(mismatch.headers.get("location") ?? "").searchParams.get("error"), "google_state");
+      assert.equal(calls, 2);
+    } finally {
+      globalThis.fetch = original;
+    }
+    const accounts = JSON.parse(await readFile(path.join(dir, "accounts.json"), "utf8")) as { users: { email: string }[] };
+    assert.equal(accounts.users.length, 1);
+
+    delete process.env.GOOGLE_CLIENT_ID;
+    const missing = await startGoogle(new Request("https://preview.example.com/api/auth/google?next=https://evil.example"));
+    const missingUrl = new URL(missing.headers.get("location") ?? "");
+    assert.equal(missingUrl.origin, "https://preview.example.com");
+    assert.equal(missingUrl.pathname, "/login");
+    assert.equal(missingUrl.searchParams.get("error"), "google_unconfigured");
+    assert.equal(missingUrl.searchParams.get("next"), "/characters");
+    assert.equal(missing.headers.get("location")?.includes("accounts.google.com"), false);
+
+    const key = secret();
+    assert.equal(readOAuthState(signSession("usr_123", key), key), null);
+    assert.equal(readOAuthState(signOAuthState({ state: "nonce", next: "/biblioteca" }, key, 1_000), key, 1_000 + 11 * 60 * 1000), null);
+    assert.equal(safeNext("//evil.example"), "/characters");
+    assert.equal(authOrigin(new Request("http://127.0.0.1:3000/api/auth/google")), "https://preview.example.com");
+    delete process.env.ANIMIND_AUTH_URL;
+    assert.equal(authOrigin(new Request("http://127.0.0.1:3000/api/auth/google")), "http://127.0.0.1:3000");
+    const direct = await accountForVerifiedGoogle(`blank-${randomBytes(3).toString("hex")}@example.com`, "   ");
+    assert.equal(direct?.role, "user");
+    assert.equal(direct?.name, direct?.email.split("@")[0]);
+    const built = googleAuthorizeUrl({ clientId: "test-client", redirectUri: "https://preview.example.com/api/auth/google/callback", state: "state" });
+    assert.equal(built.includes("test-secret"), false);
   });
 
   it("signs a session and refuses a missing auth secret", () => {

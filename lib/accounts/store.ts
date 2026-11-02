@@ -120,6 +120,35 @@ export async function upsertPilotSuperAdmin(email: string, password: string): Pr
   return toPublicUser(user);
 }
 
+/**
+ * Links a verified Google email to the account that already uses it.
+ * Role, name and password stay as they are, so the seeded super admin remains Diogo.
+ * An address that is not in the library yet becomes a `user` who cannot sign in with a password.
+ */
+export async function accountForVerifiedGoogle(email: string, name: string): Promise<PublicUser | null> {
+  const normalized = normalizeEmail(email);
+  if (!normalized) return null;
+  const store = records();
+  const existing = await store.userByEmail(normalized);
+  if (existing) return toPublicUser(existing);
+  const local = normalized.split("@")[0] ?? "";
+  const display = name.trim().slice(0, 80) || local.slice(0, 80) || "Google";
+  const user: UserRecord = {
+    id: newId("usr"),
+    email: normalized,
+    name: display,
+    role: "user",
+    passwordHash: await hashPassword(randomBytes(32).toString("base64url")),
+    createdAt: new Date().toISOString(),
+  };
+  const inserted = await store.insertUser(user);
+  if (!inserted) {
+    const raced = await store.userByEmail(normalized);
+    return raced ? toPublicUser(raced) : null;
+  }
+  return toPublicUser(user);
+}
+
 function withOwner(character: LibraryCharacter, users: UserRecord[], includeOwner: boolean): LibraryCharacter {
   const base = withoutOwner(character);
   if (!includeOwner) return base;

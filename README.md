@@ -133,6 +133,39 @@ npm run import-character -- --dir /caminho/do/personagem --email "$SEED_SUPERADM
 
 Os dois scripts carregam `.env.local` sem substituir variáveis que já estão no ambiente. A saída diz `store=file` ou `store=postgres`, e `assets=file` ou `assets=blob`.
 
+### Entrar com Google
+
+O botão **Entrar com Google** fica ao lado do e-mail e da senha. O fluxo é o authorization code no servidor. O e-mail só entra se o Google marcar `email_verified`. Se esse e-mail já tem conta, a sessão usa essa conta sem mudar papel, nome nem senha: o Google do Diogo cai no `super_admin` quando `SEED_SUPERADMIN_EMAIL` é o mesmo endereço. Um e-mail novo vira `user` e não entra com senha. Rode o seed antes do primeiro login com Google para a conta já nascer `super_admin`.
+
+Variáveis (só o nome no git):
+
+- `GOOGLE_CLIENT_ID`
+- `GOOGLE_CLIENT_SECRET`
+- `ANIMIND_AUTH_URL` — origem pública, sem caminho (`https://host`). O redirect URI é sempre `{ANIMIND_AUTH_URL}/api/auth/google/callback`.
+- `ANIMIND_AUTH_SECRET` — assina a sessão e o cookie de estado (`animind_google_state`, 10 minutos).
+
+O Google não aceita curingas. Cadastre estes redirect URIs no cliente OAuth (tipo Web), um por host que for usar:
+
+```text
+http://localhost:3000/api/auth/google/callback
+http://127.0.0.1:3000/api/auth/google/callback
+https://<project>-git-feat-mvp-ui-<team>.vercel.app/api/auth/google/callback
+https://<domínio-de-produção>/api/auth/google/callback
+```
+
+O alias estável do preview é o domínio `…-git-feat-mvp-ui-…vercel.app` na Vercel (Deployments → a branch `feat/mvp-ui` → Domains). O hostname com hash muda a cada deploy; não use esse como `ANIMIND_AUTH_URL`. Quem abre um deploy com hash é enviado ao alias estável antes de ir ao Google, e a sessão fica nesse host.
+
+Passos no Google Cloud e na Vercel:
+
+1. [Google Cloud Console](https://console.cloud.google.com/apis/credentials) → tela de consentimento OAuth → **External**. Escopos: `openid`, `email`, `profile`. Enquanto o app estiver em **Testing**, adicione o e-mail Google do Diogo em Test users.
+2. Credenciais → **Create OAuth client ID** → **Web application**. Cole os redirect URIs acima. Não precisa de origem JavaScript: o código troca o `code` no servidor.
+3. Copie o Client ID e o Client secret para a Vercel (Preview e Production) e para o `.env.local`. Nomes: `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`. O secret não entra no git.
+4. Defina `ANIMIND_AUTH_URL` com a origem exata do URI cadastrado (preview: `https://<project>-git-feat-mvp-ui-<team>.vercel.app`; local: `http://localhost:3000` ou `http://127.0.0.1:3000`, o host que o navegador abre). `localhost` e `127.0.0.1` são URIs diferentes.
+5. `SEED_SUPERADMIN_EMAIL` tem de ser esse mesmo e-mail do Google. `npm run seed` antes de entrar com Google. Um login anterior cria `user`; o seed seguinte promove esse e-mail a `super_admin`.
+6. Redeploy do preview de `feat/mvp-ui` (nunca `main`) e entre por **Entrar com Google** no alias estável.
+
+Sem as duas variáveis do Google, o botão volta para `/login?error=google_unconfigured` e não chama o Google.
+
 A página **Biblioteca** lista tudo o que a conta gerou: personagem, vista, ficha de emoções, imagem, roteiro, áudio, vídeo e debate. Cada item aponta para o personagem ou o job de origem. Um `super_admin` vê os de todo mundo. Importar um personagem grava essas linhas na hora; terminar uma criação grava roteiro, debate, imagem, áudio e vídeo sozinho. O texto vai para o mesmo armazenamento dos PNG (disco local ou Vercel Blob) e a ficha fica na mesma tabela de contas (`animind_assets` no Neon).
 
 ### Preview na Vercel (`feat/mvp-ui`, nunca `main`)
@@ -151,7 +184,10 @@ Ao conectar o Neon, deixe desligada a opção de criar um branch de banco por pr
 Variáveis que você cria à mão, nos mesmos ambientes, só com o nome (o valor não entra no git):
 
 - `ANIMIND_AUTH_SECRET`
-- `SEED_SUPERADMIN_EMAIL`
+- `ANIMIND_AUTH_URL` (origem do preview, sem caminho; ver Entrar com Google)
+- `GOOGLE_CLIENT_ID`
+- `GOOGLE_CLIENT_SECRET`
+- `SEED_SUPERADMIN_EMAIL` (o mesmo e-mail da conta Google do Diogo)
 - `SEED_SUPERADMIN_PASSWORD`
 
 `VERCEL_OIDC_TOKEN` a Vercel injeta sozinha; não cole um valor. `ANIMIND_BLOB_ACCESS` só entra se a loja Blob for privada (`private`). `ANIMIND_DATA_DIR` não é usado quando `DATABASE_URL` existe.
@@ -169,7 +205,7 @@ O seed e o import precisam imprimir `store=postgres assets=blob`. Aí o login no
 
 A pasta precisa de `puppet.json`. As fotos de galeria saem de `views/front.png`, `views/three-quarter.png` (ou `3-4.png`) e, se existir, `views/profile.png`, ou do campo `rest` de cada vista no puppet. As camadas podem ficar em `layers/<vista>/` (`layers/front/torso.png`, `layers/three-quarter/mouths/X.png`): o import resolve cada `url` relativo ao `base` da vista. `emotion-sheet.png` e `persona.txt` (uma linha com a referência da ficha) são opcionais. O mesmo envio existe em `POST /api/library/import` (multipart, campo `file` repetido com o caminho relativo) e na página **Meus personagens**. Dali, **Novo vídeo** e **Debate** abrem o estúdio com esse personagem. A ficha do personagem mostra só as vistas presentes e a ficha de emoções em tamanho grande; um clique abre a imagem inteira.
 
-`npm test` cobre papéis, seed, importação e o fato de os bytes não irem parar no JSON. O E2E da biblioteca (`e2e/library.spec.ts`) só roda com `E2E_AUTH_SECRET`, `E2E_DATA_DIR`, `E2E_SUPERADMIN_EMAIL` e `E2E_SUPERADMIN_PASSWORD`.
+`npm test` cobre papéis, seed, importação, o login com Google (OAuth mockado, sem chamar o Google) e o fato de os bytes não irem parar no JSON. O E2E da biblioteca (`e2e/library.spec.ts`) só roda com `E2E_AUTH_SECRET`, `E2E_DATA_DIR`, `E2E_SUPERADMIN_EMAIL` e `E2E_SUPERADMIN_PASSWORD`.
 
 Com o núcleo, o player oferece dois downloads: a gravação do Canvas (WebM/MP4 do navegador) e o “MP4 do núcleo” (H.264 1280×720 renderizado pelo Rigly).
 
