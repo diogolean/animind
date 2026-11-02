@@ -65,11 +65,10 @@ de prévia. `GET /api/voices?lang=` normaliza `GET /v1/voices` (`voiceId`, gêne
 não responder, o app marca e usa o catálogo edge-tts embutido; a prévia usa a URL do catálogo
 quando houver e Web Speech como fallback.
 
-Os tons de produto são Humor, Terror, Educacional, Sábio e Sério. `GET /api/tones` normaliza o catálogo
-do núcleo: Humor → `comedia`, Terror → `horror` e Sério → `serio`; Educacional e Sábio aparecem com
-um selo de fallback e usam `serio` enquanto o núcleo não os oferecer. O objetivo (`ensinar`, `debater`,
-`entreter` ou `convencer`), `configurationSource`, direção e duração são enviados no `RenderRequest`,
-mas a PR #93 do núcleo ainda ignora esses campos.
+Os tons de produto são Humor, Terror, Educacional, Sábio e Sério. `GET /api/tones` mantém o id
+quando o núcleo já o anuncia. Só um catálogo antigo, sem esse id, cai no alias: Humor → `comedia`,
+Terror → `horror`, Educacional e Sábio → `serio`. O render envia `tone`, `objective` e `duration`
+(a partir de `targetDurationSec`) para o núcleo.
 
 ## Modos de persona: Rápido x Profundo
 
