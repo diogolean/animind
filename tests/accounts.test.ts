@@ -404,6 +404,12 @@ describe("accounts and character library", { concurrency: false }, () => {
   it("keeps the file store unless a hosted database URL is set, and refuses disk on Vercel", async () => {
     assert.equal(databaseUrl(), null);
     assert.equal(usesBlob(), false);
+    process.env.DATABASE_URL = "";
+    process.env.POSTGRES_URL = "";
+    process.env.BLOB_STORE_ID = "";
+    process.env.BLOB_READ_WRITE_TOKEN = "   ";
+    assert.equal(databaseUrl(), null);
+    assert.equal(usesBlob(), false);
     process.env.DATABASE_URL = "  ";
     process.env.POSTGRES_URL = "";
     assert.equal(databaseUrl(), null);
@@ -433,10 +439,18 @@ describe("accounts and character library", { concurrency: false }, () => {
       users: { email: string; role: string; name: string; passwordHash: string }[];
     };
 
-    const bounced = await startGoogle(new Request("http://127.0.0.1:3000/api/auth/google?next=/biblioteca"));
-    assert.equal(bounced.status, 307);
-    assert.equal(bounced.headers.get("location"), "https://preview.example.com/api/auth/google?next=%2Fbiblioteca");
-    assert.equal(bounced.headers.get("set-cookie"), null);
+    const local = await startGoogle(new Request("http://localhost:3000/api/auth/google?next=/biblioteca"));
+    const localUrl = new URL(local.headers.get("location") ?? "");
+    assert.equal(`${localUrl.origin}${localUrl.pathname}`, "https://accounts.google.com/o/oauth2/v2/auth");
+    assert.equal(localUrl.searchParams.get("redirect_uri"), "http://localhost:3000/api/auth/google/callback");
+    assert.equal(localUrl.searchParams.get("redirect_uri")?.includes("preview.example.com"), false);
+    const localState = local.cookies.get("animind_google_state")?.value ?? "";
+    assert.equal(localUrl.searchParams.get("state"), localState);
+
+    const hashed = await startGoogle(new Request("https://animind-abc123.vercel.app/api/auth/google?next=/biblioteca"));
+    assert.equal(hashed.status, 307);
+    assert.equal(hashed.headers.get("location"), "https://preview.example.com/api/auth/google?next=%2Fbiblioteca");
+    assert.equal(hashed.headers.get("set-cookie"), null);
 
     const started = await startGoogle(new Request("https://preview.example.com/api/auth/google?next=/biblioteca"));
     const authorize = new URL(started.headers.get("location") ?? "");
@@ -454,23 +468,40 @@ describe("accounts and character library", { concurrency: false }, () => {
 
     const original = globalThis.fetch;
     const seen: string[] = [];
+    let expectLocal = true;
     globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
       const target = String(input);
-      seen.push(target);
       if (target === "https://oauth2.googleapis.com/token") {
         const params = new URLSearchParams(String(init?.body));
         assert.equal(params.get("client_secret"), clientSecret);
-        assert.equal(params.get("redirect_uri"), "https://preview.example.com/api/auth/google/callback");
         assert.equal(params.get("grant_type"), "authorization_code");
+        if (expectLocal) {
+          assert.equal(params.get("code"), "local");
+          assert.equal(params.get("redirect_uri"), "http://localhost:3000/api/auth/google/callback");
+        } else {
+          seen.push(target);
+          assert.equal(params.get("redirect_uri"), "https://preview.example.com/api/auth/google/callback");
+        }
         return new Response(JSON.stringify({ access_token: "access-token" }), { status: 200 });
       }
       if (target === "https://openidconnect.googleapis.com/v1/userinfo") {
         assert.equal((init?.headers as { authorization?: string }).authorization, "Bearer access-token");
+        if (expectLocal) {
+          expectLocal = false;
+          return new Response(JSON.stringify({ email, email_verified: true, name: "Not Diogo" }), { status: 200 });
+        }
+        seen.push(target);
         return new Response(JSON.stringify({ email: email.toUpperCase(), email_verified: true, name: "Not Diogo" }), { status: 200 });
       }
       throw new Error(`unexpected ${target}`);
     }) as typeof fetch;
     try {
+      const localDone = await finishGoogle(
+        new Request(`http://localhost:3000/api/auth/google/callback?code=local&state=${encodeURIComponent(localState)}`, {
+          headers: { cookie: `animind_google_state=${localState}` },
+        }),
+      );
+      assert.equal(localDone.headers.get("location"), "http://localhost:3000/biblioteca");
       const done = await finishGoogle(
         new Request(`https://preview.example.com/api/auth/google/callback?code=abc&state=${encodeURIComponent(state)}`, {
           headers: { cookie: `animind_google_state=${state}` },
@@ -566,7 +597,13 @@ describe("accounts and character library", { concurrency: false }, () => {
     assert.equal(readOAuthState(signSession("usr_123", key), key), null);
     assert.equal(readOAuthState(signOAuthState({ state: "nonce", next: "/biblioteca" }, key, 1_000), key, 1_000 + 11 * 60 * 1000), null);
     assert.equal(safeNext("//evil.example"), "/characters");
-    assert.equal(authOrigin(new Request("http://127.0.0.1:3000/api/auth/google")), "https://preview.example.com");
+    assert.equal(authOrigin(new Request("http://localhost:3000/api/auth/google")), "http://localhost:3000");
+    assert.equal(
+      authOrigin(new Request("http://0.0.0.0:3000/api/auth/google", { headers: { "x-forwarded-host": "localhost:3000", "x-forwarded-proto": "http" } })),
+      "http://localhost:3000",
+    );
+    assert.equal(authOrigin(new Request("http://localhost:3000/api/auth/google", { headers: { "x-forwarded-host": "localhost:3000" } })), "http://localhost:3000");
+    assert.equal(authOrigin(new Request("https://animind-abc123.vercel.app/api/auth/google")), "https://preview.example.com");
     delete process.env.ANIMIND_AUTH_URL;
     assert.equal(authOrigin(new Request("http://127.0.0.1:3000/api/auth/google")), "http://127.0.0.1:3000");
     const direct = await accountForVerifiedGoogle(`blank-${randomBytes(3).toString("hex")}@example.com`, "   ");
@@ -585,6 +622,7 @@ describe("accounts and character library", { concurrency: false }, () => {
     assert.equal(readSession(token, key, 1_000 + 15 * 24 * 60 * 60 * 1000), null);
     assert.equal(readSession(`${token}x`, key, 1_000), null);
     assert.equal(cookieSecure(new Request("http://127.0.0.1/api/auth/login")), false);
+    assert.equal(cookieSecure(new Request("http://localhost:3000/api/auth/login", { headers: { "x-forwarded-proto": "https" } })), false);
     assert.equal(cookieSecure(new Request("https://animind.example/api/auth/login")), true);
   });
 });

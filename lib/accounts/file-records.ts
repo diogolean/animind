@@ -1,4 +1,4 @@
-import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { dataDir } from "./paths";
 import type { AccountRecords } from "./records";
@@ -45,7 +45,18 @@ async function writeDb(db: Db): Promise<void> {
   await mkdir(path.dirname(dest), { recursive: true });
   const tmp = `${dest}.${process.pid}.tmp`;
   await writeFile(tmp, JSON.stringify(db, null, 2));
-  await rename(tmp, dest);
+  try {
+    await rename(tmp, dest);
+  } catch (error) {
+    // Windows refuses to rename onto a file that already exists (EPERM / EEXIST).
+    const code = (error as NodeJS.ErrnoException).code;
+    if (code !== "EPERM" && code !== "EEXIST" && code !== "EBUSY") {
+      await rm(tmp, { force: true });
+      throw error;
+    }
+    await rm(dest, { force: true });
+    await rename(tmp, dest);
+  }
 }
 
 function withoutOwner(character: LibraryCharacter): LibraryCharacter {

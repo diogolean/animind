@@ -35,11 +35,23 @@ export function readSession(token: string, secret: string, now = Date.now()): { 
   }
 }
 
-/** Secure only on HTTPS, so `next start` on http://127.0.0.1 still keeps the cookie. */
+/** localhost, 127.0.0.1 and ::1. Google treats each of these as its own redirect URI. */
+export function isLoopbackHost(hostname: string): boolean {
+  const host = hostname.replace(/^\[|\]$/g, "").toLowerCase();
+  return host === "localhost" || host === "127.0.0.1" || host === "::1";
+}
+
+/** Secure only on HTTPS. `npm run dev` on http://localhost keeps the cookie. */
 export function cookieSecure(req: Request): boolean {
   const forced = process.env.ANIMIND_COOKIE_SECURE;
   if (forced === "1") return true;
   if (forced === "0") return false;
+  try {
+    const url = new URL(req.url);
+    if (url.protocol === "http:" && isLoopbackHost(url.hostname)) return false;
+  } catch {
+    // Fall through to the proxy header.
+  }
   const forwarded = req.headers.get("x-forwarded-proto")?.split(",")[0]?.trim();
   if (forwarded) return forwarded === "https";
   try {

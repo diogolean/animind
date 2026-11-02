@@ -1,4 +1,5 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
+import { isLoopbackHost } from "./session";
 
 export const GOOGLE_STATE_COOKIE = "animind_google_state";
 const STATE_TTL_MS = 10 * 60 * 1000;
@@ -34,24 +35,37 @@ function originFrom(proto: string, host: string): string | null {
 /** Host the browser actually called, ignoring ANIMIND_AUTH_URL. */
 export function requestOrigin(req: Request): string {
   const forwardedHost = req.headers.get("x-forwarded-host")?.split(",")[0]?.trim() ?? "";
-  const forwardedProto = req.headers.get("x-forwarded-proto")?.split(",")[0]?.trim() || "https";
-  if (forwardedHost) {
+  const forwardedProto = req.headers.get("x-forwarded-proto")?.split(",")[0]?.trim() ?? "";
+  if (forwardedHost && (forwardedProto === "http" || forwardedProto === "https")) {
     const origin = originFrom(forwardedProto, forwardedHost);
     if (origin) return origin;
   }
   try {
     return new URL(req.url).origin;
   } catch {
-    return "http://127.0.0.1:3000";
+    return "http://localhost:3000";
+  }
+}
+
+function isLoopbackOrigin(origin: string): boolean {
+  try {
+    const url = new URL(origin);
+    return (url.protocol === "http:" || url.protocol === "https:") && isLoopbackHost(url.hostname);
+  } catch {
+    return false;
   }
 }
 
 /**
  * Public origin for the redirect URI and the session cookie.
- * ANIMIND_AUTH_URL wins so a changing preview hostname still matches Google Cloud.
+ * http://localhost:3000 (and the other loopback hosts) always win, so `npm run dev`
+ * matches the redirect URI registered for that exact origin.
+ * Anywhere else, ANIMIND_AUTH_URL wins so a changing preview hostname still matches Google Cloud.
  * A path on that variable is dropped; only the origin is used.
  */
 export function authOrigin(req: Request): string {
+  const here = requestOrigin(req);
+  if (isLoopbackOrigin(here)) return here;
   const configured = process.env.ANIMIND_AUTH_URL?.trim();
   if (configured) {
     try {
@@ -61,7 +75,7 @@ export function authOrigin(req: Request): string {
       // Fall through to the request host.
     }
   }
-  return requestOrigin(req);
+  return here;
 }
 
 export function googleRedirectUri(origin: string): string {
