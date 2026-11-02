@@ -1,4 +1,5 @@
 import { json } from "@/lib/core";
+import { StoreConfigError } from "@/lib/accounts/config";
 import { isUser, requireUser } from "@/lib/accounts/http";
 import { contentTypeFor, isSafeObjectKey, readObject } from "@/lib/accounts/object-store";
 import { characterFor } from "@/lib/accounts/store";
@@ -15,7 +16,13 @@ export async function GET(_req: Request, { params }: { params: Promise<{ key: st
   if (!isSafeObjectKey(key)) return json({ error: "Arquivo não encontrado" }, 404);
   const character = await characterFor(actor, parts[1] ?? "");
   if (!character) return json({ error: "Arquivo não encontrado" }, 404);
-  const bytes = await readObject(key);
+  let bytes: Buffer | null;
+  try {
+    bytes = await readObject(key);
+  } catch (error) {
+    if (error instanceof StoreConfigError) return json({ error: error.message }, error.status);
+    throw error;
+  }
   if (!bytes) return json({ error: "Arquivo não encontrado" }, 404);
   return new Response(new Uint8Array(bytes), {
     headers: {

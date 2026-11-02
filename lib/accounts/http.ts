@@ -1,6 +1,7 @@
 import "server-only";
 import { cookies } from "next/headers";
 import { json } from "@/lib/core";
+import { StoreConfigError } from "./config";
 import { authSecret, readSession, SESSION_COOKIE } from "./session";
 import { getUser } from "./store";
 import type { PublicUser } from "./types";
@@ -17,9 +18,14 @@ export async function currentUser(): Promise<PublicUser | null> {
 
 export async function requireUser(): Promise<PublicUser | Response> {
   if (!authSecret()) return json({ error: "Defina ANIMIND_AUTH_SECRET (mínimo de 16 caracteres)" }, 503);
-  const user = await currentUser();
-  if (!user) return json({ error: "Entre para continuar" }, 401);
-  return user;
+  try {
+    const user = await currentUser();
+    if (!user) return json({ error: "Entre para continuar" }, 401);
+    return user;
+  } catch (error) {
+    if (error instanceof StoreConfigError) return json({ error: error.message }, error.status);
+    throw error;
+  }
 }
 
 export function isUser(value: PublicUser | Response): value is PublicUser {

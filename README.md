@@ -123,13 +123,47 @@ SEED_SUPERADMIN_PASSWORD=
 npm run seed
 ```
 
-A biblioteca guarda nome, referência da ficha, as vistas que a pasta trouxer (frente, 3/4 e perfil; o perfil é opcional), URL do `puppet.json`, URLs das camadas e o status (`draft`, `ready`, `archived`). Os PNG e o `puppet.json` vão para o armazenamento de objetos em `ANIMIND_DATA_DIR/objects` (padrão `./.data`, no `.gitignore`) e a ficha só guarda a URL `/api/library/assets/...`.
+A biblioteca guarda nome, referência da ficha, as vistas que a pasta trouxer (frente, 3/4 e perfil; o perfil é opcional), URL do `puppet.json`, URLs das camadas e o status (`draft`, `ready`, `archived`). Sem `DATABASE_URL`, os PNG e o `puppet.json` vão para `ANIMIND_DATA_DIR/objects` (padrão `./.data`, no `.gitignore`). A ficha só guarda a URL `/api/library/assets/...`, que a aplicação lê do disco ou do Blob.
 
 Importar uma pasta já gerada para a conta do Diogo:
 
 ```bash
 npm run import-character -- --dir /caminho/do/personagem --email "$SEED_SUPERADMIN_EMAIL"
 ```
+
+Os dois scripts carregam `.env.local` sem substituir variáveis que já estão no ambiente. A saída diz `store=file` ou `store=postgres`, e `assets=file` ou `assets=blob`.
+
+### Preview na Vercel (`feat/mvp-ui`, nunca `main`)
+
+O disco da função some a cada invocação, então o preview não usa `./.data`. Contas ficam no Neon. PNGs e `puppet.json` ficam no Vercel Blob e continuam sendo servidos por `/api/library/assets/...`.
+
+Integrações no projeto Vercel, ambientes **Preview** e **Development** (Production só se for publicar de propósito):
+
+| Integração | Variáveis que ela cria |
+| --- | --- |
+| Neon (Marketplace / Storage) | `DATABASE_URL` (o app também aceita `POSTGRES_URL`, o nome antigo do Vercel Postgres) |
+| Vercel Blob, loja **pública** | `BLOB_STORE_ID` na função; `BLOB_READ_WRITE_TOKEN` para os scripts fora da Vercel |
+
+Ao conectar o Neon, deixe desligada a opção de criar um branch de banco por preview. Com ela ligada, o preview lê um banco vazio e o seed feito no branch principal não aparece.
+
+Variáveis que você cria à mão, nos mesmos ambientes, só com o nome (o valor não entra no git):
+
+- `ANIMIND_AUTH_SECRET`
+- `SEED_SUPERADMIN_EMAIL`
+- `SEED_SUPERADMIN_PASSWORD`
+
+`VERCEL_OIDC_TOKEN` a Vercel injeta sozinha; não cole um valor. `ANIMIND_BLOB_ACCESS` só entra se a loja Blob for privada (`private`). `ANIMIND_DATA_DIR` não é usado quando `DATABASE_URL` existe.
+
+Depois do push de `feat/mvp-ui` e de um redeploy do preview:
+
+```bash
+vercel link
+vercel env pull .env.local --environment=development
+npm run seed
+npm run import-character -- --dir /caminho/do/personagem --email "$SEED_SUPERADMIN_EMAIL"
+```
+
+O seed e o import precisam imprimir `store=postgres assets=blob`. Aí o login no URL de preview dessa branch abre a biblioteca do Diogo. A pasta inteira do Einstein passa pelo script: o envio pelo navegador pode estourar o limite de corpo da função.
 
 A pasta precisa de `puppet.json`. As fotos de galeria saem de `views/front.png`, `views/three-quarter.png` (ou `3-4.png`) e, se existir, `views/profile.png`, ou do campo `rest` de cada vista no puppet. As camadas podem ficar em `layers/<vista>/` (`layers/front/torso.png`, `layers/three-quarter/mouths/X.png`): o import resolve cada `url` relativo ao `base` da vista. `emotion-sheet.png` e `persona.txt` (uma linha com a referência da ficha) são opcionais. O mesmo envio existe em `POST /api/library/import` (multipart, campo `file` repetido com o caminho relativo) e na página **Meus personagens**. Dali, **Novo vídeo** e **Debate** abrem o estúdio com esse personagem. A ficha do personagem mostra só as vistas presentes e a ficha de emoções em tamanho grande; um clique abre a imagem inteira.
 

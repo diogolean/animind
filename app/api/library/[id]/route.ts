@@ -1,4 +1,5 @@
 import { json } from "@/lib/core";
+import { StoreConfigError } from "@/lib/accounts/config";
 import { isUser, requireUser } from "@/lib/accounts/http";
 import { keyFromAssetUrl, readObject } from "@/lib/accounts/object-store";
 import { puppetToRig } from "@/lib/accounts/rig";
@@ -15,7 +16,13 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   const character = await characterFor(actor, id);
   if (!character) return json({ error: "Personagem não encontrado" }, 404);
   const key = keyFromAssetUrl(character.puppetUrl);
-  const bytes = key ? await readObject(key) : null;
+  let bytes: Buffer | null = null;
+  try {
+    bytes = key ? await readObject(key) : null;
+  } catch (error) {
+    if (!(error instanceof StoreConfigError)) throw error;
+    return json({ error: error.message }, error.status);
+  }
   let rig = null;
   if (bytes) {
     try {

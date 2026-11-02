@@ -6,6 +6,7 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, it } from "node:test";
 import { canAssignRole, canSeeAll, canSeeCharacter } from "../lib/accounts/access";
+import { StoreConfigError, databaseUrl, usesBlob } from "../lib/accounts/config";
 import { importCharacterPackage } from "../lib/accounts/import-character";
 import { isSafeObjectKey, keyFromAssetUrl, readObject } from "../lib/accounts/object-store";
 import { PILOT_SUPERADMIN_NAME, charactersFor, createAccount, deleteCharacterFor, updateCharacterStatus, upsertPilotSuperAdmin, verifyLogin } from "../lib/accounts/store";
@@ -29,9 +30,15 @@ function secret(): string {
 beforeEach(async () => {
   dir = await mkdtemp(path.join(os.tmpdir(), "animind-accounts-"));
   process.env.ANIMIND_DATA_DIR = dir;
+  process.env.ANIMIND_SKIP_ENV_FILE = "1";
   delete process.env.ANIMIND_COOKIE_SECURE;
   delete process.env.SEED_SUPERADMIN_EMAIL;
   delete process.env.SEED_SUPERADMIN_PASSWORD;
+  delete process.env.DATABASE_URL;
+  delete process.env.POSTGRES_URL;
+  delete process.env.BLOB_READ_WRITE_TOKEN;
+  delete process.env.BLOB_STORE_ID;
+  delete process.env.VERCEL;
   secret();
 });
 
@@ -43,7 +50,17 @@ function run(script: string, env: Record<string, string>, args: string[] = []) {
   return new Promise<{ code: number | null; stdout: string; stderr: string }>((resolve, reject) => {
     const child = spawn(path.join(root, "node_modules", ".bin", "tsx"), [script, ...args], {
       cwd: root,
-      env: { ...process.env, ...env, ANIMIND_DATA_DIR: dir },
+      env: {
+        ...process.env,
+        ...env,
+        ANIMIND_DATA_DIR: dir,
+        ANIMIND_SKIP_ENV_FILE: "1",
+        DATABASE_URL: "",
+        POSTGRES_URL: "",
+        BLOB_READ_WRITE_TOKEN: "",
+        BLOB_STORE_ID: "",
+        VERCEL: "",
+      },
     });
     let stdout = "";
     let stderr = "";
@@ -97,9 +114,19 @@ describe("accounts and character library", { concurrency: false }, () => {
     assert.match(seed, /process\.env\.SEED_SUPERADMIN_PASSWORD/);
     assert.doesNotMatch(seed, /password\s*[:=]\s*["'][^"']+["']/);
     assert.doesNotMatch(seed, /@[a-z0-9.-]+\.[a-z]{2,}/i);
-    for (const name of ["SEED_SUPERADMIN_EMAIL", "SEED_SUPERADMIN_PASSWORD", "ANIMIND_AUTH_SECRET", "ANIMIND_DATA_DIR"]) {
+    for (const name of [
+      "SEED_SUPERADMIN_EMAIL",
+      "SEED_SUPERADMIN_PASSWORD",
+      "ANIMIND_AUTH_SECRET",
+      "ANIMIND_DATA_DIR",
+      "DATABASE_URL",
+      "POSTGRES_URL",
+      "BLOB_READ_WRITE_TOKEN",
+      "BLOB_STORE_ID",
+    ]) {
       assert.match(example, new RegExp(`^${name}=$`, "m"));
     }
+    assert.doesNotMatch(example, /postgres:\/\/|vercel_blob|rw_/);
     assert.equal(canSeeAll("user"), false);
     assert.equal(canSeeAll("admin"), false);
     assert.equal(canSeeAll("super_admin"), true);
@@ -299,6 +326,25 @@ describe("accounts and character library", { concurrency: false }, () => {
       views: { front: { layers: { url: string }[] } };
     };
     assert.match(puppet.views.front.layers[0]!.url, /\/layers\/head\.png$/);
+  });
+
+  it("keeps the file store unless a hosted database URL is set, and refuses disk on Vercel", async () => {
+    assert.equal(databaseUrl(), null);
+    assert.equal(usesBlob(), false);
+    process.env.DATABASE_URL = "  ";
+    process.env.POSTGRES_URL = "";
+    assert.equal(databaseUrl(), null);
+    delete process.env.DATABASE_URL;
+    delete process.env.POSTGRES_URL;
+    process.env.VERCEL = "1";
+    await assert.rejects(() => verifyLogin("pilot@example.com", "not-the-password"), StoreConfigError);
+    delete process.env.VERCEL;
+    const email = `pilot-${randomBytes(4).toString("hex")}@example.com`;
+    const password = randomBytes(18).toString("base64url");
+    const user = await upsertPilotSuperAdmin(email, password);
+    assert.equal(user.role, "super_admin");
+    const accounts = JSON.parse(await readFile(path.join(dir, "accounts.json"), "utf8")) as { users: { email: string }[] };
+    assert.equal(accounts.users[0]?.email, email);
   });
 
   it("signs a session and refuses a missing auth secret", () => {

@@ -1,5 +1,7 @@
 import { readdir, readFile, realpath, stat } from "node:fs/promises";
 import path from "node:path";
+import { databaseUrl, usesBlob } from "../lib/accounts/config";
+import { loadLocalEnv } from "../lib/accounts/env-file";
 import { importCharacterPackage, ImportError, type ImportFile } from "../lib/accounts/import-character";
 import { normalizeRel } from "../lib/accounts/paths";
 import { listUsers } from "../lib/accounts/store";
@@ -46,6 +48,7 @@ async function collect(dir: string): Promise<ImportFile[]> {
 }
 
 async function main() {
+  await loadLocalEnv();
   const dir = arg("dir");
   const email = arg("email")?.trim().toLowerCase();
   if (!dir || !email) {
@@ -67,7 +70,16 @@ async function main() {
     });
     console.log(
       JSON.stringify(
-        { id: character.id, name: character.name, ownerId: character.ownerId, puppetUrl: character.puppetUrl, views: character.views, status: character.status },
+        {
+          id: character.id,
+          name: character.name,
+          ownerId: character.ownerId,
+          puppetUrl: character.puppetUrl,
+          views: character.views,
+          status: character.status,
+          store: databaseUrl() ? "postgres" : "file",
+          assets: usesBlob() ? "blob" : "file",
+        },
         null,
         2,
       ),

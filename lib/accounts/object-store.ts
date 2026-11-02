@@ -1,5 +1,6 @@
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { blobAccess, blobConfigError, onVercel, usesBlob } from "./config";
 import { dataDir } from "./paths";
 
 /**
@@ -43,7 +44,41 @@ function resolveKey(key: string): string | null {
   return dest;
 }
 
+async function putBlob(key: string, bytes: Buffer): Promise<void> {
+  const { put } = await import("@vercel/blob");
+  await put(key, bytes, {
+    access: blobAccess(),
+    addRandomSuffix: false,
+    allowOverwrite: true,
+    contentType: contentTypeFor(key).split(";")[0],
+  });
+}
+
+async function readBlob(key: string): Promise<Buffer | null> {
+  const { get } = await import("@vercel/blob");
+  const result = await get(key, { access: blobAccess() });
+  if (!result || result.statusCode !== 200 || !result.stream) return null;
+  return Buffer.from(await new Response(result.stream).arrayBuffer());
+}
+
+async function deleteBlobPrefix(characterId: string): Promise<void> {
+  const { del, list } = await import("@vercel/blob");
+  const prefix = `characters/${characterId}/`;
+  let cursor: string | undefined;
+  do {
+    const page = await list({ prefix, cursor, limit: 1000 });
+    if (page.blobs.length) await del(page.blobs.map((blob) => blob.url));
+    cursor = page.hasMore ? page.cursor : undefined;
+  } while (cursor);
+}
+
 export async function putObject(key: string, bytes: Buffer): Promise<string> {
+  if (!isSafeObjectKey(key)) throw new Error("Chave de objeto inválida");
+  if (usesBlob()) {
+    await putBlob(key, bytes);
+    return assetUrl(key);
+  }
+  if (onVercel()) throw blobConfigError();
   const dest = resolveKey(key);
   if (!dest) throw new Error("Chave de objeto inválida");
   await mkdir(path.dirname(dest), { recursive: true });
@@ -52,10 +87,13 @@ export async function putObject(key: string, bytes: Buffer): Promise<string> {
 }
 
 export async function readObject(key: string): Promise<Buffer | null> {
+  if (!isSafeObjectKey(key)) return null;
+  if (usesBlob()) return readBlob(key);
+  if (onVercel()) throw blobConfigError();
   const dest = resolveKey(key);
   if (!dest) return null;
   try {
-    return await readFile(dest);
+    return await readFile(/*turbopackIgnore: true*/ dest);
   } catch {
     return null;
   }
@@ -63,6 +101,11 @@ export async function readObject(key: string): Promise<Buffer | null> {
 
 export async function deleteObjectPrefix(characterId: string): Promise<void> {
   if (!/^chr_[A-Za-z0-9_-]+$/.test(characterId)) return;
+  if (usesBlob()) {
+    await deleteBlobPrefix(characterId);
+    return;
+  }
+  if (onVercel()) throw blobConfigError();
   const root = path.resolve(objectsRoot());
   const dest = path.resolve(root, "characters", characterId);
   const rel = path.relative(root, dest);

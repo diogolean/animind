@@ -10,7 +10,16 @@ import { defineConfig, devices } from "@playwright/test";
 const coreUrl = process.env.E2E_CORE_URL?.replace(/\/$/, "");
 const MOCK_PORT = Number(process.env.E2E_MOCK_PORT ?? 3311);
 const CORE_PORT = Number(process.env.E2E_APP_PORT ?? 3312);
-const mockEnv: Record<string, string> = { ANIMIND_CORE_MOCK: "1", ANIMIND_CORE_URL: "", CORE_URL: "" };
+const mockEnv: Record<string, string> = {
+  ANIMIND_CORE_MOCK: "1",
+  ANIMIND_CORE_URL: "",
+  CORE_URL: "",
+  DATABASE_URL: "",
+  POSTGRES_URL: "",
+  BLOB_READ_WRITE_TOKEN: "",
+  BLOB_STORE_ID: "",
+  VERCEL: "",
+};
 if (process.env.E2E_AUTH_SECRET && process.env.E2E_DATA_DIR) {
   mockEnv.ANIMIND_AUTH_SECRET = process.env.E2E_AUTH_SECRET;
   mockEnv.ANIMIND_DATA_DIR = process.env.E2E_DATA_DIR;

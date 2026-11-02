@@ -1,4 +1,5 @@
 import { json } from "@/lib/core";
+import { StoreConfigError } from "@/lib/accounts/config";
 import { importCharacterPackage, ImportError } from "@/lib/accounts/import-character";
 import { isUser, requireUser } from "@/lib/accounts/http";
 import { resolveOwner } from "@/lib/accounts/store";
@@ -36,7 +37,7 @@ export async function POST(req: Request) {
     });
     return json({ character }, 201);
   } catch (error) {
-    if (error instanceof ImportError) return json({ error: error.message }, error.status);
+    if (error instanceof ImportError || error instanceof StoreConfigError) return json({ error: error.message }, error.status);
     throw error;
   }
 }

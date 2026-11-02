@@ -16,6 +16,11 @@ function run(script: string, args: string[] = []) {
       env: {
         ...process.env,
         ANIMIND_DATA_DIR: process.env.E2E_DATA_DIR,
+        ANIMIND_SKIP_ENV_FILE: "1",
+        DATABASE_URL: "",
+        POSTGRES_URL: "",
+        BLOB_READ_WRITE_TOKEN: "",
+        BLOB_STORE_ID: "",
         SEED_SUPERADMIN_EMAIL: process.env.E2E_SUPERADMIN_EMAIL,
         SEED_SUPERADMIN_PASSWORD: process.env.E2E_SUPERADMIN_PASSWORD,
       },
