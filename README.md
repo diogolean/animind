@@ -18,7 +18,7 @@ PWA (Next.js 16 App Router, React 19, TypeScript, Tailwind 4, shadcn/ui, framer-
   - `GET /api/files/*` repassa as camadas PNG, a voz e o `preview.mp4` do núcleo pela mesma origem (o Canvas não fica “tainted” e o MediaRecorder grava).
   - `GET /api/health` diz o modo (`core`, `mock` ou `off`); o cabeçalho mostra “núcleo real”, “mock de dev” ou “núcleo não configurado”.
 - O mock (`lib/mock.ts`, silhuetas e jobs sem estado) é só fallback explícito de dev: `ANIMIND_CORE_MOCK=1`. Sem URL e sem essa flag, a API responde 503.
-- **Prévia no navegador:** `lib/engine.ts` desenha as camadas no Canvas, sincroniza a boca com o envelope do áudio (TTS do núcleo ou voz placeholder sintetizada) e grava o vídeo com MediaRecorder. O visual cinematográfico (`lib/cinema.ts`) espelha o render do núcleo: cenários em camadas com paralaxe e desfoque de profundidade, luz de recorte e sombra suave nos personagens, câmera com push-in, balanço de mão e cortes por fala (dissolve e chicote), gradação de cor, vinheta, legendas e lower-thirds com nome e fonte.
+- **Prévia no navegador:** enquanto o núcleo recorta o personagem, a tela mostra só uma silhueta de carregamento. O SVG local permanece apenas como fallback explícito (`mock de dev` ou núcleo fora). Assim que `POST /v1/characters` responde, as camadas reais entram no lugar. O player do núcleo é o `preview.mp4` (`GET /v1/jobs/:id` → `result.videoUrl`). Sem MP4 (mock), `lib/engine.ts` ainda desenha as camadas no Canvas. O visual cinematográfico (`lib/cinema.ts`) espelha o render do núcleo: cenários em camadas com paralaxe e desfoque de profundidade, luz de recorte e sombra suave nos personagens, câmera com push-in, balanço de mão e cortes por fala (dissolve e chicote), gradação de cor, vinheta, legendas e lower-thirds com nome e fonte.
 
 ## Roteiros: citações reais, paráfrases marcadas
 
@@ -40,8 +40,9 @@ Os personagens só são enviados para a factory nesse momento.
 `lib/planner.ts` implementa hoje o mesmo contrato com regras determinísticas. A rota tenta primeiro
 o futuro `POST /v1/plan`, portanto trocar a heurística por um planejador barato no núcleo não muda a UI.
 Com Automático desligado, os mesmos controles aparecem juntos na página, incluindo de um a seis
-personagens com nome e prompt próprios. O tipo padrão é `stick`; `illustrated` identifica o pipeline
-complexo Aiwake, ainda não aplicado pela PR #93 do núcleo.
+personagens com nome e prompt próprios. O tipo padrão é `stick` (`type: "stick"` no núcleo).
+`illustrated` vai como `type: "rig"`, o pipeline Aiwake. Sem chave de imagem o núcleo devolve
+as mesmas camadas com `generator` `mock` ou `procedural` e um aviso na tela.
 
 O cenário automático usa `lib/eras.ts` (por exemplo, Sócrates → Ágora). A opção por prompt chama
 `POST /api/scenarios`, que tentará o futuro `/v1/scenarios`; em 404/405/501 escolhe deterministicamente
@@ -60,9 +61,9 @@ preenche `lang` para compatibilidade com a PR #93 do núcleo.
 
 Cada personagem tem gênero vocal (`male`/`female`) e `voiceId` opcional. Sem escolha explícita, a UI
 seleciona vozes distintas do gênero indicado; o chip de cada personagem abre gênero, catálogo e botão
-de prévia. `GET /api/voices?lang=` normaliza o futuro catálogo do núcleo. Como `/v1/voices` ainda não
-existe na PR #93, o app marca e usa um catálogo provisório para English e Português BR; a prévia usa a
-URL do catálogo quando houver e Web Speech como fallback.
+de prévia. `GET /api/voices?lang=` normaliza `GET /v1/voices` (`voiceId`, gênero, idioma). Se o núcleo
+não responder, o app marca e usa o catálogo edge-tts embutido; a prévia usa a URL do catálogo
+quando houver e Web Speech como fallback.
 
 Os tons de produto são Humor, Terror, Educacional, Sábio e Sério. `GET /api/tones` normaliza o catálogo
 do núcleo: Humor → `comedia`, Terror → `horror` e Sério → `serio`; Educacional e Sábio aparecem com

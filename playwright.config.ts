@@ -1,9 +1,10 @@
 import { defineConfig, devices } from "@playwright/test";
 
 /**
- * E2E suite (see e2e/README.md). Two projects run the same user flow:
+ * E2E suite (see e2e/README.md).
  *   mock  always: the app with ANIMIND_CORE_MOCK=1, no keys, fast (CI).
- *   core  only when E2E_CORE_URL is set: the app proxies to a real Omni-Engine core.
+ *   core  only when E2E_CORE_URL is set: one flow against a real Omni-Engine core.
+ * The core spec skips itself on the mock project, so CI stays green when the core is down.
  * Both use the production build (`npm run build` first).
  */
 const coreUrl = process.env.E2E_CORE_URL?.replace(/\/$/, "");
@@ -37,7 +38,9 @@ export default defineConfig({
   },
   projects: [
     { name: "mock", timeout: 120_000, use: { baseURL: `http://127.0.0.1:${MOCK_PORT}` } },
-    ...(coreUrl ? [{ name: "core", timeout: 40 * 60_000, use: { baseURL: `http://127.0.0.1:${CORE_PORT}` } }] : []),
+    ...(coreUrl
+      ? [{ name: "core", testMatch: /core-flow\.spec\.ts/, timeout: 20 * 60_000, use: { baseURL: `http://127.0.0.1:${CORE_PORT}` } }]
+      : []),
   ],
   webServer: [
     server(MOCK_PORT, { ANIMIND_CORE_MOCK: "1", ANIMIND_CORE_URL: "", CORE_URL: "" }),

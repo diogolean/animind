@@ -12,8 +12,8 @@ per-character `voices`. Tela inicial, chips, controles manuais e resultados são
 
 | Project | When | Server | Checks |
 | --- | --- | --- | --- |
-| `mock` | always (CI, no keys) | `next start` with `ANIMIND_CORE_MOCK=1` | plano local, chips, manual, cenário fallback, preview e transcript |
-| `core` | `E2E_CORE_URL` set | `next start` proxying to the real core | o mesmo estúdio contra os jobs reais |
+| `mock` | always (CI, no keys) | `next start` with `ANIMIND_CORE_MOCK=1` | plano local, chips, manual, cenário fallback, preview e transcript. `core-flow.spec.ts` fica skipped |
+| `core` | `E2E_CORE_URL` set | `next start` proxying to the real core | `e2e/core-flow.spec.ts`: recorte real, job, MP4. Sem a variável o projeto nem sobe |
 
 ```bash
 npx playwright install chromium         # once
