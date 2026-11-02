@@ -16,9 +16,11 @@ export function objectsRoot(): string {
 
 export function isSafeObjectKey(key: string): boolean {
   const parts = key.split("/");
-  if (parts.length < 3 || parts[0] !== "characters") return false;
-  if (!/^chr_[A-Za-z0-9_-]+$/.test(parts[1] ?? "")) return false;
-  return parts.every((part) => part.length > 0 && part !== "." && part !== "..");
+  if (parts.length < 3) return false;
+  if (!parts.every((part) => part.length > 0 && part !== "." && part !== "..")) return false;
+  const id = parts[1] ?? "";
+  if (parts[0] === "characters" && /^chr_[A-Za-z0-9_-]+$/.test(id)) return true;
+  return parts[0] === "assets" && /^ast_[A-Za-z0-9_-]+$/.test(id);
 }
 
 export function assetUrl(key: string): string {
@@ -97,6 +99,20 @@ export async function readObject(key: string): Promise<Buffer | null> {
   } catch {
     return null;
   }
+}
+
+export async function deleteObject(key: string): Promise<void> {
+  if (!isSafeObjectKey(key)) return;
+  if (usesBlob()) {
+    const { del, get } = await import("@vercel/blob");
+    const found = await get(key, { access: blobAccess() });
+    if (found?.blob.url) await del(found.blob.url);
+    return;
+  }
+  if (onVercel()) throw blobConfigError();
+  const dest = resolveKey(key);
+  if (!dest) return;
+  await rm(dest, { force: true });
 }
 
 export async function deleteObjectPrefix(characterId: string): Promise<void> {

@@ -133,6 +133,8 @@ npm run import-character -- --dir /caminho/do/personagem --email "$SEED_SUPERADM
 
 Os dois scripts carregam `.env.local` sem substituir variáveis que já estão no ambiente. A saída diz `store=file` ou `store=postgres`, e `assets=file` ou `assets=blob`.
 
+A página **Biblioteca** lista tudo o que a conta gerou: personagem, vista, ficha de emoções, imagem, roteiro, áudio, vídeo e debate. Cada item aponta para o personagem ou o job de origem. Um `super_admin` vê os de todo mundo. Importar um personagem grava essas linhas na hora; terminar uma criação grava roteiro, debate, imagem, áudio e vídeo sozinho. O texto vai para o mesmo armazenamento dos PNG (disco local ou Vercel Blob) e a ficha fica na mesma tabela de contas (`animind_assets` no Neon).
+
 ### Preview na Vercel (`feat/mvp-ui`, nunca `main`)
 
 O disco da função some a cada invocação, então o preview não usa `./.data`. Contas ficam no Neon. PNGs e `puppet.json` ficam no Vercel Blob e continuam sendo servidos por `/api/library/assets/...`.

@@ -1,6 +1,6 @@
 import { keyFromAssetUrl, putObject } from "./object-store";
 import { newId, normalizeRel } from "./paths";
-import { saveCharacter } from "./store";
+import { saveCharacter, saveCharacterAssets } from "./store";
 import type { LibraryCharacter, LibraryStatus, LibraryViewName } from "./types";
 import { isLibraryStatus } from "./types";
 
@@ -267,5 +267,6 @@ export async function importCharacterPackage(options: {
   };
   const saved = await saveCharacter(character);
   if (!keyFromAssetUrl(saved.puppetUrl)) throw new ImportError("Falha ao gravar o puppet", 500);
+  await saveCharacterAssets(saved);
   return saved;
 }

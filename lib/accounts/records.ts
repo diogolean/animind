@@ -1,4 +1,4 @@
-import type { LibraryCharacter, UserRecord } from "./types";
+import type { LibraryAsset, LibraryCharacter, UserRecord } from "./types";
 
 /** Persistence for accounts and character metadata. Bytes live in object storage, not here. */
 export interface AccountRecords {
@@ -12,4 +12,7 @@ export interface AccountRecords {
   insertCharacter(character: LibraryCharacter): Promise<void>;
   replaceCharacter(character: LibraryCharacter): Promise<LibraryCharacter | null>;
   deleteCharacter(id: string): Promise<boolean>;
+  assets(): Promise<LibraryAsset[]>;
+  insertAsset(asset: LibraryAsset): Promise<void>;
+  deleteAssetsForCharacter(characterId: string): Promise<LibraryAsset[]>;
 }

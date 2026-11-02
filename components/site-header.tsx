@@ -70,6 +70,9 @@ export function SiteHeader() {
       <span className="flex-1" />
       {user ? (
         <>
+          <Link href="/biblioteca" data-testid="biblioteca-link" className="text-sm text-muted-foreground hover:text-foreground">
+            Biblioteca
+          </Link>
           <Link href="/characters" data-testid="my-characters-link" className="text-sm text-muted-foreground hover:text-foreground">
             Meus personagens
           </Link>

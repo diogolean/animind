@@ -2,11 +2,12 @@ import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { dataDir } from "./paths";
 import type { AccountRecords } from "./records";
-import type { LibraryCharacter, UserRecord } from "./types";
+import type { LibraryAsset, LibraryCharacter, UserRecord } from "./types";
 
 interface Db {
   users: UserRecord[];
   characters: LibraryCharacter[];
+  assets: LibraryAsset[];
 }
 
 const locks = new Map<string, Promise<unknown>>();
@@ -32,9 +33,9 @@ function dbPath(): string {
 async function readDb(): Promise<Db> {
   try {
     const parsed = JSON.parse(await readFile(dbPath(), "utf8")) as Partial<Db>;
-    return { users: parsed.users ?? [], characters: parsed.characters ?? [] };
+    return { users: parsed.users ?? [], characters: parsed.characters ?? [], assets: parsed.assets ?? [] };
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") return { users: [], characters: [] };
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return { users: [], characters: [], assets: [] };
     throw error;
   }
 }
@@ -115,5 +116,31 @@ export function fileRecords(): AccountRecords {
         return true;
       });
     },
+    async assets() {
+      return (await readDb()).assets.map(withoutAssetOwner);
+    },
+    insertAsset(asset) {
+      return exclusive(async () => {
+        const db = await readDb();
+        db.assets.push(withoutAssetOwner(asset));
+        await writeDb(db);
+      });
+    },
+    deleteAssetsForCharacter(characterId) {
+      return exclusive(async () => {
+        const db = await readDb();
+        const removed = db.assets.filter((asset) => asset.characterId === characterId);
+        db.assets = db.assets.filter((asset) => asset.characterId !== characterId);
+        await writeDb(db);
+        return removed;
+      });
+    },
   };
+}
+
+function withoutAssetOwner(asset: LibraryAsset): LibraryAsset {
+  if (!asset.owner) return asset;
+  const copy = { ...asset };
+  delete copy.owner;
+  return copy;
 }

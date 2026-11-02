@@ -2,12 +2,12 @@ import { randomBytes } from "node:crypto";
 import { canAssignRole, canSeeAll, canSeeCharacter } from "./access";
 import { accountsConfigError, databaseUrl, onVercel, usesBlob, blobConfigError } from "./config";
 import { fileRecords } from "./file-records";
-import { deleteObjectPrefix } from "./object-store";
+import { deleteObject, deleteObjectPrefix, keyFromAssetUrl, putObject } from "./object-store";
 import { hashPassword, verifyPassword } from "./password";
 import { newId } from "./paths";
 import { postgresRecords } from "./postgres-records";
 import type { AccountRecords } from "./records";
-import { isLibraryStatus, isRole, type LibraryCharacter, type LibraryStatus, type PublicUser, type Result, type Role, type UserRecord } from "./types";
+import { isLibraryStatus, isRole, type AssetKind, type LibraryAsset, type LibraryCharacter, type LibraryStatus, type LibraryViewName, type PublicUser, type Result, type Role, type UserRecord } from "./types";
 
 /** Pilot super admin created by scripts/seed-superadmin.ts. The name is not a secret. */
 export const PILOT_SUPERADMIN_NAME = "Diogo";
@@ -163,9 +163,151 @@ export async function deleteCharacterFor(actor: PublicUser, id: string): Promise
   const store = records();
   const current = (await store.characters()).find((item) => item.id === id);
   if (!current || !canSeeCharacter(actor, current)) return false;
+  const linked = await store.deleteAssetsForCharacter(id);
   const removed = await store.deleteCharacter(id);
-  if (removed) await deleteObjectPrefix(id);
-  return removed;
+  if (!removed) return false;
+  await deleteObjectPrefix(id);
+  for (const asset of linked) {
+    const key = asset.url ? keyFromAssetUrl(asset.url) : null;
+    if (key?.startsWith("assets/")) await deleteObject(key);
+  }
+  return true;
+}
+
+const VIEW_ASSET: { id: LibraryViewName; label: string }[] = [
+  { id: "front", label: "Frente" },
+  { id: "three_quarter", label: "3/4" },
+  { id: "profile", label: "Perfil" },
+];
+
+function withAssetOwner(asset: LibraryAsset, users: UserRecord[], includeOwner: boolean): LibraryAsset {
+  if (!includeOwner) {
+    if (!asset.owner) return asset;
+    const copy = { ...asset };
+    delete copy.owner;
+    return copy;
+  }
+  const owner = users.find((user) => user.id === asset.ownerId);
+  return owner ? { ...asset, owner: { id: owner.id, name: owner.name, email: owner.email } } : asset;
+}
+
+/** Views and the emotion sheet already stored on a character, until an import writes real asset rows. */
+function derivedAssets(character: LibraryCharacter): LibraryAsset[] {
+  const shared = { ownerId: character.ownerId, text: null, characterId: character.id, projectId: character.id, createdAt: character.createdAt };
+  const assets: LibraryAsset[] = [
+    {
+      ...shared,
+      id: `derived_${character.id}_character`,
+      kind: "character",
+      name: character.name,
+      url: character.views.front ?? null,
+      mime: character.views.front ? "image/png" : null,
+    },
+  ];
+  for (const view of VIEW_ASSET) {
+    const url = character.views[view.id];
+    if (!url) continue;
+    assets.push({ ...shared, id: `derived_${character.id}_${view.id}`, kind: "view", name: `${character.name} · ${view.label}`, url, mime: "image/png" });
+  }
+  if (character.emotionSheetUrl) {
+    assets.push({
+      ...shared,
+      id: `derived_${character.id}_emotion`,
+      kind: "emotion_sheet",
+      name: `${character.name} · emoções`,
+      url: character.emotionSheetUrl,
+      mime: "image/png",
+    });
+  }
+  return assets;
+}
+
+export async function assetsFor(actor: PublicUser, kind?: AssetKind): Promise<LibraryAsset[]> {
+  const store = records();
+  const [users, stored, characters] = await Promise.all([store.users(), store.assets(), store.characters()]);
+  const includeOwner = canSeeAll(actor.role);
+  const visibleCharacters = characters.filter((character) => canSeeCharacter(actor, character));
+  const linked = new Set(stored.map((asset) => asset.characterId).filter((id): id is string => Boolean(id)));
+  const derived = visibleCharacters.filter((character) => !linked.has(character.id)).flatMap(derivedAssets);
+  const visible = [...stored.filter((asset) => canSeeCharacter(actor, asset)), ...derived];
+  const filtered = kind ? visible.filter((asset) => asset.kind === kind) : visible;
+  return filtered
+    .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1))
+    .map((asset) => withAssetOwner(asset, users, includeOwner));
+}
+
+export async function assetFor(actor: PublicUser, id: string): Promise<LibraryAsset | null> {
+  const asset = (await records().assets()).find((item) => item.id === id);
+  if (!asset || !canSeeCharacter(actor, asset)) return null;
+  return asset;
+}
+
+const TEXT_PREVIEW = 280;
+
+/** Stores one library file. Text is copied into object storage; the row keeps a short preview. */
+export async function saveAsset(
+  ownerId: string,
+  input: { kind: AssetKind; name: string; url?: string | null; text?: string | null; mime?: string | null; characterId?: string | null; projectId?: string | null },
+): Promise<LibraryAsset> {
+  const id = newId("ast");
+  const name = input.name.trim().slice(0, 120) || "Arquivo";
+  let url = input.url?.trim() || null;
+  let text = input.text?.trim() || null;
+  let mime = input.mime?.trim() || null;
+  if (text) {
+    const key = `assets/${id}/text.txt`;
+    url = await putObject(key, Buffer.from(text, "utf8"));
+    mime = mime ?? "text/plain";
+    text = text.slice(0, TEXT_PREVIEW);
+  }
+  const asset: LibraryAsset = {
+    id,
+    ownerId,
+    kind: input.kind,
+    name,
+    url,
+    text,
+    mime,
+    characterId: input.characterId?.trim() || null,
+    projectId: input.projectId?.trim() || null,
+    createdAt: new Date().toISOString(),
+  };
+  await records().insertAsset(asset);
+  return asset;
+}
+
+/** Rows for a character folder that just landed in the library. The PNGs are already in object storage. */
+export async function saveCharacterAssets(character: LibraryCharacter): Promise<void> {
+  await saveAsset(character.ownerId, {
+    kind: "character",
+    name: character.name,
+    url: character.views.front ?? null,
+    mime: character.views.front ? "image/png" : null,
+    characterId: character.id,
+    projectId: character.id,
+  });
+  for (const view of VIEW_ASSET) {
+    const url = character.views[view.id];
+    if (!url) continue;
+    await saveAsset(character.ownerId, {
+      kind: "view",
+      name: `${character.name} · ${view.label}`,
+      url,
+      mime: "image/png",
+      characterId: character.id,
+      projectId: character.id,
+    });
+  }
+  if (character.emotionSheetUrl) {
+    await saveAsset(character.ownerId, {
+      kind: "emotion_sheet",
+      name: `${character.name} · emoções`,
+      url: character.emotionSheetUrl,
+      mime: "image/png",
+      characterId: character.id,
+      projectId: character.id,
+    });
+  }
 }
 
 export async function resolveOwner(actor: PublicUser, ownerEmail?: string): Promise<Result<PublicUser>> {

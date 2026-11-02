@@ -28,6 +28,7 @@ import type {
 import type { LibraryCharacter } from "@/lib/accounts/types";
 import { HEALTH_EVENT, createCharacter, createPreview, getTones, getVoices, planCreation, resolveScenario, startRender, waitJob } from "@/lib/api";
 import { previewFromCharacter, stickPreview } from "@/lib/character-preview";
+import { captureGeneration } from "@/lib/library-capture";
 import { normalizeToneCatalog } from "@/lib/tones";
 import { fallbackVoiceCatalog } from "@/lib/voices";
 import { CharacterListEditor } from "@/components/flow/character-list-editor";
@@ -347,6 +348,14 @@ export function CreationStudio() {
       });
       setResult(done.result!);
       setStatus("");
+      const items = captureGeneration({ jobId: done.id, libraryCharacterId: libraryCharacter?.id, result: done.result! });
+      if (items.length) {
+        void fetch("/api/library/catalog", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ items }),
+        }).catch(() => undefined);
+      }
       window.dispatchEvent(new Event(HEALTH_EVENT));
     } catch (error) {
       toast.error((error as Error).message);

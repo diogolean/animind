@@ -5,6 +5,11 @@ export const ROLES: readonly Role[] = ["user", "admin", "super_admin"];
 
 export type LibraryStatus = "draft" | "ready" | "archived";
 
+/** Every generated file a user keeps, not only characters. */
+export const ASSET_KINDS = ["character", "view", "emotion_sheet", "image", "script", "audio", "video", "debate"] as const;
+
+export type AssetKind = (typeof ASSET_KINDS)[number];
+
 export const LIBRARY_STATUSES: readonly LibraryStatus[] = ["draft", "ready", "archived"];
 
 /** Gallery angles shown on My characters. The rig itself stays in puppet.json. */
@@ -45,6 +50,24 @@ export interface LibraryCharacter {
   owner?: Pick<PublicUser, "id" | "name" | "email">;
 }
 
+/** One user-owned file. Bytes live in object storage; this record keeps the link. */
+export interface LibraryAsset {
+  id: string;
+  ownerId: string;
+  kind: AssetKind;
+  name: string;
+  url: string | null;
+  /** Short preview for text assets. The full text is the object at `url` when it was stored. */
+  text: string | null;
+  mime: string | null;
+  /** Library character, or the generated character id when it is not in the library yet. */
+  characterId: string | null;
+  /** Job or character that produced this file. */
+  projectId: string | null;
+  createdAt: string;
+  owner?: Pick<PublicUser, "id" | "name" | "email">;
+}
+
 export type Result<T> = { ok: true; value: T } | { ok: false; error: string; status: number };
 
 export function isRole(value: unknown): value is Role {
@@ -53,4 +76,8 @@ export function isRole(value: unknown): value is Role {
 
 export function isLibraryStatus(value: unknown): value is LibraryStatus {
   return value === "draft" || value === "ready" || value === "archived";
+}
+
+export function isAssetKind(value: unknown): value is AssetKind {
+  return typeof value === "string" && (ASSET_KINDS as readonly string[]).includes(value);
 }

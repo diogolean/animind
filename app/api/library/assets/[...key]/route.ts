@@ -2,7 +2,7 @@ import { json } from "@/lib/core";
 import { StoreConfigError } from "@/lib/accounts/config";
 import { isUser, requireUser } from "@/lib/accounts/http";
 import { contentTypeFor, isSafeObjectKey, readObject } from "@/lib/accounts/object-store";
-import { characterFor } from "@/lib/accounts/store";
+import { assetFor, characterFor } from "@/lib/accounts/store";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -14,8 +14,13 @@ export async function GET(_req: Request, { params }: { params: Promise<{ key: st
   if (parts.some((part) => part === ".." || part.includes("\\") || part.includes("/"))) return json({ error: "Caminho inválido" }, 400);
   const key = parts.map(decodeURIComponent).join("/");
   if (!isSafeObjectKey(key)) return json({ error: "Arquivo não encontrado" }, 404);
-  const character = await characterFor(actor, parts[1] ?? "");
-  if (!character) return json({ error: "Arquivo não encontrado" }, 404);
+  if (parts[0] === "assets") {
+    const asset = await assetFor(actor, parts[1] ?? "");
+    if (!asset) return json({ error: "Arquivo não encontrado" }, 404);
+  } else {
+    const character = await characterFor(actor, parts[1] ?? "");
+    if (!character) return json({ error: "Arquivo não encontrado" }, 404);
+  }
   let bytes: Buffer | null;
   try {
     bytes = await readObject(key);

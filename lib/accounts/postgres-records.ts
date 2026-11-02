@@ -1,7 +1,7 @@
 import { neon, type NeonQueryFunction } from "@neondatabase/serverless";
 import { databaseUrl } from "./config";
 import type { AccountRecords } from "./records";
-import type { LibraryCharacter, LibraryStatus, LibraryViewName, Role, UserRecord } from "./types";
+import type { AssetKind, LibraryAsset, LibraryCharacter, LibraryStatus, LibraryViewName, Role, UserRecord } from "./types";
 
 type Sql = NeonQueryFunction<false, false>;
 
@@ -43,6 +43,18 @@ async function ready(): Promise<Sql> {
       created_at timestamptz NOT NULL,
       updated_at timestamptz NOT NULL
     )`;
+    await db`CREATE TABLE IF NOT EXISTS animind_assets (
+      id text PRIMARY KEY,
+      owner_id text NOT NULL REFERENCES animind_users (id),
+      kind text NOT NULL,
+      name text NOT NULL,
+      url text,
+      text_preview text,
+      mime text,
+      character_id text,
+      project_id text,
+      created_at timestamptz NOT NULL
+    )`;
   })().catch((error: unknown) => {
     schema = null;
     throw error;
@@ -69,6 +81,21 @@ function userFrom(row: Record<string, unknown>): UserRecord {
     name: String(row.name),
     role: String(row.role) as Role,
     passwordHash: String(row.password_hash),
+    createdAt: asIso(row.created_at),
+  };
+}
+
+function assetFrom(row: Record<string, unknown>): LibraryAsset {
+  return {
+    id: String(row.id),
+    ownerId: String(row.owner_id),
+    kind: String(row.kind) as AssetKind,
+    name: String(row.name),
+    url: row.url == null ? null : String(row.url),
+    text: row.text_preview == null ? null : String(row.text_preview),
+    mime: row.mime == null ? null : String(row.mime),
+    characterId: row.character_id == null ? null : String(row.character_id),
+    projectId: row.project_id == null ? null : String(row.project_id),
     createdAt: asIso(row.created_at),
   };
 }
@@ -161,6 +188,27 @@ export function postgresRecords(): AccountRecords {
       const db = await ready();
       const rows = await db`DELETE FROM animind_characters WHERE id = ${id} RETURNING id`;
       return rows.length > 0;
+    },
+    async assets() {
+      const db = await ready();
+      const rows = await db`SELECT id, owner_id, kind, name, url, text_preview, mime, character_id, project_id, created_at
+        FROM animind_assets ORDER BY created_at DESC`;
+      return rows.map((row) => assetFrom(row));
+    },
+    async insertAsset(asset) {
+      const db = await ready();
+      await db`INSERT INTO animind_assets (
+          id, owner_id, kind, name, url, text_preview, mime, character_id, project_id, created_at
+        ) VALUES (
+          ${asset.id}, ${asset.ownerId}, ${asset.kind}, ${asset.name}, ${asset.url}, ${asset.text}, ${asset.mime},
+          ${asset.characterId}, ${asset.projectId}, ${asset.createdAt}
+        )`;
+    },
+    async deleteAssetsForCharacter(characterId) {
+      const db = await ready();
+      const rows = await db`DELETE FROM animind_assets WHERE character_id = ${characterId}
+        RETURNING id, owner_id, kind, name, url, text_preview, mime, character_id, project_id, created_at`;
+      return rows.map((row) => assetFrom(row));
     },
   };
 }

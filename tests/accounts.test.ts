@@ -9,7 +9,8 @@ import { canAssignRole, canSeeAll, canSeeCharacter } from "../lib/accounts/acces
 import { StoreConfigError, databaseUrl, usesBlob } from "../lib/accounts/config";
 import { importCharacterPackage } from "../lib/accounts/import-character";
 import { isSafeObjectKey, keyFromAssetUrl, readObject } from "../lib/accounts/object-store";
-import { PILOT_SUPERADMIN_NAME, charactersFor, createAccount, deleteCharacterFor, updateCharacterStatus, upsertPilotSuperAdmin, verifyLogin } from "../lib/accounts/store";
+import { PILOT_SUPERADMIN_NAME, assetsFor, charactersFor, createAccount, deleteCharacterFor, saveAsset, updateCharacterStatus, upsertPilotSuperAdmin, verifyLogin } from "../lib/accounts/store";
+import { captureGeneration } from "../lib/library-capture";
 import { puppetToRig } from "../lib/accounts/rig";
 import { authSecret, cookieSecure, readSession, signSession } from "../lib/accounts/session";
 
@@ -326,6 +327,69 @@ describe("accounts and character library", { concurrency: false }, () => {
       views: { front: { layers: { url: string }[] } };
     };
     assert.match(puppet.views.front.layers[0]!.url, /\/layers\/head\.png$/);
+  });
+
+  it("files every generated asset for its owner, and lets a super admin see all of them", async () => {
+    const email = `pilot-${randomBytes(4).toString("hex")}@example.com`;
+    const password = randomBytes(18).toString("base64url");
+    const superAdmin = await upsertPilotSuperAdmin(email, password);
+    const owner = await createAccount(superAdmin, {
+      email: `maker-${randomBytes(3).toString("hex")}@example.com`,
+      name: "Autor",
+      password: randomBytes(12).toString("base64url"),
+      role: "user",
+    });
+    const stranger = await createAccount(superAdmin, {
+      email: `other-${randomBytes(3).toString("hex")}@example.com`,
+      name: "Outra",
+      password: randomBytes(12).toString("base64url"),
+      role: "user",
+    });
+    assert.equal(owner.ok && stranger.ok, true);
+    if (!owner.ok || !stranger.ok) return;
+    const imported = await importCharacterPackage({ ownerId: owner.value.id, files: einsteinFiles() });
+    const importedKinds = (await assetsFor(owner.value)).filter((asset) => asset.characterId === imported.id).map((asset) => asset.kind);
+    assert.deepEqual(importedKinds.filter((kind) => kind === "character"), ["character"]);
+    assert.equal(importedKinds.filter((kind) => kind === "view").length, 3);
+    assert.equal(importedKinds.filter((kind) => kind === "emotion_sheet").length, 1);
+    assert.equal((await assetsFor(stranger.value)).length, 0);
+
+    const mono = captureGeneration({
+      jobId: "job_mono",
+      result: { template: "solo", topic: "aula", script: [{ text: "Uma linha." }], characters: [], audioUrl: null, videoUrl: null },
+    });
+    assert.equal(mono[0]?.kind, "script");
+    const finished = captureGeneration({
+      jobId: "job_debate",
+      libraryCharacterId: imported.id,
+      result: {
+        template: "debate",
+        topic: "relatividade",
+        script: [{ text: "O tempo é relativo." }],
+        characters: [{ id: "gen_1", name: "Einstein", imageUrl: "https://example.com/einstein.png" }],
+        audioUrl: "https://example.com/voice.mp3",
+        videoUrl: "https://example.com/cut.mp4",
+      },
+    });
+    assert.deepEqual(
+      finished.map((item) => item.kind),
+      ["debate", "audio", "video", "image"],
+    );
+    for (const item of finished) await saveAsset(owner.value.id, item);
+    const debate = await assetsFor(owner.value, "debate");
+    assert.equal(debate.length, 1);
+    assert.equal(debate[0]?.projectId, "job_debate");
+    assert.equal(debate[0]?.characterId, imported.id);
+    assert.match(debate[0]?.text ?? "", /O tempo é relativo/);
+    const storedText = await readObject(keyFromAssetUrl(debate[0]!.url!)!);
+    assert.match(storedText!.toString("utf8"), /O tempo é relativo/);
+    assert.equal((await assetsFor(owner.value, "video"))[0]?.url, "https://example.com/cut.mp4");
+    assert.equal((await assetsFor(stranger.value, "image")).length, 0);
+    const everything = await assetsFor(superAdmin);
+    const seen = everything.find((asset) => asset.kind === "debate");
+    assert.equal(seen?.owner?.email, owner.value.email);
+    assert.equal(await deleteCharacterFor(owner.value, imported.id), true);
+    assert.equal((await assetsFor(superAdmin)).some((asset) => asset.characterId === imported.id), false);
   });
 
   it("keeps the file store unless a hosted database URL is set, and refuses disk on Vercel", async () => {
