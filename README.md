@@ -112,7 +112,7 @@ Testes E2E (Playwright, projeto `mock` sem chaves e `core` contra o núcleo real
 
 Papéis: `user`, `admin`, `super_admin`. Cada personagem pertence a uma conta. Um `super_admin` vê e gerencia a biblioteca de todo mundo; os outros papéis só a própria. A senha fica com scrypt e a sessão é um cookie assinado (`ANIMIND_AUTH_SECRET`, mínimo 16 caracteres). Nada disso entra no git.
 
-Os nomes de todas as variáveis estão em [`.env.example`](.env.example). Copie para `.env.local` (ignorado pelo git) e preencha só o modo que for usar. Valor vazio é o mesmo que ausente.
+Os nomes de todas as variáveis estão em [`.env.example`](.env.example). Copie para `.env.local` (ignorado pelo git) e preencha só o modo que for usar. Valor vazio é o mesmo que ausente. Quem paga cada serviço, e onde fica a chave, está em [`docs/ACCOUNTS.md`](docs/ACCOUNTS.md).
 
 A biblioteca guarda nome, referência da ficha, as vistas que a pasta trouxer (frente, 3/4 e perfil; o perfil é opcional), URL do `puppet.json`, URLs das camadas e o status (`draft`, `ready`, `archived`). A ficha só guarda a URL `/api/library/assets/...`.
 
@@ -133,7 +133,7 @@ No `.env.local` local, preencha e deixe o resto vazio:
 
 ```text
 ANIMIND_AUTH_SECRET=<pelo menos 16 caracteres>
-SEED_SUPERADMIN_EMAIL=<e-mail Google do Diogo>
+SEED_SUPERADMIN_EMAIL=diogolean@gmail.com
 SEED_SUPERADMIN_PASSWORD=<senha do piloto>
 GOOGLE_CLIENT_ID=<client id>
 GOOGLE_CLIENT_SECRET=<client secret>
@@ -146,13 +146,13 @@ ANIMIND_AUTH_URL=http://localhost:3000
 
 `npm run seed` precisa imprimir `store=file assets=file`. Aí `http://localhost:3000` abre a conta do Diogo. O mesmo vale para `npm run import-character`. Os dois scripts leem `.env.local` sem substituir variável que já está no ambiente.
 
-Redirect URI para cadastrar no Google Cloud (exato, sem curinga):
+O app manda o Google de volta para este caminho, já cadastrado no cliente **Animind web**:
 
 ```text
 http://localhost:3000/api/auth/google/callback
 ```
 
-Se o navegador abrir `http://127.0.0.1:3000`, cadastre também `http://127.0.0.1:3000/api/auth/google/callback`. O `npm run dev` escuta a porta 3000.
+`http://localhost:3000/api/auth/callback/google` também está cadastrado nesse cliente e o app não usa. `127.0.0.1` é outro host: se o navegador abrir esse, cadastre `http://127.0.0.1:3000/api/auth/google/callback`. O `npm run dev` escuta a porta 3000. `SEED_SUPERADMIN_EMAIL=diogolean@gmail.com` faz esse login Google cair no `super_admin`.
 
 ### Modo Vercel (preview de `feat/mvp-ui`, nunca `main`)
 
@@ -173,7 +173,7 @@ Variáveis que você cria à mão, nos mesmos ambientes, só com o nome (o valor
 - `ANIMIND_AUTH_URL` (origem do preview, sem caminho)
 - `GOOGLE_CLIENT_ID`
 - `GOOGLE_CLIENT_SECRET`
-- `SEED_SUPERADMIN_EMAIL` (o mesmo e-mail da conta Google do Diogo)
+- `SEED_SUPERADMIN_EMAIL` (`diogolean@gmail.com`, para o login Google cair no `super_admin`)
 - `SEED_SUPERADMIN_PASSWORD`
 
 `VERCEL_OIDC_TOKEN` a Vercel injeta sozinha; não cole um valor. `ANIMIND_BLOB_ACCESS` só entra se a loja Blob for privada (`private`).
@@ -200,15 +200,11 @@ O seed e o import precisam imprimir `store=postgres assets=blob`. Aí o login no
 
 ### Entrar com Google
 
-O botão **Entrar com Google** fica ao lado do e-mail e da senha, nos dois modos. O fluxo é o authorization code no servidor. O e-mail só entra se o Google marcar `email_verified`. Se esse e-mail já tem conta, a sessão usa essa conta sem mudar papel, nome nem senha: o Google do Diogo cai no `super_admin` quando `SEED_SUPERADMIN_EMAIL` é o mesmo endereço. Um e-mail novo vira `user` e não entra com senha. Rode o seed antes do primeiro login com Google para a conta já nascer `super_admin`. Um login anterior cria `user`; o seed seguinte promove esse e-mail.
+O botão **Entrar com Google** fica ao lado do e-mail e da senha, nos dois modos. O fluxo é o authorization code no servidor. O redirect URI que o app envia é `{origem}/api/auth/google/callback`. O e-mail só entra se o Google marcar `email_verified`. Se esse e-mail já tem conta, a sessão usa essa conta sem mudar papel, nome nem senha: `diogolean@gmail.com` cai no `super_admin` quando `SEED_SUPERADMIN_EMAIL` é esse endereço. Um e-mail novo vira `user` e não entra com senha. Rode o seed antes do primeiro login com Google para a conta já nascer `super_admin`. Um login anterior cria `user`; o seed seguinte promove esse e-mail.
 
 `ANIMIND_AUTH_SECRET` assina a sessão e o cookie de estado (`animind_google_state`, 10 minutos). Sem `GOOGLE_CLIENT_ID` e `GOOGLE_CLIENT_SECRET`, o botão volta para `/login?error=google_unconfigured` e não chama o Google.
 
-No [Google Cloud Console](https://console.cloud.google.com/apis/credentials):
-
-1. Tela de consentimento OAuth → **External**. Escopos: `openid`, `email`, `profile`. Enquanto o app estiver em **Testing**, adicione o e-mail Google do Diogo em Test users.
-2. Credenciais → **Create OAuth client ID** → **Web application**. Cole o redirect URI do modo local e, quando o preview existir, os da Vercel. Não precisa de origem JavaScript: o código troca o `code` no servidor.
-3. Copie o Client ID e o Client secret para o `.env.local` e, no modo Vercel, para Preview e Production. O secret não entra no git.
+O cliente já existe. Projeto [animind-513520](https://console.cloud.google.com/apis/credentials?project=animind-513520), conta `contato@sosilha.com.br`, organização `sosilha.com.br`, nome **Animind web**. Consentimento External, em Testing, com test users `diogolean@gmail.com` e `contato@sosilha.com.br`. Copie o Client ID e o Client secret desse cliente para o `.env.local` e, no modo Vercel, para Preview e Production. O valor não entra no git. Antes do login no preview, acrescente no mesmo cliente o redirect URI `https://<project>-git-feat-mvp-ui-<team>.vercel.app/api/auth/google/callback` (e o da produção, quando houver domínio).
 
 A página **Biblioteca** lista tudo o que a conta gerou: personagem, vista, ficha de emoções, imagem, roteiro, áudio, vídeo e debate. Cada item aponta para o personagem ou o job de origem. Um `super_admin` vê os de todo mundo. Importar um personagem grava essas linhas na hora; terminar uma criação grava roteiro, debate, imagem, áudio e vídeo sozinho. O texto vai para o mesmo armazenamento dos PNG (disco local ou Vercel Blob) e a ficha fica na mesma tabela de contas (`animind_assets` no Neon).
 

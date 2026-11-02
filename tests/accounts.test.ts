@@ -137,6 +137,13 @@ describe("accounts and character library", { concurrency: false }, () => {
       assert.match(example, new RegExp(`^${name}=$`, "m"));
     }
     assert.doesNotMatch(example, /postgres:\/\/|vercel_blob|rw_/);
+    const accountsDoc = await readFile(path.join(root, "docs", "ACCOUNTS.md"), "utf8");
+    assert.match(accountsDoc, /animind-513520/);
+    assert.match(accountsDoc, /Animind web/);
+    assert.match(accountsDoc, /http:\/\/localhost:3000\/api\/auth\/google\/callback/);
+    assert.match(accountsDoc, /diogolean\/animind/);
+    assert.match(accountsDoc, /to confirm/);
+    assert.doesNotMatch(accountsDoc, /GOCSPX-|AIza[0-9A-Za-z_-]{10}|sk-[A-Za-z0-9]{10}|postgres:\/\/|rw_[A-Za-z0-9]|BEGIN (RSA |OPENSSH )?PRIVATE KEY/);
     assert.equal(canSeeAll("user"), false);
     assert.equal(canSeeAll("admin"), false);
     assert.equal(canSeeAll("super_admin"), true);
