@@ -26,7 +26,8 @@ const fold = (value: string) =>
 export function normalizeToneCatalog(data?: { tones?: CoreTone[] } | null, source: ToneCatalog["source"] = "fallback"): ToneCatalog {
   const advertised = data?.tones?.length ? data.tones : KNOWN_CORE_TONES;
   const tones = PRODUCT_TONES.map((product) => {
-    const hit = advertised.find((candidate) => {
+    const exact = advertised.find((candidate) => fold(String(candidate.id ?? "")) === product.id);
+    const hit = exact ?? advertised.find((candidate) => {
       const words = `${fold(String(candidate.id ?? ""))} ${fold(String(candidate.label ?? ""))}`;
       return product.aliases.some((alias) => words.split(" ").includes(alias));
     });
