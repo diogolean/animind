@@ -176,6 +176,18 @@ function viewNameOf(key: string): LibraryViewName | undefined {
   return VIEW_BASENAMES[normalized];
 }
 
+/** Older packages set `base`. This one names the folder after the view and leaves layer urls as `torso.png`. */
+function ensureViewBases(puppet: Record<string, unknown>, files: ImportFile[]): void {
+  if (!puppet.views || typeof puppet.views !== "object" || Array.isArray(puppet.views)) return;
+  for (const [key, value] of Object.entries(puppet.views as Record<string, unknown>)) {
+    if (!value || typeof value !== "object" || Array.isArray(value)) continue;
+    const view = value as Record<string, unknown>;
+    if (typeof view.base === "string" && view.base.trim()) continue;
+    const candidate = `layers/${key}/`;
+    if (files.some((file) => file.path.startsWith(candidate))) view.base = candidate;
+  }
+}
+
 function overlayPuppetViews(puppet: Record<string, unknown>, urls: Map<string, string>, views: LibraryCharacter["views"]): void {
   for (const bag of [puppet.presentation, puppet.viewImages]) {
     if (!bag || typeof bag !== "object") continue;
@@ -244,6 +256,7 @@ export async function importCharacterPackage(options: {
   const previous = await findOwnedCharacter(options.ownerId, name);
   const id = previous?.id ?? newId("chr");
   if (previous) await deleteObjectPrefix(id);
+  ensureViewBases(puppet, files);
   const urls = new Map<string, string>();
   for (const file of files) {
     if (file.path === puppetFile.path) continue;

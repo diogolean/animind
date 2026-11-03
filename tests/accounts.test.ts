@@ -485,6 +485,38 @@ describe("accounts and character library", { concurrency: false }, () => {
     const kinds = accounts.assets.filter((item) => item.characterId === again.id).map((item) => item.kind);
     assert.equal(kinds.filter((kind) => kind === "view").length, 3);
     assert.equal(kinds.filter((kind) => kind === "emotion_sheet").length, 1);
+
+    const bare = await importCharacterPackage({
+      ownerId: owner.id,
+      name: "Bare layers",
+      files: [
+        {
+          path: "puppet.json",
+          bytes: Buffer.from(
+            JSON.stringify({
+              name: "Bare layers",
+              views: {
+                "three-quarter-right": {
+                  canvas: { w: 8, h: 8 },
+                  layers: [{ name: "head", url: "head.png", x: 0, y: 0, w: 1, h: 1, z: 1 }],
+                  visemes: {},
+                },
+              },
+            }),
+          ),
+        },
+        { path: "layers/three-quarter-right/head.png", bytes: PNG },
+        { path: "views/three-quarter-right.png", bytes: PNG },
+        { path: "emotion-sheet.jpg", bytes: PNG },
+      ],
+    });
+    assert.ok(bare.views.three_quarter_right?.endsWith("/views/three-quarter-right.png"));
+    assert.ok(bare.emotionSheetUrl?.endsWith("/emotion-sheet.jpg"));
+    const barePuppet = JSON.parse((await readObject(keyFromAssetUrl(bare.puppetUrl)!))!.toString("utf8")) as {
+      views: { "three-quarter-right": { base: string; layers: { url: string }[] } };
+    };
+    assert.equal(barePuppet.views["three-quarter-right"].base, "layers/three-quarter-right/");
+    assert.match(barePuppet.views["three-quarter-right"].layers[0]!.url, /\/layers\/three-quarter-right\/head\.png$/);
   });
 
   it("accepts the folder prefix a directory picker adds", async () => {
