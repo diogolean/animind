@@ -141,6 +141,14 @@
   --border: oklch(1 0 0 / 8%);
   --muted-foreground: oklch(0.62 0 0);
 }
+html {
+  max-width: 100%;
+}
+body {
+  max-width: 100%;
+  overflow-x: clip;
+}
+
 @keyframes shimmer { from { background-position: 150% 0 } to { background-position: -50% 0 } }
 .skeleton {
   background: linear-gradient(90deg, transparent 30%, oklch(1 0 0 / 0.06) 50%, transparent 70%) 0 0 / 200% 100%, var(--muted);

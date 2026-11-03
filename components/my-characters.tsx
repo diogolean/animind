@@ -159,7 +159,7 @@ export function MyCharacters() {
         </ul>
       )}
 
-      <form onSubmit={onImport} data-testid="import-character" className="mt-12 rounded-[1.5rem] border border-white/10 bg-white/[0.025] p-5">
+      <form onSubmit={onImport} data-testid="import-character" className="mt-12 max-w-full rounded-[1.5rem] border border-white/10 bg-white/[0.025] p-5">
         <h2 className="text-sm font-medium">Importar pasta</h2>
         <p className="mt-1 text-sm text-muted-foreground">puppet.json, as vistas que a pasta tiver (frente e 3/4; perfil se houver), ficha de emoções e PNGs em layers/&lt;vista&gt;/.</p>
         <div className="mt-4 grid gap-3 sm:grid-cols-2">
@@ -173,7 +173,7 @@ export function MyCharacters() {
           type="file"
           multiple
           required
-          className="mt-3 block w-full text-sm text-muted-foreground file:mr-3 file:rounded-full file:border-0 file:bg-white file:px-4 file:py-2 file:text-sm file:font-medium file:text-black"
+          className="mt-3 block w-full max-w-full text-sm text-muted-foreground file:mr-3 file:rounded-full file:border-0 file:bg-white file:px-4 file:py-2 file:text-sm file:font-medium file:text-black"
         />
         <button
           type="submit"

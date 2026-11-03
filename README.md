@@ -158,6 +158,8 @@ http://localhost:3000/api/auth/google/callback
 
 ### Modo Vercel (preview de `feat/mvp-ui`, nunca `main`)
 
+O preview ainda não existe: esta máquina não tem `VERCEL_TOKEN`, o CLI está deslogado e o repositório não está ligado a um projeto Vercel. Não há deploy de `main` nem de produção para criar daqui. O passo que falta é seu: em [vercel.com/new](https://vercel.com/new) importe `diogolean/animind`, deixe os deploys de Preview ligados e não publique `main`. Conecte o Neon sem branch de banco por preview, e um Blob público. Os nomes das variáveis ficam abaixo; os valores só na Vercel.
+
 O disco da função some a cada invocação, então o preview não usa `./.data`. Contas ficam no Neon. PNGs e `puppet.json` ficam no Vercel Blob e continuam sendo servidos por `/api/library/assets/...`.
 
 Integrações no projeto Vercel, ambientes **Preview** e **Development** (Production só se for publicar de propósito):

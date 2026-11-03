@@ -30,8 +30,13 @@ export function CharacterDetail() {
     function onKey(event: KeyboardEvent) {
       if (event.key === "Escape") setSheetOpen(false);
     }
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
     window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    return () => {
+      document.body.style.overflow = previous;
+      window.removeEventListener("keydown", onKey);
+    };
   }, [sheetOpen]);
 
   useEffect(() => {
@@ -113,6 +118,7 @@ export function CharacterDetail() {
     (view) => view.id !== "three_quarter" || !character.views.three_quarter_left,
   );
   const viewColumns = availableViews.length >= 3 ? "sm:grid-cols-3" : availableViews.length === 2 ? "sm:grid-cols-2" : "";
+  const viewCard = availableViews.length > 1 ? "w-[min(78vw,20rem)] shrink-0 snap-center sm:w-auto sm:shrink" : "w-full";
   return (
     <div data-testid="character-detail" className="mx-auto w-full max-w-5xl flex-1 px-5 py-10 sm:px-8">
       <Link href="/characters" className="text-sm text-muted-foreground hover:text-foreground">
@@ -151,10 +157,10 @@ export function CharacterDetail() {
         </div>
       </div>
 
-      <div className={`mt-8 grid gap-4 ${viewColumns}`}>
+      <div className={`mt-8 flex snap-x snap-mandatory gap-4 overflow-x-auto pb-1 sm:grid sm:overflow-visible ${viewColumns}`}>
         {availableViews.map((view) => (
-          <figure key={view.id} data-testid={view.testId} className="overflow-hidden rounded-[1.5rem] border border-white/10 bg-black/30">
-            <div className="flex aspect-[9/16] items-center justify-center bg-black">
+          <figure key={view.id} data-testid={view.testId} className={`${viewCard} overflow-hidden rounded-[1.5rem] border border-white/10 bg-black/30`}>
+            <div className="flex aspect-[3/4] items-center justify-center bg-black sm:aspect-[9/16]">
               <img src={character.views[view.id]} alt={view.label} className="size-full object-contain" />
             </div>
             <figcaption className="px-4 py-3 text-sm">{view.label}</figcaption>
@@ -168,7 +174,7 @@ export function CharacterDetail() {
           {character.emotionSheetUrl ? (
             <button type="button" data-testid="emotion-sheet-zoom" onClick={() => setSheetOpen(true)} className="block w-full cursor-zoom-in text-left">
               <img src={character.emotionSheetUrl} alt="Ficha de emoções" className="w-full" />
-              <span className="block px-4 py-3 text-sm text-muted-foreground">Clique para ver em tamanho real</span>
+              <span className="block px-4 py-3 text-sm text-muted-foreground">Toque para ver em tamanho real</span>
             </button>
           ) : (
             <p className="px-4 py-10 text-sm text-muted-foreground">Esta pasta não trouxe uma ficha de emoções.</p>
@@ -181,11 +187,11 @@ export function CharacterDetail() {
           aria-modal="true"
           aria-label="Ficha de emoções em tamanho real"
           data-testid="emotion-sheet-lightbox"
-          className="fixed inset-0 z-50 overflow-auto bg-black/90 p-4 sm:p-8"
+          className="fixed inset-0 z-50 overflow-auto overscroll-contain bg-black/95 px-3 pt-[max(0.75rem,env(safe-area-inset-top))] pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:p-8"
           onClick={() => setSheetOpen(false)}
         >
-          <div className="mb-4 flex justify-end">
-            <button type="button" onClick={() => setSheetOpen(false)} className="rounded-full border border-white/20 px-4 py-2 text-sm">
+          <div className="sticky top-0 z-10 mb-3 flex justify-end">
+            <button type="button" onClick={() => setSheetOpen(false)} className="rounded-full border border-white/20 bg-black/80 px-4 py-2 text-sm">
               Fechar
             </button>
           </div>
@@ -193,7 +199,7 @@ export function CharacterDetail() {
             data-testid="emotion-sheet-full"
             src={character.emotionSheetUrl}
             alt="Ficha de emoções em tamanho real"
-            className="mx-auto h-auto w-auto max-w-none"
+            className="mx-auto h-auto w-max min-w-full max-w-none"
             onClick={(event) => event.stopPropagation()}
           />
         </div>

@@ -52,8 +52,8 @@ export function Biblioteca() {
           ? "Tudo o que foi gerado, em todas as contas."
           : "Personagens, vistas, roteiros, áudios e vídeos desta conta."}
       </p>
-      <div className="mt-6 flex flex-wrap gap-2">
-        <button type="button" data-testid="asset-filter-all" onClick={() => setKind("")} className={`rounded-full px-3 py-1.5 text-xs ${kind === "" ? "bg-white text-black" : "border border-white/10 text-muted-foreground"}`}>
+      <div className="-mx-5 mt-6 flex gap-2 overflow-x-auto px-5 pb-1 sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0">
+        <button type="button" data-testid="asset-filter-all" onClick={() => setKind("")} className={`shrink-0 rounded-full px-3 py-1.5 text-xs ${kind === "" ? "bg-white text-black" : "border border-white/10 text-muted-foreground"}`}>
           Tudo
         </button>
         {ASSET_KINDS.map((item) => (
@@ -62,7 +62,7 @@ export function Biblioteca() {
             type="button"
             data-testid={`asset-filter-${item}`}
             onClick={() => setKind(item)}
-            className={`rounded-full px-3 py-1.5 text-xs ${kind === item ? "bg-white text-black" : "border border-white/10 text-muted-foreground"}`}
+            className={`shrink-0 rounded-full px-3 py-1.5 text-xs ${kind === item ? "bg-white text-black" : "border border-white/10 text-muted-foreground"}`}
           >
             {ASSET_LABEL[item]}
           </button>

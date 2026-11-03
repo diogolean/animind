@@ -62,12 +62,12 @@ export function SiteHeader() {
   }
 
   return (
-    <header className="mx-auto flex h-14 w-full max-w-5xl items-center gap-4 px-6">
+    <header className="mx-auto flex w-full max-w-5xl flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3 pt-[max(0.75rem,env(safe-area-inset-top))] sm:px-6">
       <Link href="/" className="flex items-center gap-2 text-sm font-medium tracking-tight">
         <span className="size-2 rounded-full bg-[var(--accent-brand)]" />
         animind
       </Link>
-      <span className="flex-1" />
+      <nav className="ml-auto flex max-w-full flex-wrap items-center justify-end gap-x-3 gap-y-1">
       {user ? (
         <>
           <Link href="/biblioteca" data-testid="biblioteca-link" className="text-sm text-muted-foreground hover:text-foreground">
@@ -89,6 +89,7 @@ export function SiteHeader() {
           Entrar
         </Link>
       )}
+      </nav>
       {mode && (
         <span data-testid="core-mode" title={mode.note} className="sr-only">
           {mode.label}
