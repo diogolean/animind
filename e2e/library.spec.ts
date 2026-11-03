@@ -23,6 +23,8 @@ function run(script: string, args: string[] = []) {
         BLOB_STORE_ID: "",
         SEED_SUPERADMIN_EMAIL: process.env.E2E_SUPERADMIN_EMAIL,
         SEED_SUPERADMIN_PASSWORD: process.env.E2E_SUPERADMIN_PASSWORD,
+        ANIMIND_SKIP_CHARACTER_IMPORT: "1",
+        ANIMIND_CHARACTER_ZIP: "",
       },
     });
     let stderr = "";
@@ -59,7 +61,7 @@ test("super admin entra e vê o personagem importado", async ({ page }) => {
   await expect(page.getByTestId("character-card").filter({ hasText: "Einstein" })).toBeVisible();
   await page.getByTestId("character-card").filter({ hasText: "Einstein" }).click();
   await expect(page.getByTestId("view-front").locator("img")).toBeVisible();
-  await expect(page.getByTestId("view-three-quarter").locator("img")).toBeVisible();
+  await expect(page.getByTestId("view-three-quarter-left").locator("img")).toBeVisible();
   await expect(page.getByTestId("view-profile").locator("img")).toBeVisible();
   await expect(page.getByTestId("emotion-sheet").locator("img")).toBeVisible();
   await expect(page.getByTestId("persona-ref")).toHaveText("wikiquote:Albert_Einstein");

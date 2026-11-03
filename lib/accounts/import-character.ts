@@ -1,27 +1,49 @@
-import { keyFromAssetUrl, putObject } from "./object-store";
+import { deleteObjectPrefix, keyFromAssetUrl, putObject } from "./object-store";
 import { newId, normalizeRel } from "./paths";
-import { saveCharacter, saveCharacterAssets } from "./store";
+import { findOwnedCharacter, writeImportedCharacter } from "./store";
 import type { LibraryCharacter, LibraryStatus, LibraryViewName } from "./types";
 import { isLibraryStatus } from "./types";
 
 const MAX_FILE = 8 * 1024 * 1024;
 const MAX_TOTAL = 64 * 1024 * 1024;
-const MAX_FILES = 200;
+const MAX_FILES = 400;
 const ALLOWED = new Set(["png", "webp", "jpg", "jpeg", "json", "txt", "md"]);
 
 const VIEW_BASENAMES: Record<string, LibraryViewName> = {
   front: "front",
   frente: "front",
   "view-front": "front",
-  "three-quarter": "three_quarter",
-  three_quarter: "three_quarter",
-  threequarter: "three_quarter",
-  "3-4": "three_quarter",
-  "34": "three_quarter",
+  "three-quarter": "three_quarter_left",
+  three_quarter: "three_quarter_left",
+  threequarter: "three_quarter_left",
+  "3-4": "three_quarter_left",
+  "34": "three_quarter_left",
+  left: "three_quarter_left",
+  "three-quarter-left": "three_quarter_left",
+  "3-4-left": "three_quarter_left",
+  "three-quarter-right": "three_quarter_right",
+  "3-4-right": "three_quarter_right",
+  "34-right": "three_quarter_right",
+  "3/4-right": "three_quarter_right",
+  right: "three_quarter_right",
+  "34-left": "three_quarter_left",
+  "3/4-left": "three_quarter_left",
+  "3/4": "three_quarter_left",
+  esquerda: "three_quarter_left",
+  direita: "three_quarter_right",
+  "three-quarter-esquerda": "three_quarter_left",
+  "three-quarter-direita": "three_quarter_right",
+  "3-4-esquerda": "three_quarter_left",
+  "3-4-direita": "three_quarter_right",
+  "tres-quartos": "three_quarter_left",
+  "tres-quartos-esquerda": "three_quarter_left",
+  "tres-quartos-direita": "three_quarter_right",
   profile: "profile",
   perfil: "profile",
   side: "profile",
 };
+
+const GALLERY_VIEWS: readonly LibraryViewName[] = ["front", "three_quarter", "three_quarter_left", "three_quarter_right", "profile"];
 
 const EMOTION_BASENAMES = new Set([
   "emotion",
@@ -134,7 +156,7 @@ function stringField(puppet: Record<string, unknown>, key: string): string | nul
 }
 
 function pickView(files: ImportFile[], urls: Map<string, string>, view: LibraryViewName): string | undefined {
-  const matches = files.filter((file) => isImage(file.path) && VIEW_BASENAMES[basenameKey(file.path)] === view);
+  const matches = files.filter((file) => isImage(file.path) && viewNameOf(basenameKey(file.path)) === view);
   matches.sort((a, b) => Number(b.path.includes("/views/")) - Number(a.path.includes("/views/")) || a.path.length - b.path.length);
   return matches[0] ? urls.get(matches[0].path) : undefined;
 }
@@ -146,7 +168,12 @@ function pickEmotion(files: ImportFile[], urls: Map<string, string>): string | n
 }
 
 function viewNameOf(key: string): LibraryViewName | undefined {
-  return VIEW_BASENAMES[key.toLowerCase().replace(/[\s_]+/g, "-")];
+  const normalized = key
+    .normalize("NFD")
+    .replace(/\p{M}/gu, "")
+    .toLowerCase()
+    .replace(/[\s_]+/g, "-");
+  return VIEW_BASENAMES[normalized];
 }
 
 function overlayPuppetViews(puppet: Record<string, unknown>, urls: Map<string, string>, views: LibraryCharacter["views"]): void {
@@ -212,7 +239,11 @@ export async function importCharacterPackage(options: {
     throw new ImportError("puppet.json não é JSON válido");
   }
 
-  const id = newId("chr");
+  const puppetName = stringField(puppet, "name");
+  const name = (options.name?.trim() || puppetName || "Personagem").slice(0, 80);
+  const previous = await findOwnedCharacter(options.ownerId, name);
+  const id = previous?.id ?? newId("chr");
+  if (previous) await deleteObjectPrefix(id);
   const urls = new Map<string, string>();
   for (const file of files) {
     if (file.path === puppetFile.path) continue;
@@ -223,7 +254,7 @@ export async function importCharacterPackage(options: {
   const puppetUrl = await putObject(`characters/${id}/${puppetFile.path}`, Buffer.from(JSON.stringify(rewritten)));
 
   const views: LibraryCharacter["views"] = {};
-  for (const view of ["front", "three_quarter", "profile"] as const) {
+  for (const view of GALLERY_VIEWS) {
     const url = pickView(files, urls, view);
     if (url) views[view] = url;
   }
@@ -240,8 +271,6 @@ export async function importCharacterPackage(options: {
     stringField(puppet, "personaSheet") ||
     stringField(puppet, "persona");
 
-  const puppetName = stringField(puppet, "name");
-  const name = (options.name?.trim() || puppetName || "Personagem").slice(0, 80);
   const now = new Date().toISOString();
   const referenced = new Set<string>();
   const gallery = new Set(Object.values(views));
@@ -262,11 +291,10 @@ export async function importCharacterPackage(options: {
     layers,
     emotionSheetUrl,
     status: (options.status as LibraryStatus) || "ready",
-    createdAt: now,
+    createdAt: previous?.createdAt ?? now,
     updatedAt: now,
   };
-  const saved = await saveCharacter(character);
+  const saved = await writeImportedCharacter(character, Boolean(previous));
   if (!keyFromAssetUrl(saved.puppetUrl)) throw new ImportError("Falha ao gravar o puppet", 500);
-  await saveCharacterAssets(saved);
   return saved;
 }

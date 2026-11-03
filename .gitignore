@@ -72,6 +72,9 @@ web_modules/
 
 # Accounts, character metadata and object storage (puppet.json, PNG layers). Never commit.
 .data/
+# Character packages. Seed imports uploads/albert_einstein.zip when that file is present.
+*.zip
+/uploads/
 
 # parcel-bundler cache (https://parceljs.org/)
 .cache

@@ -46,6 +46,8 @@ beforeEach(async () => {
   delete process.env.GOOGLE_CLIENT_ID;
   delete process.env.GOOGLE_CLIENT_SECRET;
   delete process.env.ANIMIND_AUTH_URL;
+  delete process.env.ANIMIND_CHARACTER_ZIP;
+  delete process.env.ANIMIND_SKIP_CHARACTER_IMPORT;
   secret();
 });
 
@@ -115,6 +117,8 @@ describe("accounts and character library", { concurrency: false }, () => {
   it("keeps object storage and the pilot password out of the repo", async () => {
     const ignore = await readFile(path.join(root, ".gitignore"), "utf8");
     assert.match(ignore, /^\.data\/$/m);
+    assert.match(ignore, /^\*\.zip$/m);
+    assert.match(ignore, /^\/uploads\/$/m);
     const seed = await readFile(path.join(root, "scripts", "seed-superadmin.ts"), "utf8");
     const example = await readFile(path.join(root, ".env.example"), "utf8");
     assert.match(seed, /process\.env\.SEED_SUPERADMIN_EMAIL/);
@@ -133,6 +137,7 @@ describe("accounts and character library", { concurrency: false }, () => {
       "ANIMIND_AUTH_URL",
       "GOOGLE_CLIENT_ID",
       "GOOGLE_CLIENT_SECRET",
+      "ANIMIND_CHARACTER_ZIP",
     ]) {
       assert.match(example, new RegExp(`^${name}=$`, "m"));
     }
@@ -161,7 +166,11 @@ describe("accounts and character library", { concurrency: false }, () => {
 
     const email = `pilot-${randomBytes(4).toString("hex")}@example.com`;
     const password = randomBytes(18).toString("base64url");
-    const seeded = await run("scripts/seed-superadmin.ts", { SEED_SUPERADMIN_EMAIL: email, SEED_SUPERADMIN_PASSWORD: password });
+    const seeded = await run("scripts/seed-superadmin.ts", {
+      SEED_SUPERADMIN_EMAIL: email,
+      SEED_SUPERADMIN_PASSWORD: password,
+      ANIMIND_SKIP_CHARACTER_IMPORT: "1",
+    });
     assert.equal(seeded.code, 0, seeded.stderr);
     assert.equal(seeded.stdout.includes(password), false);
     assert.equal(seeded.stderr.includes(password), false);
@@ -173,10 +182,114 @@ describe("accounts and character library", { concurrency: false }, () => {
     assert.equal(JSON.stringify(user).includes("passwordHash"), false);
     assert.equal(await verifyLogin(email, `${password}x`), null);
 
-    const again = await run("scripts/seed-superadmin.ts", { SEED_SUPERADMIN_EMAIL: email, SEED_SUPERADMIN_PASSWORD: password });
+    const again = await run("scripts/seed-superadmin.ts", {
+      SEED_SUPERADMIN_EMAIL: email,
+      SEED_SUPERADMIN_PASSWORD: password,
+      ANIMIND_SKIP_CHARACTER_IMPORT: "1",
+    });
     assert.equal(again.code, 0, again.stderr);
     const accounts = JSON.parse(await readFile(path.join(dir, "accounts.json"), "utf8")) as { users: { email: string }[] };
     assert.equal(accounts.users.length, 1);
+  });
+
+  it("imports the character zip during seed and replaces that character on the next seed", async () => {
+    const email = `pilot-${randomBytes(4).toString("hex")}@example.com`;
+    const password = randomBytes(18).toString("base64url");
+    const pack = path.join(dir, "pack");
+    const zipPath = path.join(dir, "albert_einstein.zip");
+    const puppet = {
+      name: "Albert Einstein",
+      views: {
+        front: {
+          base: "layers/front/",
+          rest: "views/front.png",
+          canvas: { w: 8, h: 8 },
+          layers: [{ name: "torso", url: "torso.png", x: 0, y: 0, w: 1, h: 1, z: 0 }],
+          visemes: {},
+        },
+        "three-quarter-left": {
+          base: "layers/three-quarter-left/",
+          rest: "views/three-quarter-left.png",
+          canvas: { w: 8, h: 8 },
+          layers: [{ name: "head", url: "head.png", x: 0, y: 0, w: 1, h: 1, z: 1 }],
+          visemes: {},
+        },
+        "three-quarter-right": {
+          base: "layers/three-quarter-right/",
+          rest: "views/three-quarter-right.png",
+          canvas: { w: 8, h: 8 },
+          layers: [{ name: "head", url: "head.png", x: 0, y: 0, w: 1, h: 1, z: 1 }],
+          visemes: {},
+        },
+      },
+    };
+    const packed: [string, Buffer][] = [
+      ["puppet.json", Buffer.from(JSON.stringify(puppet))],
+      ["views/front.png", PNG],
+      ["views/three-quarter-left.png", PNG],
+      ["views/three-quarter-right.png", PNG],
+      ["layers/front/torso.png", PNG],
+      ["layers/three-quarter-left/head.png", PNG],
+      ["layers/three-quarter-right/head.png", PNG],
+      ["emotion-sheet.png", PNG],
+    ];
+    for (const [rel, bytes] of packed) {
+      const dest = path.join(pack, rel);
+      await mkdir(path.dirname(dest), { recursive: true });
+      await writeFile(dest, bytes);
+    }
+    const zipped = await new Promise<{ code: number | null; stderr: string }>((resolve, reject) => {
+      const child = spawn(
+        "python3",
+        [
+          "-c",
+          [
+            "import os, zipfile",
+            "root = os.environ['PACK']",
+            "dest = os.environ['ZIP']",
+            "archive = zipfile.ZipFile(dest, 'w', compression=zipfile.ZIP_DEFLATED)",
+            "for current, dirs, names in os.walk(root):",
+            "    for name in names:",
+            "        full = os.path.join(current, name)",
+            "        rel = os.path.relpath(full, root).replace(os.sep, '/')",
+            "        archive.write(full, 'albert_einstein/' + rel)",
+            "archive.close()",
+          ].join("\n"),
+        ],
+        { env: { ...process.env, PACK: pack, ZIP: zipPath } },
+      );
+      let stderr = "";
+      child.stderr.setEncoding("utf8");
+      child.stderr.on("data", (chunk) => {
+        stderr += chunk;
+      });
+      child.on("error", reject);
+      child.on("close", (code) => resolve({ code, stderr }));
+    });
+    assert.equal(zipped.code, 0, zipped.stderr);
+
+    const env = { SEED_SUPERADMIN_EMAIL: email, SEED_SUPERADMIN_PASSWORD: password, ANIMIND_CHARACTER_ZIP: zipPath };
+    const seeded = await run("scripts/seed-superadmin.ts", env);
+    assert.equal(seeded.code, 0, seeded.stderr);
+    assert.equal(seeded.stdout.includes(password), false);
+    const id = seeded.stdout.match(/character Albert Einstein id=(chr_[A-Za-z0-9_-]+)/)?.[1];
+    assert.ok(id);
+    const again = await run("scripts/seed-superadmin.ts", env);
+    assert.equal(again.code, 0, again.stderr);
+    assert.match(again.stdout, new RegExp(`character Albert Einstein id=${id}`));
+    const stored = JSON.parse(await readFile(path.join(dir, "accounts.json"), "utf8")) as {
+      characters: { id: string; views: Record<string, string>; emotionSheetUrl: string | null }[];
+      assets: { characterId: string; kind: string }[];
+    };
+    assert.equal(stored.characters.length, 1);
+    assert.equal(stored.characters[0]?.id, id);
+    assert.ok(stored.characters[0]?.views.front?.endsWith("/views/front.png"));
+    assert.ok(stored.characters[0]?.views.three_quarter_left?.endsWith("/views/three-quarter-left.png"));
+    assert.ok(stored.characters[0]?.views.three_quarter_right?.endsWith("/views/three-quarter-right.png"));
+    assert.ok(stored.characters[0]?.emotionSheetUrl?.endsWith("/emotion-sheet.png"));
+    const kinds = stored.assets.filter((item) => item.characterId === id).map((item) => item.kind);
+    assert.equal(kinds.filter((kind) => kind === "view").length, 3);
+    assert.equal(kinds.filter((kind) => kind === "emotion_sheet").length, 1);
   });
 
   it("lets a super_admin see and manage every library, and nobody else", async () => {
@@ -212,7 +325,7 @@ describe("accounts and character library", { concurrency: false }, () => {
     assert.equal(imported.personaSheetRef, "wikiquote:Albert_Einstein");
     assert.equal(imported.status, "ready");
     assert.ok(imported.views.front?.startsWith("/api/library/assets/"));
-    assert.ok(imported.views.three_quarter?.includes("/views/three-quarter.png"));
+    assert.ok(imported.views.three_quarter_left?.includes("/views/three-quarter.png"));
     assert.ok(imported.views.profile?.includes("/views/profile.png"));
     assert.ok(imported.emotionSheetUrl?.includes("/emotion-sheet.png"));
     assert.equal(imported.layers.some((layer) => layer.name === "head"), true);
@@ -315,7 +428,7 @@ describe("accounts and character library", { concurrency: false }, () => {
     });
     assert.equal(imported.views.profile, undefined);
     assert.ok(imported.views.front?.endsWith("/views/front.png"));
-    assert.ok(imported.views.three_quarter?.endsWith("/views/three-quarter.png"));
+    assert.ok(imported.views.three_quarter_left?.endsWith("/views/three-quarter.png"));
     assert.ok(imported.emotionSheetUrl?.endsWith("/emotion-sheet.png"));
     assert.equal(imported.personaSheetRef, "Albert Einstein: warm, playful theoretical physicist.");
     const stored = JSON.parse((await readObject(keyFromAssetUrl(imported.puppetUrl)!))!.toString("utf8")) as {
@@ -330,6 +443,48 @@ describe("accounts and character library", { concurrency: false }, () => {
     const rig = puppetToRig(imported, stored);
     assert.equal(rig.views.left.layers[0]?.name, "head");
     assert.equal(rig.views.right.layers.length, 0);
+
+    const withRight = {
+      ...puppet,
+      views: {
+        ...puppet.views,
+        "three-quarter-right": {
+          base: "layers/three-quarter-right/",
+          rest: "views/three-quarter-right.png",
+          canvas: { w: 32, h: 48 },
+          layers: [{ name: "head", url: "head.png", x: 0, y: 0, w: 8, h: 8, z: 1 }],
+          visemes: {},
+        },
+      },
+    };
+    const again = await importCharacterPackage({
+      ownerId: owner.id,
+      files: [
+        { path: "puppet.json", bytes: Buffer.from(JSON.stringify(withRight)) },
+        { path: "layers/front/torso.png", bytes: PNG },
+        { path: "layers/front/mouths/X.png", bytes: PNG },
+        { path: "layers/three-quarter/head.png", bytes: PNG },
+        { path: "layers/three-quarter-right/head.png", bytes: PNG },
+        { path: "views/front.png", bytes: PNG },
+        { path: "views/three-quarter.png", bytes: PNG },
+        { path: "views/three-quarter-right.png", bytes: PNG },
+        { path: "emotion-sheet.png", bytes: PNG },
+      ],
+    });
+    assert.equal(again.id, imported.id);
+    assert.ok(again.views.three_quarter_right?.endsWith("/views/three-quarter-right.png"));
+    const replaced = JSON.parse((await readObject(keyFromAssetUrl(again.puppetUrl)!))!.toString("utf8")) as {
+      views: { "three-quarter-right": { layers: { name: string }[] } };
+    };
+    assert.equal(puppetToRig(again, replaced).views.right.layers[0]?.name, "head");
+    const accounts = JSON.parse(await readFile(path.join(dir, "accounts.json"), "utf8")) as {
+      characters: { id: string; name: string }[];
+      assets: { characterId: string; kind: string }[];
+    };
+    assert.equal(accounts.characters.filter((item) => item.name === "Albert Einstein").length, 1);
+    const kinds = accounts.assets.filter((item) => item.characterId === again.id).map((item) => item.kind);
+    assert.equal(kinds.filter((kind) => kind === "view").length, 3);
+    assert.equal(kinds.filter((kind) => kind === "emotion_sheet").length, 1);
   });
 
   it("accepts the folder prefix a directory picker adds", async () => {

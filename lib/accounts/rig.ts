@@ -39,6 +39,28 @@ function asView(value: unknown): CharacterView | null {
   };
 }
 
+function normalizedViewKey(key: string): string {
+  return key
+    .normalize("NFD")
+    .replace(/\p{M}/gu, "")
+    .toLowerCase()
+    .replace(/[\s_]+/g, "-");
+}
+
+function firstNamedView(views: Record<string, unknown>, keys: readonly string[]): CharacterView | null {
+  const wanted = new Set(keys);
+  for (const key of keys) {
+    const parsed = asView(views[key]);
+    if (parsed) return parsed;
+  }
+  for (const [key, value] of Object.entries(views)) {
+    if (!wanted.has(normalizedViewKey(key))) continue;
+    const parsed = asView(value);
+    if (parsed) return parsed;
+  }
+  return null;
+}
+
 function viewFromLayers(puppet: Record<string, unknown>): CharacterView | null {
   if (!Array.isArray(puppet.layers)) return null;
   const layers = puppet.layers.map(asLayer).filter((layer): layer is Layer => layer !== null);
@@ -59,8 +81,24 @@ export function puppetToRig(character: LibraryCharacter, puppet: unknown): Chara
   const record = puppet && typeof puppet === "object" ? (puppet as Record<string, unknown>) : {};
   const views = record.views && typeof record.views === "object" ? (record.views as Record<string, unknown>) : {};
   const front = asView(views.front) ?? viewFromLayers(record) ?? emptyView();
-  const left = asView(views.left) ?? asView(views.three_quarter) ?? asView(views["three-quarter"]) ?? emptyView();
-  const right = asView(views.right) ?? asView(views.profile) ?? emptyView();
+  const left =
+    firstNamedView(views, [
+      "three-quarter-left",
+      "left",
+      "3-4-left",
+      "3/4-left",
+      "34-left",
+      "three-quarter-esquerda",
+      "esquerda",
+      "three-quarter",
+      "3-4",
+      "3/4",
+      "34",
+    ]) ?? emptyView();
+  const right =
+    firstNamedView(views, ["three-quarter-right", "right", "3-4-right", "3/4-right", "34-right", "three-quarter-direita", "direita"]) ??
+    asView(views.profile) ??
+    emptyView();
   const rigViews: Record<ViewName, CharacterView> = { front, left, right };
   const frontImage = character.views.front ?? null;
   return {

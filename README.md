@@ -114,7 +114,7 @@ Papéis: `user`, `admin`, `super_admin`. Cada personagem pertence a uma conta. U
 
 Os nomes de todas as variáveis estão em [`.env.example`](.env.example). Copie para `.env.local` (ignorado pelo git) e preencha só o modo que for usar. Valor vazio é o mesmo que ausente. Quem paga cada serviço, e onde fica a chave, está em [`docs/ACCOUNTS.md`](docs/ACCOUNTS.md).
 
-A biblioteca guarda nome, referência da ficha, as vistas que a pasta trouxer (frente, 3/4 e perfil; o perfil é opcional), URL do `puppet.json`, URLs das camadas e o status (`draft`, `ready`, `archived`). A ficha só guarda a URL `/api/library/assets/...`.
+A biblioteca guarda nome, referência da ficha, as vistas que a pasta trouxer (frente, 3/4 esquerda, 3/4 direita e perfil; o perfil é opcional), URL do `puppet.json`, URLs das camadas e o status (`draft`, `ready`, `archived`). A página do personagem mostra essas vistas e a ficha de emoções grande, com zoom. A ficha só guarda a URL `/api/library/assets/...`.
 
 ### Modo local (`npm run dev`, inclusive no Windows)
 
@@ -145,6 +145,8 @@ ANIMIND_AUTH_URL=http://localhost:3000
 `ANIMIND_AUTH_URL` pode ficar vazio: quem abre `http://localhost:3000` usa essa origem mesmo que a variável aponte para a Vercel. `localhost` e `127.0.0.1` são URIs diferentes. Deixe `ANIMIND_COOKIE_SECURE` vazio para o cookie valer em `http://`. Não defina `VERCEL=1` na máquina: com essa flag e sem `DATABASE_URL` a API responde 503 em vez de usar o disco.
 
 `npm run seed` precisa imprimir `store=file assets=file`. Aí `http://localhost:3000` abre a conta do Diogo. O mesmo vale para `npm run import-character`. Os dois scripts leem `.env.local` sem substituir variável que já está no ambiente.
+
+Se `uploads/albert_einstein.zip`, `.data/inbox/albert_einstein.zip` ou o arquivo em `ANIMIND_CHARACTER_ZIP` existir, o seed importa esse pacote para o `SEED_SUPERADMIN_EMAIL`. O zip e os PNG ficam de fora do git. Os bytes vão para `./.data` ou para o Blob. Rodar o seed de novo, com o mesmo dono e o mesmo nome, substitui o personagem em vez de duplicar. `npm run import-character -- --zip <arquivo.zip> --email "$SEED_SUPERADMIN_EMAIL"` faz o mesmo import.
 
 O app manda o Google de volta para este caminho, já cadastrado no cliente **Animind web**:
 

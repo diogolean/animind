@@ -176,6 +176,28 @@ export async function saveCharacter(character: LibraryCharacter): Promise<Librar
   return stored;
 }
 
+/** Same owner and same display name means the same library character. */
+export async function findOwnedCharacter(ownerId: string, name: string): Promise<Pick<LibraryCharacter, "id" | "createdAt"> | null> {
+  const wanted = name.trim().toLowerCase();
+  const found = (await records().characters()).find((item) => item.ownerId === ownerId && item.name.trim().toLowerCase() === wanted);
+  return found ? { id: found.id, createdAt: found.createdAt } : null;
+}
+
+/** Inserts a character, or replaces the one that already uses this id. Asset rows are rewritten. */
+export async function writeImportedCharacter(character: LibraryCharacter, replace: boolean): Promise<LibraryCharacter> {
+  const store = records();
+  const stored = withoutOwner(character);
+  if (replace) {
+    await store.deleteAssetsForCharacter(stored.id);
+    const replaced = await store.replaceCharacter(stored);
+    if (!replaced) await store.insertCharacter(stored);
+  } else {
+    await store.insertCharacter(stored);
+  }
+  await saveCharacterAssets(stored);
+  return stored;
+}
+
 export async function updateCharacterStatus(actor: PublicUser, id: string, status: LibraryStatus): Promise<LibraryCharacter | null> {
   if (!isLibraryStatus(status)) return null;
   const store = records();
@@ -205,7 +227,9 @@ export async function deleteCharacterFor(actor: PublicUser, id: string): Promise
 
 const VIEW_ASSET: { id: LibraryViewName; label: string }[] = [
   { id: "front", label: "Frente" },
+  { id: "three_quarter_left", label: "3/4 esquerda" },
   { id: "three_quarter", label: "3/4" },
+  { id: "three_quarter_right", label: "3/4 direita" },
   { id: "profile", label: "Perfil" },
 ];
 

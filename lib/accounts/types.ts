@@ -12,8 +12,11 @@ export type AssetKind = (typeof ASSET_KINDS)[number];
 
 export const LIBRARY_STATUSES: readonly LibraryStatus[] = ["draft", "ready", "archived"];
 
-/** Gallery angles shown on My characters. The rig itself stays in puppet.json. */
-export type LibraryViewName = "front" | "three_quarter" | "profile";
+/**
+ * Gallery angles shown on My characters. The rig itself stays in puppet.json.
+ * `three_quarter` is the older single 3/4 slot; new packages use left and right.
+ */
+export type LibraryViewName = "front" | "three_quarter" | "three_quarter_left" | "three_quarter_right" | "profile";
 
 export interface PublicUser {
   id: string;

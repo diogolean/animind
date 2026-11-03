@@ -10,7 +10,9 @@ import type { LibraryCharacter, LibraryStatus, LibraryViewName } from "@/lib/acc
 
 const VIEWS: { id: LibraryViewName; label: string; testId: string }[] = [
   { id: "front", label: "Frente", testId: "view-front" },
-  { id: "three_quarter", label: "3/4", testId: "view-three-quarter" },
+  { id: "three_quarter_left", label: "3/4 esquerda", testId: "view-three-quarter-left" },
+  { id: "three_quarter", label: "3/4 esquerda", testId: "view-three-quarter" },
+  { id: "three_quarter_right", label: "3/4 direita", testId: "view-three-quarter-right" },
   { id: "profile", label: "Perfil", testId: "view-profile" },
 ];
 
@@ -107,7 +109,9 @@ export function CharacterDetail() {
   }
 
   const ready = character.status === "ready";
-  const availableViews = VIEWS.filter((view) => character.views[view.id]);
+  const availableViews = VIEWS.filter((view) => character.views[view.id]).filter(
+    (view) => view.id !== "three_quarter" || !character.views.three_quarter_left,
+  );
   const viewColumns = availableViews.length >= 3 ? "sm:grid-cols-3" : availableViews.length === 2 ? "sm:grid-cols-2" : "";
   return (
     <div data-testid="character-detail" className="mx-auto w-full max-w-5xl flex-1 px-5 py-10 sm:px-8">

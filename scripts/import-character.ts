@@ -1,3 +1,4 @@
+import { existsSync, statSync } from "node:fs";
 import { readdir, readFile, realpath, stat } from "node:fs/promises";
 import path from "node:path";
 import { databaseUrl, usesBlob } from "../lib/accounts/config";
@@ -5,11 +6,15 @@ import { loadLocalEnv } from "../lib/accounts/env-file";
 import { importCharacterPackage, ImportError, type ImportFile } from "../lib/accounts/import-character";
 import { normalizeRel } from "../lib/accounts/paths";
 import { listUsers } from "../lib/accounts/store";
+import type { LibraryCharacter } from "../lib/accounts/types";
+import { readZip } from "../lib/accounts/zip-package";
 
 /**
- * Loads a generated character folder into a user's library.
+ * Loads a generated character folder or zip into a user's library.
  *   npm run import-character -- --dir /path/to/einstein --email "$SEED_SUPERADMIN_EMAIL"
+ *   npm run import-character -- --zip /path/to/albert_einstein.zip --email "$SEED_SUPERADMIN_EMAIL"
  * Optional: --name, --persona, --status ready|draft|archived
+ * Importing the same owner and display name again replaces that character.
  */
 const ALLOWED = new Set(["png", "webp", "jpg", "jpeg", "json", "txt", "md"]);
 const MAX_FILE = 8 * 1024 * 1024;
@@ -47,26 +52,75 @@ async function collect(dir: string): Promise<ImportFile[]> {
   return files;
 }
 
+async function filesFromZip(zipPath: string): Promise<ImportFile[]> {
+  const bytes = await readFile(zipPath);
+  return readZip(bytes).map((entry) => ({ path: entry.path, bytes: entry.bytes }));
+}
+
+export async function importOwnedCharacter(options: {
+  email: string;
+  dir?: string;
+  zip?: string;
+  name?: string;
+  persona?: string;
+  status?: string;
+}): Promise<LibraryCharacter> {
+  const email = options.email.trim().toLowerCase();
+  if (!email || Boolean(options.dir) === Boolean(options.zip)) {
+    throw new ImportError("Informe o e-mail e exatamente um de --dir ou --zip");
+  }
+  const owner = (await listUsers()).find((user) => user.email === email);
+  if (!owner) throw new ImportError("Usuário não encontrado. Rode npm run seed antes, ou crie a conta.");
+  const source = options.zip ?? options.dir;
+  if (!source || !existsSync(source)) throw new ImportError("Pasta ou zip não encontrado");
+  const files = options.zip ? await filesFromZip(options.zip) : await collect(options.dir!);
+  return importCharacterPackage({
+    ownerId: owner.id,
+    name: options.name,
+    personaSheetRef: options.persona,
+    status: options.status,
+    files,
+  });
+}
+
+/** Zip the seed should import for the pilot, when one is on disk. Absent means seed only the account. */
+export function characterPackagePath(): string | null {
+  if (process.env.ANIMIND_SKIP_CHARACTER_IMPORT === "1") return null;
+  const fromEnv = process.env.ANIMIND_CHARACTER_ZIP?.trim() ?? "";
+  if (fromEnv) {
+    if (!existsSync(fromEnv) || !statSync(fromEnv).isFile()) {
+      throw new ImportError(`ANIMIND_CHARACTER_ZIP não é um arquivo: ${fromEnv}`);
+    }
+    return fromEnv;
+  }
+  for (const candidate of [
+    path.join(process.cwd(), "uploads", "albert_einstein.zip"),
+    path.join(process.cwd(), ".data", "inbox", "albert_einstein.zip"),
+  ]) {
+    if (existsSync(candidate) && statSync(candidate).isFile()) return candidate;
+  }
+  return null;
+}
+
 async function main() {
   await loadLocalEnv();
   const dir = arg("dir");
+  const zip = arg("zip");
   const email = arg("email")?.trim().toLowerCase();
-  if (!dir || !email) {
-    console.error("Uso: npm run import-character -- --dir <pasta> --email <dono> [--name <nome>] [--persona <ref>] [--status ready]");
+  if (!email || Boolean(dir) === Boolean(zip)) {
+    console.error(
+      "Uso: npm run import-character -- --dir <pasta> | --zip <arquivo.zip> --email <dono> [--name <nome>] [--persona <ref>] [--status ready]",
+    );
     process.exit(1);
   }
   try {
-    const owner = (await listUsers()).find((user) => user.email === email);
-    if (!owner) {
-      console.error("Usuário não encontrado. Rode npm run seed antes, ou crie a conta.");
-      process.exit(1);
-    }
-    const character = await importCharacterPackage({
-      ownerId: owner.id,
+    const character = await importOwnedCharacter({
+      email,
+      dir,
+      zip,
       name: arg("name"),
-      personaSheetRef: arg("persona"),
+      persona: arg("persona"),
       status: arg("status"),
-      files: await collect(dir),
     });
     console.log(
       JSON.stringify(
@@ -90,4 +144,7 @@ async function main() {
   }
 }
 
-void main();
+const invoked = process.argv[1] ? path.resolve(process.argv[1]) : "";
+if (invoked.endsWith(`${path.sep}import-character.ts`) || invoked.endsWith(`${path.sep}import-character.js`)) {
+  void main();
+}
