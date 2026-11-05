@@ -182,7 +182,7 @@ export function CharacterDetail() {
       </div>
       {character.catalog ? (
         <p className="mt-3 text-sm text-muted-foreground">
-          Frente do pacote aprovado, sem a legenda do quadro. As bocas A–H e X são as do pacote. As vistas 3/4 não vieram nele; o debate reutiliza esta frente.
+          Frente, 3/4 esquerda e 3/4 direita do pacote aprovado. As bocas A–H e X de cada vista entram no debate: a câmera da esquerda usa o 3/4 esquerdo e a da direita usa o 3/4 direito.
         </p>
       ) : null}
 
@@ -292,7 +292,17 @@ function MouthPreview({ view }: { view: CharacterView }) {
   const viseme = VISEMES[index] ?? "X";
   const mouth = view.visemes[viseme];
   const { w, h } = view.canvas;
-  const parts = [...view.layers, ...(mouth ? [{ ...mouth, name: "mouth" }] : [])].sort((a, b) => a.z - b.z);
+  const movable =
+    view.layers.some((layer) => layer.name === "eye_socket") &&
+    view.layers.some((layer) => layer.name === "iris") &&
+    view.layers.some((layer) => layer.name === "eye_white");
+  const parts = [...view.layers, ...(mouth ? [{ ...mouth, name: "mouth" }] : [])]
+    .filter((layer) => {
+      if (layer.name === "eye_socket" || layer.name === "eyes_closed" || layer.name === "eyes_half") return false;
+      if (movable && layer.name === "eyes") return false;
+      return true;
+    })
+    .sort((a, b) => a.z - b.z);
   return (
     <div data-testid="mouth-preview" data-viseme={viseme} className="relative mx-auto w-full max-w-md bg-black" style={{ aspectRatio: `${w} / ${h}` }}>
       {parts.map((layer) => (

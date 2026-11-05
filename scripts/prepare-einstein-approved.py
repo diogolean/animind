@@ -1,5 +1,12 @@
 #!/usr/bin/env python3
-"""Place the approved Einstein pack where the app can serve it.
+"""Older front-only helper. Do not run this to refresh the catalog.
+
+The approved pack now ships three cameras from the full zip
+(views/front.png, views/three-quarter.png, views/three-quarter-right.png
+and layers/{front,three-quarter,three-quarter-right}/). This script still
+rebuilds only the earlier p82 front plate and would overwrite that layout.
+
+Place the approved Einstein pack where the app can serve it.
 
 Reads the p82 pack (ksheet, mouths A–H+X, eyes, voice, motion) and writes:
 

@@ -375,6 +375,9 @@ export function CreationStudio() {
           <p data-testid="library-character" className="mb-4 text-sm text-muted-foreground">
             Usando <span className="text-foreground">{libraryCharacter.name}</span> da sua biblioteca
             {libraryIntent === "debate" ? " neste debate." : " neste vídeo."}
+            {libraryCharacter.views.front && libraryCharacter.views.three_quarter_left && libraryCharacter.views.three_quarter_right
+              ? " Frente, 3/4 esquerda e 3/4 direita: no debate a câmera da esquerda usa o 3/4 esquerdo e a da direita usa o 3/4 direito."
+              : ""}
           </p>
         ) : null}
         <div className="rounded-[2rem] border border-white/10 bg-white/[0.025] p-3 shadow-2xl shadow-black/20 sm:p-4">

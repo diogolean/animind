@@ -1,309 +1,1593 @@
 {
-  "name": "Albert Einstein",
-  "personaSheetRef": "https://en.wikiquote.org/wiki/Albert_Einstein",
-  "artStyle": "ghibli",
-  "emotionSheet": "emotion-sheet.png",
-  "views": {
-    "front": {
-      "canvas": {
-        "w": 480,
-        "h": 620
-      },
-      "layers": [
-        {
-          "name": "body",
-          "url": "layers/front/body.png",
-          "x": 0,
-          "y": 0,
-          "w": 480,
-          "h": 620,
-          "z": 1
-        }
-      ],
-      "visemes": {
-        "A": {
-          "name": "mouth",
-          "url": "mouths/A.png",
-          "x": 197,
-          "y": 479,
-          "w": 90,
-          "h": 18,
-          "z": 8
-        },
-        "B": {
-          "name": "mouth",
-          "url": "mouths/B.png",
-          "x": 194,
-          "y": 477,
-          "w": 96,
-          "h": 28,
-          "z": 8
-        },
-        "C": {
-          "name": "mouth",
-          "url": "mouths/C.png",
-          "x": 194,
-          "y": 470,
-          "w": 96,
-          "h": 39,
-          "z": 8
-        },
-        "D": {
-          "name": "mouth",
-          "url": "mouths/D.png",
-          "x": 191,
-          "y": 458,
-          "w": 101,
-          "h": 65,
-          "z": 8
-        },
-        "E": {
-          "name": "mouth",
-          "url": "mouths/E.png",
-          "x": 199,
-          "y": 470,
-          "w": 85,
-          "h": 42,
-          "z": 8
-        },
-        "F": {
-          "name": "mouth",
-          "url": "mouths/F.png",
-          "x": 222,
-          "y": 466,
-          "w": 42,
-          "h": 50,
-          "z": 8
-        },
-        "G": {
-          "name": "mouth",
-          "url": "mouths/G.png",
-          "x": 194,
-          "y": 472,
-          "w": 96,
-          "h": 35,
-          "z": 8
-        },
-        "H": {
-          "name": "mouth",
-          "url": "mouths/H.png",
-          "x": 200,
-          "y": 467,
-          "w": 85,
-          "h": 42,
-          "z": 8
-        },
-        "X": {
-          "name": "mouth",
-          "url": "mouths/X.png",
-          "x": 194,
-          "y": 479,
-          "w": 96,
-          "h": 18,
-          "z": 8
-        }
-      }
+ "name": "Albert Einstein",
+ "id": "albert_einstein",
+ "views": {
+  "front": {
+   "canvas": {
+    "w": 1080,
+    "h": 1920
+   },
+   "layers": [
+    {
+     "name": "torso",
+     "url": "torso.png",
+     "x": 28,
+     "y": 735,
+     "w": 1023,
+     "h": 1185,
+     "z": 0
     },
-    "left": {
-      "canvas": {
-        "w": 480,
-        "h": 620
-      },
-      "layers": [
-        {
-          "name": "body",
-          "url": "layers/front/body.png",
-          "x": 0,
-          "y": 0,
-          "w": 480,
-          "h": 620,
-          "z": 1
-        }
-      ],
-      "visemes": {
-        "A": {
-          "name": "mouth",
-          "url": "mouths/A.png",
-          "x": 197,
-          "y": 479,
-          "w": 90,
-          "h": 18,
-          "z": 8
-        },
-        "B": {
-          "name": "mouth",
-          "url": "mouths/B.png",
-          "x": 194,
-          "y": 477,
-          "w": 96,
-          "h": 28,
-          "z": 8
-        },
-        "C": {
-          "name": "mouth",
-          "url": "mouths/C.png",
-          "x": 194,
-          "y": 470,
-          "w": 96,
-          "h": 39,
-          "z": 8
-        },
-        "D": {
-          "name": "mouth",
-          "url": "mouths/D.png",
-          "x": 191,
-          "y": 458,
-          "w": 101,
-          "h": 65,
-          "z": 8
-        },
-        "E": {
-          "name": "mouth",
-          "url": "mouths/E.png",
-          "x": 199,
-          "y": 470,
-          "w": 85,
-          "h": 42,
-          "z": 8
-        },
-        "F": {
-          "name": "mouth",
-          "url": "mouths/F.png",
-          "x": 222,
-          "y": 466,
-          "w": 42,
-          "h": 50,
-          "z": 8
-        },
-        "G": {
-          "name": "mouth",
-          "url": "mouths/G.png",
-          "x": 194,
-          "y": 472,
-          "w": 96,
-          "h": 35,
-          "z": 8
-        },
-        "H": {
-          "name": "mouth",
-          "url": "mouths/H.png",
-          "x": 200,
-          "y": 467,
-          "w": 85,
-          "h": 42,
-          "z": 8
-        },
-        "X": {
-          "name": "mouth",
-          "url": "mouths/X.png",
-          "x": 194,
-          "y": 479,
-          "w": 96,
-          "h": 18,
-          "z": 8
-        }
-      }
+    {
+     "name": "neck",
+     "url": "neck.png",
+     "x": 0,
+     "y": 0,
+     "w": 2,
+     "h": 2,
+     "z": 1
     },
-    "right": {
-      "canvas": {
-        "w": 480,
-        "h": 620
-      },
-      "layers": [
-        {
-          "name": "body",
-          "url": "layers/front/body.png",
-          "x": 0,
-          "y": 0,
-          "w": 480,
-          "h": 620,
-          "z": 1
-        }
-      ],
-      "visemes": {
-        "A": {
-          "name": "mouth",
-          "url": "mouths/A.png",
-          "x": 197,
-          "y": 479,
-          "w": 90,
-          "h": 18,
-          "z": 8
-        },
-        "B": {
-          "name": "mouth",
-          "url": "mouths/B.png",
-          "x": 194,
-          "y": 477,
-          "w": 96,
-          "h": 28,
-          "z": 8
-        },
-        "C": {
-          "name": "mouth",
-          "url": "mouths/C.png",
-          "x": 194,
-          "y": 470,
-          "w": 96,
-          "h": 39,
-          "z": 8
-        },
-        "D": {
-          "name": "mouth",
-          "url": "mouths/D.png",
-          "x": 191,
-          "y": 458,
-          "w": 101,
-          "h": 65,
-          "z": 8
-        },
-        "E": {
-          "name": "mouth",
-          "url": "mouths/E.png",
-          "x": 199,
-          "y": 470,
-          "w": 85,
-          "h": 42,
-          "z": 8
-        },
-        "F": {
-          "name": "mouth",
-          "url": "mouths/F.png",
-          "x": 222,
-          "y": 466,
-          "w": 42,
-          "h": 50,
-          "z": 8
-        },
-        "G": {
-          "name": "mouth",
-          "url": "mouths/G.png",
-          "x": 194,
-          "y": 472,
-          "w": 96,
-          "h": 35,
-          "z": 8
-        },
-        "H": {
-          "name": "mouth",
-          "url": "mouths/H.png",
-          "x": 200,
-          "y": 467,
-          "w": 85,
-          "h": 42,
-          "z": 8
-        },
-        "X": {
-          "name": "mouth",
-          "url": "mouths/X.png",
-          "x": 194,
-          "y": 479,
-          "w": 96,
-          "h": 18,
-          "z": 8
-        }
-      }
+    {
+     "name": "head",
+     "url": "head.png",
+     "x": 298,
+     "y": 334,
+     "w": 500,
+     "h": 558,
+     "z": 2
+    },
+    {
+     "name": "eyes",
+     "url": "eyes.png",
+     "x": 439,
+     "y": 632,
+     "w": 182,
+     "h": 22,
+     "z": 3,
+     "parent": "head"
+    },
+    {
+     "name": "eye_white",
+     "url": "eye_white.png",
+     "x": 439,
+     "y": 632,
+     "w": 182,
+     "h": 22,
+     "z": 3,
+     "parent": "head"
+    },
+    {
+     "name": "iris",
+     "url": "iris.png",
+     "x": 452,
+     "y": 628,
+     "w": 155,
+     "h": 25,
+     "z": 4,
+     "parent": "head"
+    },
+    {
+     "name": "eye_socket",
+     "url": "eye_socket.png",
+     "x": 439,
+     "y": 632,
+     "w": 182,
+     "h": 22,
+     "z": 4,
+     "parent": "head"
+    },
+    {
+     "name": "eyes_half",
+     "url": "eyes_half.png",
+     "x": 438,
+     "y": 606,
+     "w": 184,
+     "h": 47,
+     "z": 5,
+     "parent": "head"
+    },
+    {
+     "name": "eyes_closed",
+     "url": "eyes_closed.png",
+     "x": 430,
+     "y": 607,
+     "w": 193,
+     "h": 58,
+     "z": 6,
+     "parent": "head"
+    },
+    {
+     "name": "brows",
+     "url": "brows.png",
+     "x": 419,
+     "y": 590,
+     "w": 218,
+     "h": 34,
+     "z": 7,
+     "parent": "head"
+    },
+    {
+     "name": "brow_left",
+     "url": "brow_left.png",
+     "x": 419,
+     "y": 590,
+     "w": 77,
+     "h": 34,
+     "z": 8,
+     "parent": "head"
+    },
+    {
+     "name": "brow_right",
+     "url": "brow_right.png",
+     "x": 567,
+     "y": 590,
+     "w": 70,
+     "h": 32,
+     "z": 8,
+     "parent": "head"
+    },
+    {
+     "name": "mustache",
+     "url": "mustache.png",
+     "x": 429,
+     "y": 750,
+     "w": 192,
+     "h": 64,
+     "z": 11
     }
+   ],
+   "visemes": {
+    "X": {
+     "name": "mouth_X",
+     "url": "mouths/X.png",
+     "x": 488,
+     "y": 758,
+     "w": 86,
+     "h": 84,
+     "z": 10,
+     "parent": "head"
+    },
+    "A": {
+     "name": "mouth_A",
+     "url": "mouths/A.png",
+     "x": 488,
+     "y": 758,
+     "w": 86,
+     "h": 84,
+     "z": 10,
+     "parent": "head"
+    },
+    "B": {
+     "name": "mouth_B",
+     "url": "mouths/B.png",
+     "x": 488,
+     "y": 758,
+     "w": 86,
+     "h": 84,
+     "z": 10,
+     "parent": "head"
+    },
+    "C": {
+     "name": "mouth_C",
+     "url": "mouths/C.png",
+     "x": 488,
+     "y": 758,
+     "w": 86,
+     "h": 84,
+     "z": 10,
+     "parent": "head"
+    },
+    "D": {
+     "name": "mouth_D",
+     "url": "mouths/D.png",
+     "x": 488,
+     "y": 758,
+     "w": 86,
+     "h": 84,
+     "z": 10,
+     "parent": "head"
+    },
+    "E": {
+     "name": "mouth_E",
+     "url": "mouths/E.png",
+     "x": 488,
+     "y": 758,
+     "w": 86,
+     "h": 84,
+     "z": 10,
+     "parent": "head"
+    },
+    "F": {
+     "name": "mouth_F",
+     "url": "mouths/F.png",
+     "x": 488,
+     "y": 758,
+     "w": 86,
+     "h": 84,
+     "z": 10,
+     "parent": "head"
+    },
+    "G": {
+     "name": "mouth_G",
+     "url": "mouths/G.png",
+     "x": 488,
+     "y": 758,
+     "w": 86,
+     "h": 84,
+     "z": 10,
+     "parent": "head"
+    },
+    "H": {
+     "name": "mouth_H",
+     "url": "mouths/H.png",
+     "x": 488,
+     "y": 758,
+     "w": 86,
+     "h": 84,
+     "z": 10,
+     "parent": "head"
+    }
+   },
+   "expressions": {
+    "neutral": {
+     "name": "expression_neutral",
+     "url": "expressions/neutral.png",
+     "x": 488,
+     "y": 758,
+     "w": 86,
+     "h": 84,
+     "z": 10,
+     "parent": "head"
+    },
+    "happy": {
+     "name": "expression_happy",
+     "url": "expressions/happy.png",
+     "x": 488,
+     "y": 758,
+     "w": 86,
+     "h": 84,
+     "z": 10,
+     "parent": "head"
+    },
+    "smug_smile": {
+     "name": "expression_smug_smile",
+     "url": "expressions/smug_smile.png",
+     "x": 488,
+     "y": 758,
+     "w": 86,
+     "h": 84,
+     "z": 10,
+     "parent": "head"
+    },
+    "ironic": {
+     "name": "expression_ironic",
+     "url": "expressions/ironic.png",
+     "x": 488,
+     "y": 758,
+     "w": 86,
+     "h": 84,
+     "z": 10,
+     "parent": "head"
+    },
+    "angry": {
+     "name": "expression_angry",
+     "url": "expressions/angry.png",
+     "x": 488,
+     "y": 758,
+     "w": 86,
+     "h": 84,
+     "z": 10,
+     "parent": "head"
+    },
+    "stressed_grimace": {
+     "name": "expression_stressed_grimace",
+     "url": "expressions/stressed_grimace.png",
+     "x": 488,
+     "y": 758,
+     "w": 86,
+     "h": 84,
+     "z": 10,
+     "parent": "head"
+    },
+    "sad": {
+     "name": "expression_sad",
+     "url": "expressions/sad.png",
+     "x": 488,
+     "y": 758,
+     "w": 86,
+     "h": 84,
+     "z": 10,
+     "parent": "head"
+    },
+    "surprised": {
+     "name": "expression_surprised",
+     "url": "expressions/surprised.png",
+     "x": 488,
+     "y": 758,
+     "w": 86,
+     "h": 84,
+     "z": 10,
+     "parent": "head"
+    },
+    "thoughtful": {
+     "name": "expression_thoughtful",
+     "url": "expressions/thoughtful.png",
+     "x": 488,
+     "y": 758,
+     "w": 86,
+     "h": 84,
+     "z": 10,
+     "parent": "head"
+    }
+   },
+   "mouthQA": {
+    "head": "aiwake v3",
+    "mouths": "human",
+    "mouthBox": [
+     518,
+     794,
+     544,
+     806
+    ],
+    "mouth": [
+     518,
+     794,
+     544,
+     806
+    ],
+    "eyes": [
+     [
+      452,
+      627,
+      478,
+      653
+     ],
+     [
+      581,
+      628,
+      607,
+      654
+     ]
+    ],
+    "irises": [
+     [
+      465,
+      640
+     ],
+     [
+      594,
+      641
+     ]
+    ],
+    "mouthless": true
+   },
+   "humanEyes": {
+    "lines": {
+     "open": 632,
+     "half": 643,
+     "closed": 653
+    },
+    "painted": {
+     "open": 632,
+     "half": 644,
+     "closed": 660
+    },
+    "iris": [
+     465,
+     641,
+     13
+    ],
+    "sclera": [
+     439,
+     632,
+     621,
+     654
+    ],
+    "browBottom": 625,
+    "eyeTop": 632,
+    "browHeight": 36,
+    "forehead": [
+     413,
+     575,
+     644,
+     632
+    ],
+    "shift": [
+     6.04296875,
+     4.31640625
+    ]
+   },
+   "eyeRig": {
+    "maxShift": [
+     3.9,
+     2.6
+    ],
+    "irises": [
+     [
+      465,
+      640,
+      4.333333333333333
+     ],
+     [
+      594,
+      641,
+      4.333333333333333
+     ]
+    ]
+   },
+   "fx": {
+    "happy": {
+     "name": "cheeks_happy",
+     "x": 422,
+     "y": 644,
+     "w": 215,
+     "h": 58,
+     "url": "fx/cheeks_happy.png",
+     "z": 9,
+     "parent": "head"
+    }
+   },
+   "headPivot": [
+    548,
+    892
+   ]
   },
-  "note": "Approved p82 pack. left/right reuse the front plate; 3/4 views were not in the pack."
+  "three-quarter": {
+   "canvas": {
+    "w": 1080,
+    "h": 1920
+   },
+   "layers": [
+    {
+     "name": "torso",
+     "url": "torso.png",
+     "x": 117,
+     "y": 785,
+     "w": 914,
+     "h": 1135,
+     "z": 0
+    },
+    {
+     "name": "neck",
+     "url": "neck.png",
+     "x": 0,
+     "y": 0,
+     "w": 2,
+     "h": 2,
+     "z": 1
+    },
+    {
+     "name": "head",
+     "url": "head.png",
+     "x": 270,
+     "y": 311,
+     "w": 558,
+     "h": 603,
+     "z": 2
+    },
+    {
+     "name": "eyes",
+     "url": "eyes.png",
+     "x": 364,
+     "y": 631,
+     "w": 170,
+     "h": 28,
+     "z": 3,
+     "parent": "head"
+    },
+    {
+     "name": "eye_white",
+     "url": "eye_white.png",
+     "x": 364,
+     "y": 631,
+     "w": 170,
+     "h": 28,
+     "z": 3,
+     "parent": "head"
+    },
+    {
+     "name": "iris",
+     "url": "iris.png",
+     "x": 375,
+     "y": 627,
+     "w": 139,
+     "h": 30,
+     "z": 4,
+     "parent": "head"
+    },
+    {
+     "name": "eye_socket",
+     "url": "eye_socket.png",
+     "x": 364,
+     "y": 631,
+     "w": 170,
+     "h": 28,
+     "z": 4,
+     "parent": "head"
+    },
+    {
+     "name": "eyes_half",
+     "url": "eyes_half.png",
+     "x": 363,
+     "y": 628,
+     "w": 171,
+     "h": 27,
+     "z": 5,
+     "parent": "head"
+    },
+    {
+     "name": "eyes_closed",
+     "url": "eyes_closed.png",
+     "x": 364,
+     "y": 628,
+     "w": 170,
+     "h": 32,
+     "z": 6,
+     "parent": "head"
+    },
+    {
+     "name": "brows",
+     "url": "brows.png",
+     "x": 340,
+     "y": 575,
+     "w": 237,
+     "h": 54,
+     "z": 7,
+     "parent": "head"
+    },
+    {
+     "name": "brow_left",
+     "url": "brow_left.png",
+     "x": 340,
+     "y": 584,
+     "w": 60,
+     "h": 45,
+     "z": 8,
+     "parent": "head"
+    },
+    {
+     "name": "brow_right",
+     "url": "brow_right.png",
+     "x": 461,
+     "y": 575,
+     "w": 116,
+     "h": 44,
+     "z": 8,
+     "parent": "head"
+    },
+    {
+     "name": "mustache",
+     "url": "mustache.png",
+     "x": 352,
+     "y": 756,
+     "w": 208,
+     "h": 71,
+     "z": 11
+    }
+   ],
+   "visemes": {
+    "X": {
+     "name": "mouth_X",
+     "url": "mouths/X.png",
+     "x": 404,
+     "y": 772,
+     "w": 65,
+     "h": 69,
+     "z": 10,
+     "parent": "head"
+    },
+    "A": {
+     "name": "mouth_A",
+     "url": "mouths/A.png",
+     "x": 404,
+     "y": 772,
+     "w": 65,
+     "h": 69,
+     "z": 10,
+     "parent": "head"
+    },
+    "B": {
+     "name": "mouth_B",
+     "url": "mouths/B.png",
+     "x": 404,
+     "y": 772,
+     "w": 65,
+     "h": 69,
+     "z": 10,
+     "parent": "head"
+    },
+    "C": {
+     "name": "mouth_C",
+     "url": "mouths/C.png",
+     "x": 404,
+     "y": 772,
+     "w": 65,
+     "h": 69,
+     "z": 10,
+     "parent": "head"
+    },
+    "D": {
+     "name": "mouth_D",
+     "url": "mouths/D.png",
+     "x": 404,
+     "y": 772,
+     "w": 65,
+     "h": 69,
+     "z": 10,
+     "parent": "head"
+    },
+    "E": {
+     "name": "mouth_E",
+     "url": "mouths/E.png",
+     "x": 404,
+     "y": 772,
+     "w": 65,
+     "h": 69,
+     "z": 10,
+     "parent": "head"
+    },
+    "F": {
+     "name": "mouth_F",
+     "url": "mouths/F.png",
+     "x": 404,
+     "y": 772,
+     "w": 65,
+     "h": 69,
+     "z": 10,
+     "parent": "head"
+    },
+    "G": {
+     "name": "mouth_G",
+     "url": "mouths/G.png",
+     "x": 404,
+     "y": 772,
+     "w": 65,
+     "h": 69,
+     "z": 10,
+     "parent": "head"
+    },
+    "H": {
+     "name": "mouth_H",
+     "url": "mouths/H.png",
+     "x": 404,
+     "y": 772,
+     "w": 65,
+     "h": 69,
+     "z": 10,
+     "parent": "head"
+    }
+   },
+   "expressions": {
+    "neutral": {
+     "name": "expression_neutral",
+     "url": "expressions/neutral.png",
+     "x": 404,
+     "y": 772,
+     "w": 65,
+     "h": 69,
+     "z": 10,
+     "parent": "head"
+    },
+    "happy": {
+     "name": "expression_happy",
+     "url": "expressions/happy.png",
+     "x": 404,
+     "y": 772,
+     "w": 65,
+     "h": 69,
+     "z": 10,
+     "parent": "head"
+    },
+    "smug_smile": {
+     "name": "expression_smug_smile",
+     "url": "expressions/smug_smile.png",
+     "x": 404,
+     "y": 772,
+     "w": 65,
+     "h": 69,
+     "z": 10,
+     "parent": "head"
+    },
+    "ironic": {
+     "name": "expression_ironic",
+     "url": "expressions/ironic.png",
+     "x": 404,
+     "y": 772,
+     "w": 65,
+     "h": 69,
+     "z": 10,
+     "parent": "head"
+    },
+    "angry": {
+     "name": "expression_angry",
+     "url": "expressions/angry.png",
+     "x": 404,
+     "y": 772,
+     "w": 65,
+     "h": 69,
+     "z": 10,
+     "parent": "head"
+    },
+    "stressed_grimace": {
+     "name": "expression_stressed_grimace",
+     "url": "expressions/stressed_grimace.png",
+     "x": 404,
+     "y": 772,
+     "w": 65,
+     "h": 69,
+     "z": 10,
+     "parent": "head"
+    },
+    "sad": {
+     "name": "expression_sad",
+     "url": "expressions/sad.png",
+     "x": 404,
+     "y": 772,
+     "w": 65,
+     "h": 69,
+     "z": 10,
+     "parent": "head"
+    },
+    "surprised": {
+     "name": "expression_surprised",
+     "url": "expressions/surprised.png",
+     "x": 404,
+     "y": 772,
+     "w": 65,
+     "h": 69,
+     "z": 10,
+     "parent": "head"
+    },
+    "thoughtful": {
+     "name": "expression_thoughtful",
+     "url": "expressions/thoughtful.png",
+     "x": 404,
+     "y": 772,
+     "w": 65,
+     "h": 69,
+     "z": 10,
+     "parent": "head"
+    }
+   },
+   "mouthQA": {
+    "head": "aiwake v3",
+    "mouths": "human",
+    "mouthBox": [
+     424,
+     800,
+     450,
+     812
+    ],
+    "mouth": [
+     424,
+     800,
+     450,
+     812
+    ],
+    "eyes": [
+     [
+      374,
+      630,
+      400,
+      656
+     ],
+     [
+      491,
+      624,
+      517,
+      650
+     ]
+    ],
+    "irises": [
+     [
+      387,
+      643
+     ],
+     [
+      504,
+      637
+     ]
+    ],
+    "mouthless": true
+   },
+   "humanEyes": {
+    "lines": {
+     "open": 636,
+     "half": 646,
+     "closed": 657
+    },
+    "painted": {
+     "open": 636,
+     "half": 647,
+     "closed": 658
+    },
+    "iris": [
+     387,
+     645,
+     12
+    ],
+    "sclera": [
+     364,
+     631,
+     534,
+     659
+    ],
+    "browBottom": 630,
+    "eyeTop": 631,
+    "browHeight": 56,
+    "forehead": [
+     334,
+     554,
+     583,
+     631
+    ],
+    "shift": [
+     6.179760319573902,
+     3.531291611185087
+    ]
+   },
+   "eyeRig": {
+    "maxShift": [
+     3.9,
+     2.6
+    ],
+    "irises": [
+     [
+      387,
+      643,
+      4.333333333333333
+     ],
+     [
+      504,
+      637,
+      4.333333333333333
+     ]
+    ]
+   },
+   "fx": {
+    "happy": {
+     "name": "cheeks_happy",
+     "x": 347,
+     "y": 641,
+     "w": 197,
+     "h": 59,
+     "url": "fx/cheeks_happy.png",
+     "z": 9,
+     "parent": "head"
+    }
+   },
+   "headPivot": [
+    549,
+    914
+   ]
+  },
+  "three-quarter-right": {
+   "canvas": {
+    "w": 1080,
+    "h": 1920
+   },
+   "layers": [
+    {
+     "name": "torso",
+     "url": "torso.png",
+     "x": 49,
+     "y": 785,
+     "w": 914,
+     "h": 1135,
+     "z": 0
+    },
+    {
+     "name": "neck",
+     "url": "neck.png",
+     "x": 1078,
+     "y": 0,
+     "w": 2,
+     "h": 2,
+     "z": 1
+    },
+    {
+     "name": "head",
+     "url": "head.png",
+     "x": 252,
+     "y": 311,
+     "w": 558,
+     "h": 603,
+     "z": 2
+    },
+    {
+     "name": "eyes",
+     "url": "eyes.png",
+     "x": 546,
+     "y": 631,
+     "w": 170,
+     "h": 28,
+     "z": 3,
+     "parent": "head"
+    },
+    {
+     "name": "eye_white",
+     "url": "eye_white.png",
+     "x": 546,
+     "y": 631,
+     "w": 170,
+     "h": 28,
+     "z": 3,
+     "parent": "head"
+    },
+    {
+     "name": "iris",
+     "url": "iris.png",
+     "x": 566,
+     "y": 627,
+     "w": 139,
+     "h": 30,
+     "z": 4,
+     "parent": "head"
+    },
+    {
+     "name": "eye_socket",
+     "url": "eye_socket.png",
+     "x": 546,
+     "y": 631,
+     "w": 170,
+     "h": 28,
+     "z": 4,
+     "parent": "head"
+    },
+    {
+     "name": "eyes_half",
+     "url": "eyes_half.png",
+     "x": 546,
+     "y": 628,
+     "w": 171,
+     "h": 27,
+     "z": 5,
+     "parent": "head"
+    },
+    {
+     "name": "eyes_closed",
+     "url": "eyes_closed.png",
+     "x": 546,
+     "y": 628,
+     "w": 170,
+     "h": 32,
+     "z": 6,
+     "parent": "head"
+    },
+    {
+     "name": "brows",
+     "url": "brows.png",
+     "x": 503,
+     "y": 575,
+     "w": 237,
+     "h": 54,
+     "z": 7,
+     "parent": "head"
+    },
+    {
+     "name": "brow_left",
+     "url": "brow_left.png",
+     "x": 503,
+     "y": 575,
+     "w": 116,
+     "h": 44,
+     "z": 8,
+     "parent": "head"
+    },
+    {
+     "name": "brow_right",
+     "url": "brow_right.png",
+     "x": 680,
+     "y": 584,
+     "w": 60,
+     "h": 45,
+     "z": 8,
+     "parent": "head"
+    },
+    {
+     "name": "mustache",
+     "url": "mustache.png",
+     "x": 520,
+     "y": 756,
+     "w": 208,
+     "h": 71,
+     "z": 11
+    }
+   ],
+   "visemes": {
+    "X": {
+     "name": "mouth_X",
+     "url": "mouths/X.png",
+     "x": 611,
+     "y": 772,
+     "w": 65,
+     "h": 69,
+     "z": 10,
+     "parent": "head"
+    },
+    "A": {
+     "name": "mouth_A",
+     "url": "mouths/A.png",
+     "x": 611,
+     "y": 772,
+     "w": 65,
+     "h": 69,
+     "z": 10,
+     "parent": "head"
+    },
+    "B": {
+     "name": "mouth_B",
+     "url": "mouths/B.png",
+     "x": 611,
+     "y": 772,
+     "w": 65,
+     "h": 69,
+     "z": 10,
+     "parent": "head"
+    },
+    "C": {
+     "name": "mouth_C",
+     "url": "mouths/C.png",
+     "x": 611,
+     "y": 772,
+     "w": 65,
+     "h": 69,
+     "z": 10,
+     "parent": "head"
+    },
+    "D": {
+     "name": "mouth_D",
+     "url": "mouths/D.png",
+     "x": 611,
+     "y": 772,
+     "w": 65,
+     "h": 69,
+     "z": 10,
+     "parent": "head"
+    },
+    "E": {
+     "name": "mouth_E",
+     "url": "mouths/E.png",
+     "x": 611,
+     "y": 772,
+     "w": 65,
+     "h": 69,
+     "z": 10,
+     "parent": "head"
+    },
+    "F": {
+     "name": "mouth_F",
+     "url": "mouths/F.png",
+     "x": 611,
+     "y": 772,
+     "w": 65,
+     "h": 69,
+     "z": 10,
+     "parent": "head"
+    },
+    "G": {
+     "name": "mouth_G",
+     "url": "mouths/G.png",
+     "x": 611,
+     "y": 772,
+     "w": 65,
+     "h": 69,
+     "z": 10,
+     "parent": "head"
+    },
+    "H": {
+     "name": "mouth_H",
+     "url": "mouths/H.png",
+     "x": 611,
+     "y": 772,
+     "w": 65,
+     "h": 69,
+     "z": 10,
+     "parent": "head"
+    }
+   },
+   "expressions": {
+    "neutral": {
+     "name": "expression_neutral",
+     "url": "expressions/neutral.png",
+     "x": 611,
+     "y": 772,
+     "w": 65,
+     "h": 69,
+     "z": 10,
+     "parent": "head"
+    },
+    "happy": {
+     "name": "expression_happy",
+     "url": "expressions/happy.png",
+     "x": 611,
+     "y": 772,
+     "w": 65,
+     "h": 69,
+     "z": 10,
+     "parent": "head"
+    },
+    "smug_smile": {
+     "name": "expression_smug_smile",
+     "url": "expressions/smug_smile.png",
+     "x": 611,
+     "y": 772,
+     "w": 65,
+     "h": 69,
+     "z": 10,
+     "parent": "head"
+    },
+    "ironic": {
+     "name": "expression_ironic",
+     "url": "expressions/ironic.png",
+     "x": 611,
+     "y": 772,
+     "w": 65,
+     "h": 69,
+     "z": 10,
+     "parent": "head"
+    },
+    "angry": {
+     "name": "expression_angry",
+     "url": "expressions/angry.png",
+     "x": 611,
+     "y": 772,
+     "w": 65,
+     "h": 69,
+     "z": 10,
+     "parent": "head"
+    },
+    "stressed_grimace": {
+     "name": "expression_stressed_grimace",
+     "url": "expressions/stressed_grimace.png",
+     "x": 611,
+     "y": 772,
+     "w": 65,
+     "h": 69,
+     "z": 10,
+     "parent": "head"
+    },
+    "sad": {
+     "name": "expression_sad",
+     "url": "expressions/sad.png",
+     "x": 611,
+     "y": 772,
+     "w": 65,
+     "h": 69,
+     "z": 10,
+     "parent": "head"
+    },
+    "surprised": {
+     "name": "expression_surprised",
+     "url": "expressions/surprised.png",
+     "x": 611,
+     "y": 772,
+     "w": 65,
+     "h": 69,
+     "z": 10,
+     "parent": "head"
+    },
+    "thoughtful": {
+     "name": "expression_thoughtful",
+     "url": "expressions/thoughtful.png",
+     "x": 611,
+     "y": 772,
+     "w": 65,
+     "h": 69,
+     "z": 10,
+     "parent": "head"
+    }
+   },
+   "mouthQA": {
+    "head": "aiwake v3",
+    "mouths": "human",
+    "mouthBox": [
+     630,
+     800,
+     656,
+     812
+    ],
+    "mouth": [
+     630,
+     800,
+     656,
+     812
+    ],
+    "eyes": [
+     [
+      680,
+      630,
+      706,
+      656
+     ],
+     [
+      563,
+      624,
+      589,
+      650
+     ]
+    ],
+    "irises": [
+     [
+      693,
+      643
+     ],
+     [
+      576,
+      637
+     ]
+    ],
+    "mouthless": true
+   },
+   "humanEyes": {
+    "lines": {
+     "open": 636,
+     "half": 646,
+     "closed": 657
+    },
+    "painted": {
+     "open": 636,
+     "half": 647,
+     "closed": 658
+    },
+    "iris": [
+     693,
+     645,
+     12
+    ],
+    "sclera": [
+     546,
+     631,
+     716,
+     659
+    ],
+    "browBottom": 630,
+    "eyeTop": 631,
+    "browHeight": 56,
+    "forehead": [
+     497,
+     554,
+     746,
+     631
+    ],
+    "shift": [
+     6.179760319573902,
+     3.531291611185087
+    ]
+   },
+   "eyeRig": {
+    "maxShift": [
+     3.9,
+     2.6
+    ],
+    "irises": [
+     [
+      693,
+      643,
+      4.333333333333333
+     ],
+     [
+      576,
+      637,
+      4.333333333333333
+     ]
+    ]
+   },
+   "fx": {
+    "happy": {
+     "name": "cheeks_happy",
+     "x": 536,
+     "y": 641,
+     "w": 197,
+     "h": 59,
+     "url": "fx/cheeks_happy.png",
+     "z": 9,
+     "parent": "head"
+    }
+   },
+   "headPivot": [
+    531,
+    914
+   ]
+  }
+ },
+ "skin": {
+  "character_id": "albert_einstein",
+  "skin_version": "v3-auto-rig",
+  "schema_version": 3,
+  "canvas_size": [
+   768,
+   1344
+  ],
+  "anchors": {
+   "mouth": [
+    291,
+    665
+   ],
+   "left_eye": [
+    235,
+    480
+   ],
+   "right_eye": [
+    367,
+    474
+   ],
+   "eye_radius": 15,
+   "head_pivot": [
+    301,
+    572
+   ],
+   "neck_pivot": [
+    304,
+    863
+   ],
+   "chin_base": [
+    304,
+    770
+   ],
+   "mouth_width": 70.9
+  },
+  "mouth_style": "ghibli_mecha",
+  "eye_style": "circular_slit",
+  "brows": {
+   "style": "acute_mecha",
+   "ink_color": "#252424",
+   "stroke_width_px": 5.5,
+   "width_px": 48,
+   "gap_px": 4,
+   "angles": {
+    "neutral": 0.0,
+    "inquisitor": -5.5,
+    "skeptical": 12.0,
+    "conceded": 12.0,
+    "defeated": 12.0,
+    "troubled": 12.0
+   }
+  },
+  "framing": {
+   "full_bleed_torso": true,
+   "bottom_anchor": true,
+   "normalize_head_height": true,
+   "puppet_matrix": true,
+   "target_eye_y": 770,
+   "target_head_height": 550,
+   "target_head_width": 480,
+   "neck_pivot_y": 820,
+   "shoulder_min_width": 850,
+   "body_anchor_y": 1920,
+   "harmonic_head_body_scale": true
+  },
+  "palette": {
+   "ink_outline": "#252424",
+   "casing_color": "#444443",
+   "cavity_interior": "#444443",
+   "teeth_color": "#D9D8D1",
+   "accent_color": "#D9D8D1"
+  },
+  "theme": {
+   "glow_color": "#D9D8D1",
+   "glow_radius": 15
+  },
+  "layers": {
+   "body": "body.png",
+   "head": "head.png",
+   "eyes_open": "eyes_open.png",
+   "eyes_half": "eyes_half.png",
+   "eyes_blink": "eyes_blink.png",
+   "glow": "glow.png",
+   "bg": "bg.png",
+   "collar": "collar.png",
+   "mouth_A": "mouths/mouth_A.png",
+   "mouth_B": "mouths/mouth_B.png",
+   "mouth_C": "mouths/mouth_C.png",
+   "mouth_D": "mouths/mouth_D.png",
+   "mouth_E": "mouths/mouth_E.png",
+   "mouth_F": "mouths/mouth_F.png",
+   "mouth_G": "mouths/mouth_G.png",
+   "mouth_H": "mouths/mouth_H.png",
+   "mouth_X": "mouths/mouth_X.png",
+   "mouth_O": "mouths/mouth_O.png",
+   "mouth_X_neutral": "mouths/mouth_X_neutral.png",
+   "mouth_smug_smile": "mouths/mouth_smug_smile.png",
+   "mouth_stressed_grimace": "mouths/mouth_stressed_grimace.png"
+  },
+  "calibration": {
+   "detector": "mediapipe_tasks",
+   "confidence": 0.95,
+   "head_bbox": [
+    19,
+    104,
+    768,
+    1344
+   ],
+   "eye_bboxes": [
+    [
+     221,
+     466,
+     249,
+     494
+    ],
+    [
+     352,
+     459,
+     382,
+     489
+    ]
+   ],
+   "lens_circles": [
+    [
+     235,
+     480,
+     14
+    ],
+    [
+     367,
+     474,
+     15
+    ]
+   ],
+   "landmarks_uv": {
+    "left_eye": [
+     0.28848366141319276,
+     0.30357080698013306,
+     0.05855917781591415
+    ],
+    "right_eye": [
+     0.46458020210266116,
+     0.298586905002594,
+     -0.015914006158709526
+    ],
+    "mouth_center": [
+     0.3632450997829437,
+     0.4524948000907898,
+     -0.03683771193027496
+    ],
+    "mouth_width": 0.14574599266052246,
+    "jawline": [
+     [
+      0.26787200570106506,
+      0.34516769647598267,
+      0.2592083215713501
+     ],
+     [
+      0.2689417600631714,
+      0.3734668493270874,
+      0.25364378094673157
+     ],
+     [
+      0.2715857923030853,
+      0.4042152464389801,
+      0.23767192661762238
+     ],
+     [
+      0.2765604257583618,
+      0.4375951886177063,
+      0.21078477799892426
+     ],
+     [
+      0.2814326882362366,
+      0.464691698551178,
+      0.1723867654800415
+     ],
+     [
+      0.28779691457748413,
+      0.4843601584434509,
+      0.12961462140083313
+     ],
+     [
+      0.30171385407447815,
+      0.5008870363235474,
+      0.0937536433339119
+     ],
+     [
+      0.3282449245452881,
+      0.5236855745315552,
+      0.032706551253795624
+     ],
+     [
+      0.38020840287208557,
+      0.5373597145080566,
+      -0.01252676360309124
+     ],
+     [
+      0.4601350724697113,
+      0.530360996723175,
+      -0.014762823469936848
+     ],
+     [
+      0.5342394709587097,
+      0.5095134377479553,
+      0.011897760443389416
+     ],
+     [
+      0.5794005393981934,
+      0.49181222915649414,
+      0.028406690806150436
+     ],
+     [
+      0.6194779872894287,
+      0.4704006314277649,
+      0.05286708474159241
+     ],
+     [
+      0.6531146764755249,
+      0.440579354763031,
+      0.07751578837633133
+     ],
+     [
+      0.6734990477561951,
+      0.4038211405277252,
+      0.09369634836912155
+     ],
+     [
+      0.6806701421737671,
+      0.3691495656967163,
+      0.10281645506620407
+     ],
+     [
+      0.6795414090156555,
+      0.33719098567962646,
+      0.10456902533769608
+     ]
+    ],
+    "chin_base": [
+     0.38020840287208557,
+     0.5373597145080566,
+     -0.01252676360309124
+    ],
+    "neck_pivot": [
+     0.38020840287208557,
+     0.6123597145080566,
+     -0.01252676360309124
+    ]
+   },
+   "source_image": "character.png",
+   "alpha_holes_filled_px": 1155,
+   "collar_y": 863,
+   "neck_overlap_px": 45,
+   "facing": "left"
+  },
+  "facing": "left",
+  "factory": {
+   "acquisition": "local",
+   "background_removal": "rembg_birefnet-general",
+   "prompt": "A human character: Albert Einstein, elderly man, wild white hair, bushy white moustache, no chin beard, dark jacket, warm illustrated portrait. Studio Ghibli 1990s anime cel, clean flat shading, hand-drawn dark ink outlines. Keep any moustache or beard. NO human mouth, NO lips, NO lip colour, NO pink mouth, NO smile, NO teeth, NO smile creases. The skin under the moustache is one even blank skin tone with no line drawn on it. Medium bust, STRICT POSE LOCK: exactly 25 degrees facing left in three-quarter view, never dead-front. STRICT PROPORTION: crown-to-chin head height is exactly 27 percent of the 9:16 portrait height; the torso fills the lower 73 percent. The head docks into a short collar and the opaque torso is cut off by the bottom edge. Solid pure black background on every edge, including the corners and the bottom. No white border and no white strip. --ar 9:16",
+   "custom_prompt": "A human character: Albert Einstein, elderly man, wild white hair, bushy white moustache, no chin beard, dark jacket, warm illustrated portrait. Studio Ghibli 1990s anime cel, clean flat shading, hand-drawn dark ink outlines. Keep any moustache or beard. NO human mouth, NO lips, NO lip colour, NO pink mouth, NO smile, NO teeth, NO smile creases. The skin under the moustache is one even blank skin tone with no line drawn on it. Medium bust, STRICT POSE LOCK: exactly 25 degrees facing left in three-quarter view, never dead-front. STRICT PROPORTION: crown-to-chin head height is exactly 27 percent of the 9:16 portrait height; the torso fills the lower 73 percent. The head docks into a short collar and the opaque torso is cut off by the bottom edge. Solid pure black background on every edge, including the corners and the bottom. No white border and no white strip. --ar 9:16",
+   "component_mode": false,
+   "rigging_seconds": 0.564
+  },
+  "anchors_right": {
+   "mouth": [
+    477,
+    665
+   ],
+   "left_eye": [
+    401,
+    474
+   ],
+   "right_eye": [
+    533,
+    480
+   ],
+   "eye_radius": 15,
+   "head_pivot": [
+    467,
+    572
+   ],
+   "neck_pivot": [
+    464,
+    863
+   ],
+   "chin_base": [
+    464,
+    770
+   ],
+   "mouth_width": 70.9
+  },
+  "facings": {
+   "three-quarter": "left",
+   "three-quarter-right": "right",
+   "front": "front"
+  },
+  "dock": "aiwake"
+ }
 }

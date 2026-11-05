@@ -3,13 +3,15 @@ import type { LibraryCharacter, LibraryDemo } from "../accounts/types";
 import layout from "./einstein-layout.json";
 
 /**
- * Approved Einstein (p82), served from public/characters/einstein_approved/.
+ * Approved Einstein, served from public/characters/einstein_approved/.
  * The bytes are in the repo because this environment has no Blob token.
  * Private imports still use Neon + Blob when those env vars are set.
- * Left and right cameras reuse the front plate: the pack has no 3/4 views.
+ * Front, left, and right are the zip's three cameras: front, three-quarter,
+ * and three-quarter-right. Each camera keeps its own layers and Rhubarb mouths.
  */
 
 interface MouthBox {
+  name: string;
   url: string;
   x: number;
   y: number;
@@ -18,7 +20,13 @@ interface MouthBox {
   z: number;
 }
 
-const mouths = layout.visemes as Record<string, MouthBox>;
+interface PackedView {
+  canvas: { w: number; h: number };
+  layers: MouthBox[];
+  visemes: Record<string, MouthBox>;
+}
+
+const packed = layout.views as { front: PackedView; left: PackedView; right: PackedView };
 
 export const EINSTEIN_APPROVED_ID = layout.id;
 
@@ -26,22 +34,21 @@ export function isApprovedCharacterId(id: string): boolean {
   return id === EINSTEIN_APPROVED_ID;
 }
 
-function frontView(): CharacterView {
+function camera(view: PackedView, label: string): CharacterView {
   const visemes: CharacterView["visemes"] = {};
   for (const name of VISEMES) {
-    const box = mouths[name];
-    if (!box) throw new Error(`Pacote Einstein sem a boca ${name}`);
+    const box = view.visemes[name];
+    if (!box) throw new Error(`Pacote Einstein sem a boca ${name} na vista ${label}`);
     visemes[name] = { name: "mouth", url: box.url, x: box.x, y: box.y, w: box.w, h: box.h, z: box.z };
   }
   return {
-    canvas: { w: layout.canvas.w, h: layout.canvas.h },
-    layers: [{ name: "body", url: layout.body, x: 0, y: 0, w: layout.canvas.w, h: layout.canvas.h, z: 1 }],
+    canvas: { w: view.canvas.w, h: view.canvas.h },
+    layers: view.layers.map((layer) => ({ name: layer.name, url: layer.url, x: layer.x, y: layer.y, w: layer.w, h: layer.h, z: layer.z })),
     visemes,
   };
 }
 
 export function approvedEinsteinRig(): Character {
-  const view = frontView();
   return {
     id: EINSTEIN_APPROVED_ID,
     name: layout.name,
@@ -49,7 +56,11 @@ export function approvedEinsteinRig(): Character {
     style: "rig",
     artStyle: "ghibli",
     characterType: "illustrated",
-    views: { front: view, left: view, right: view },
+    views: {
+      front: camera(packed.front, "front"),
+      left: camera(packed.left, "left"),
+      right: camera(packed.right, "right"),
+    },
     imageUrl: layout.front,
     frontImageUrl: layout.front,
     reviewSheetUrl: layout.emotionSheet,
@@ -74,9 +85,13 @@ export function approvedLibraryCharacter(): LibraryCharacter {
     ownerId: "catalog",
     name: layout.name,
     personaSheetRef: layout.personaSheetRef,
-    views: { front: layout.front },
+    views: {
+      front: layout.front,
+      three_quarter_left: layout.threeQuarterLeft,
+      three_quarter_right: layout.threeQuarterRight,
+    },
     puppetUrl: "/characters/einstein_approved/puppet.json",
-    layers: VISEMES.map((name) => ({ name, url: mouths[name]!.url })),
+    layers: VISEMES.map((name) => ({ name, url: packed.front.visemes[name]!.url })),
     emotionSheetUrl: layout.emotionSheet,
     status: "ready",
     catalog: true,
@@ -109,5 +124,5 @@ export function applyApprovedCharacters(characters: Character[]): Character[] {
 }
 
 export function approvedViseme(name: string): MouthBox | undefined {
-  return mouths[name as Viseme];
+  return packed.front.visemes[name as Viseme];
 }
