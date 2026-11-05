@@ -1,5 +1,6 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
+import { productEnv } from "../product-env";
 
 function parseEnv(text: string): Record<string, string> {
   const out: Record<string, string> = {};
@@ -31,10 +32,10 @@ async function readEnvFile(file: string): Promise<Record<string, string>> {
 /**
  * Loads `.env` then `.env.local` for the seed and import scripts.
  * Existing process variables win, so a shell export is never overwritten.
- * Tests set ANIMIND_SKIP_ENV_FILE=1.
+ * Tests set ANIMINDLY_SKIP_ENV_FILE=1.
  */
 export async function loadLocalEnv(cwd = process.cwd()): Promise<void> {
-  if (process.env.ANIMIND_SKIP_ENV_FILE === "1") return;
+  if (productEnv("SKIP_ENV_FILE") === "1") return;
   const merged = { ...(await readEnvFile(path.join(cwd, ".env"))), ...(await readEnvFile(path.join(cwd, ".env.local"))) };
   for (const [key, value] of Object.entries(merged)) {
     if (process.env[key] === undefined) process.env[key] = value;

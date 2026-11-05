@@ -17,7 +17,7 @@ The Next.js app reads [`.env.example`](../.env.example). Image, script, and spee
 | Test users | diogolean@gmail.com, contato@sosilha.com.br |
 | Credentials | [APIs & Services → Credentials](https://console.cloud.google.com/apis/credentials?project=animind-513520) |
 | Consent screen | [OAuth consent screen](https://console.cloud.google.com/apis/credentials/consent?project=animind-513520) |
-| Env vars (this app) | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `ANIMIND_AUTH_URL`, `ANIMIND_AUTH_SECRET` |
+| Env vars (this app) | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `ANIMINDLY_AUTH_URL`, `ANIMINDLY_AUTH_SECRET` |
 | Where the values live | Local `.env.local` and, for a deploy, Vercel env (Preview and Production). Never git. |
 | Callback this app sends | `{origin}/api/auth/google/callback` |
 | Registered today | `http://localhost:3000/api/auth/google/callback` (used). `http://localhost:3000/api/auth/callback/google` (registered, unused). |
@@ -80,7 +80,7 @@ The Next.js app reads [`.env.example`](../.env.example). Image, script, and spee
 | --- | --- |
 | What | Preview and production hosting for this Next.js app. Environment variables. Public Blob store for PNG layers and `puppet.json` when `BLOB_STORE_ID` or `BLOB_READ_WRITE_TOKEN` is set. |
 | Team / project | **to confirm.** This checkout is not linked to a Vercel project yet. Import [diogolean/animind](https://github.com/diogolean/animind), branch `feat/mvp-ui`, and do not deploy `main` until that is intended. |
-| Env vars this app reads | `ANIMIND_AUTH_SECRET`, `ANIMIND_AUTH_URL`, `ANIMIND_COOKIE_SECURE` (optional), `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `SEED_SUPERADMIN_EMAIL`, `SEED_SUPERADMIN_PASSWORD`, `DATABASE_URL` or `POSTGRES_URL`, `BLOB_STORE_ID`, `BLOB_READ_WRITE_TOKEN`, `ANIMIND_BLOB_ACCESS` (only `private` when the store is private). `VERCEL_OIDC_TOKEN` is injected by Vercel. `ANIMIND_CORE_URL` and `ANIMIND_CORE_KEY` only if a hosted core should answer the preview. |
+| Env vars this app reads | `ANIMINDLY_AUTH_SECRET`, `ANIMINDLY_AUTH_URL`, `ANIMINDLY_COOKIE_SECURE` (optional), `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `SEED_SUPERADMIN_EMAIL`, `SEED_SUPERADMIN_PASSWORD`, `DATABASE_URL` or `POSTGRES_URL`, `BLOB_STORE_ID`, `BLOB_READ_WRITE_TOKEN`, `ANIMINDLY_BLOB_ACCESS` (only `private` when the store is private). `VERCEL_OIDC_TOKEN` is injected by Vercel. `ANIMINDLY_CORE_URL` and `ANIMINDLY_CORE_KEY` only if a hosted core should answer the preview. Each `ANIMINDLY_*` name replaces `ANIMIND_*`. The app still reads the old name when the new one is unset or blank. On Vercel, copy the value to the new name and delete the old one. |
 | Where the values live | Vercel → Project → Settings → Environment Variables (Preview, and Production when publishing). Locally, `.env.local`. `vercel env pull` copies the Development values into that file. Never git. |
 | Invoices | [Vercel account billing](https://vercel.com/account/billing). If the project sits under a team, the team's billing page instead. Which team pays is **to confirm**. Blob usage is on that same Vercel bill. |
 
@@ -110,7 +110,7 @@ The Next.js app reads [`.env.example`](../.env.example). Image, script, and spee
 | --- | --- |
 | What | HTTP API this app proxies to. Holds the Gemini, DeepSeek, Together, and OpenRouter keys above, plus local edge-tts (no account, no invoice) and the Rhubarb binary (no account). |
 | Repo | [diogolean/Omni-Engine](https://github.com/diogolean/Omni-Engine) |
-| Env vars (this app) | `ANIMIND_CORE_URL` (legacy `CORE_URL`), `ANIMIND_CORE_KEY` (same value as the core's `CORE_API_KEY`; legacy `CORE_API_KEY`). Dev only: `ANIMIND_CORE_MOCK=1` when no core URL is set. |
+| Env vars (this app) | `ANIMINDLY_CORE_URL` (older `ANIMIND_CORE_URL`, then `CORE_URL`), `ANIMINDLY_CORE_KEY` (same value as the core's `CORE_API_KEY`; older `ANIMIND_CORE_KEY`, then `CORE_API_KEY`). Dev only: `ANIMINDLY_CORE_MOCK=1` when no core URL is set (`ANIMIND_CORE_MOCK` still works). |
 | Where the values live | This app's `.env.local`, and Vercel env if the preview should reach a running core. The core's own provider keys stay on the core. Never git. |
 | Invoices | None for the core process. Provider invoices are the rows above. |
 
@@ -118,6 +118,6 @@ The Next.js app reads [`.env.example`](../.env.example). Image, script, and spee
 
 | Env var | Role |
 | --- | --- |
-| `ANIMIND_AUTH_SECRET` | Signs the session cookie and the Google state cookie. Generate it locally. At least 16 characters. |
-| `ANIMIND_DATA_DIR` | Optional override for `./.data` when hosted database and Blob variables are empty. |
+| `ANIMINDLY_AUTH_SECRET` | Signs the session cookie and the Google state cookie. Generate it locally. At least 16 characters. |
+| `ANIMINDLY_DATA_DIR` | Optional override for `./.data` when hosted database and Blob variables are empty. |
 | `SEED_SUPERADMIN_PASSWORD` | Pilot password for email login. Local `.env.local` and Vercel env. Never git. |

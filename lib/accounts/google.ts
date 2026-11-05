@@ -1,4 +1,5 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
+import { productEnv } from "../product-env";
 import { isLoopbackHost } from "./session";
 
 export const GOOGLE_STATE_COOKIE = "animind_google_state";
@@ -32,7 +33,7 @@ function originFrom(proto: string, host: string): string | null {
   }
 }
 
-/** Host the browser actually called, ignoring ANIMIND_AUTH_URL. */
+/** Host the browser actually called, ignoring ANIMINDLY_AUTH_URL. */
 export function requestOrigin(req: Request): string {
   const forwardedHost = req.headers.get("x-forwarded-host")?.split(",")[0]?.trim() ?? "";
   const forwardedProto = req.headers.get("x-forwarded-proto")?.split(",")[0]?.trim() ?? "";
@@ -60,13 +61,13 @@ function isLoopbackOrigin(origin: string): boolean {
  * Public origin for the redirect URI and the session cookie.
  * http://localhost:3000 (and the other loopback hosts) always win, so `npm run dev`
  * matches the redirect URI registered for that exact origin.
- * Anywhere else, ANIMIND_AUTH_URL wins so a changing preview hostname still matches Google Cloud.
+ * Anywhere else, ANIMINDLY_AUTH_URL wins so a changing preview hostname still matches Google Cloud.
  * A path on that variable is dropped; only the origin is used.
  */
 export function authOrigin(req: Request): string {
   const here = requestOrigin(req);
   if (isLoopbackOrigin(here)) return here;
-  const configured = process.env.ANIMIND_AUTH_URL?.trim();
+  const configured = productEnv("AUTH_URL")?.trim();
   if (configured) {
     try {
       const url = new URL(configured);

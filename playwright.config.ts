@@ -2,7 +2,7 @@ import { defineConfig, devices } from "@playwright/test";
 
 /**
  * E2E suite (see e2e/README.md).
- *   mock  always: the app with ANIMIND_CORE_MOCK=1, no keys, fast (CI).
+ *   mock  always: the app with ANIMINDLY_CORE_MOCK=1, no keys, fast (CI).
  *   core  only when E2E_CORE_URL is set: one flow against a real Omni-Engine core.
  * The core spec skips itself on the mock project, so CI stays green when the core is down.
  * Both use the production build (`npm run build` first).
@@ -11,7 +11,9 @@ const coreUrl = process.env.E2E_CORE_URL?.replace(/\/$/, "");
 const MOCK_PORT = Number(process.env.E2E_MOCK_PORT ?? 3311);
 const CORE_PORT = Number(process.env.E2E_APP_PORT ?? 3312);
 const mockEnv: Record<string, string> = {
-  ANIMIND_CORE_MOCK: "1",
+  ANIMINDLY_CORE_MOCK: "1",
+  ANIMIND_CORE_MOCK: "",
+  ANIMINDLY_CORE_URL: "",
   ANIMIND_CORE_URL: "",
   CORE_URL: "",
   DATABASE_URL: "",
@@ -21,8 +23,10 @@ const mockEnv: Record<string, string> = {
   VERCEL: "",
 };
 if (process.env.E2E_AUTH_SECRET && process.env.E2E_DATA_DIR) {
-  mockEnv.ANIMIND_AUTH_SECRET = process.env.E2E_AUTH_SECRET;
-  mockEnv.ANIMIND_DATA_DIR = process.env.E2E_DATA_DIR;
+  mockEnv.ANIMINDLY_AUTH_SECRET = process.env.E2E_AUTH_SECRET;
+  mockEnv.ANIMIND_AUTH_SECRET = "";
+  mockEnv.ANIMINDLY_DATA_DIR = process.env.E2E_DATA_DIR;
+  mockEnv.ANIMIND_DATA_DIR = "";
 }
 
 const server = (port: number, env: Record<string, string>) => ({
@@ -59,7 +63,7 @@ export default defineConfig({
   webServer: [
     server(MOCK_PORT, mockEnv),
     ...(coreUrl
-      ? [server(CORE_PORT, { ANIMIND_CORE_URL: coreUrl, ANIMIND_CORE_KEY: process.env.E2E_CORE_KEY ?? "", ANIMIND_CORE_MOCK: "" })]
+      ? [server(CORE_PORT, { ANIMINDLY_CORE_URL: coreUrl, ANIMIND_CORE_URL: "", ANIMINDLY_CORE_KEY: process.env.E2E_CORE_KEY ?? "", ANIMIND_CORE_KEY: "", ANIMINDLY_CORE_MOCK: "", ANIMIND_CORE_MOCK: "" })]
       : []),
   ],
 });

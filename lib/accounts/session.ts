@@ -1,11 +1,12 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
+import { productEnv } from "../product-env";
 
 export const SESSION_COOKIE = "animind_session";
 export const SESSION_TTL_SEC = 60 * 60 * 24 * 14;
 
 /** Signing key for the session cookie. Never has a default. */
 export function authSecret(): string | null {
-  const value = process.env.ANIMIND_AUTH_SECRET?.trim();
+  const value = productEnv("AUTH_SECRET")?.trim();
   if (!value || value.length < 16) return null;
   return value;
 }
@@ -43,7 +44,7 @@ export function isLoopbackHost(hostname: string): boolean {
 
 /** Secure only on HTTPS. `npm run dev` on http://localhost keeps the cookie. */
 export function cookieSecure(req: Request): boolean {
-  const forced = process.env.ANIMIND_COOKIE_SECURE;
+  const forced = productEnv("COOKIE_SECURE");
   if (forced === "1") return true;
   if (forced === "0") return false;
   try {

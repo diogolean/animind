@@ -27,14 +27,18 @@ let dir = "";
 
 function secret(): string {
   const value = randomBytes(24).toString("base64url");
-  process.env.ANIMIND_AUTH_SECRET = value;
+  delete process.env.ANIMIND_AUTH_SECRET;
+  process.env.ANIMINDLY_AUTH_SECRET = value;
   return value;
 }
 
 beforeEach(async () => {
   dir = await mkdtemp(path.join(os.tmpdir(), "animind-accounts-"));
-  process.env.ANIMIND_DATA_DIR = dir;
-  process.env.ANIMIND_SKIP_ENV_FILE = "1";
+  process.env.ANIMINDLY_DATA_DIR = dir;
+  delete process.env.ANIMIND_DATA_DIR;
+  process.env.ANIMINDLY_SKIP_ENV_FILE = "1";
+  delete process.env.ANIMIND_SKIP_ENV_FILE;
+  delete process.env.ANIMINDLY_COOKIE_SECURE;
   delete process.env.ANIMIND_COOKIE_SECURE;
   delete process.env.SEED_SUPERADMIN_EMAIL;
   delete process.env.SEED_SUPERADMIN_PASSWORD;
@@ -45,8 +49,11 @@ beforeEach(async () => {
   delete process.env.VERCEL;
   delete process.env.GOOGLE_CLIENT_ID;
   delete process.env.GOOGLE_CLIENT_SECRET;
+  delete process.env.ANIMINDLY_AUTH_URL;
   delete process.env.ANIMIND_AUTH_URL;
+  delete process.env.ANIMINDLY_CHARACTER_ZIP;
   delete process.env.ANIMIND_CHARACTER_ZIP;
+  delete process.env.ANIMINDLY_SKIP_CHARACTER_IMPORT;
   delete process.env.ANIMIND_SKIP_CHARACTER_IMPORT;
   secret();
 });
@@ -62,8 +69,10 @@ function run(script: string, env: Record<string, string>, args: string[] = []) {
       env: {
         ...process.env,
         ...env,
-        ANIMIND_DATA_DIR: dir,
-        ANIMIND_SKIP_ENV_FILE: "1",
+        ANIMINDLY_DATA_DIR: dir,
+        ANIMIND_DATA_DIR: "",
+        ANIMINDLY_SKIP_ENV_FILE: "1",
+        ANIMIND_SKIP_ENV_FILE: "",
         DATABASE_URL: "",
         POSTGRES_URL: "",
         BLOB_READ_WRITE_TOKEN: "",
@@ -128,19 +137,20 @@ describe("accounts and character library", { concurrency: false }, () => {
     for (const name of [
       "SEED_SUPERADMIN_EMAIL",
       "SEED_SUPERADMIN_PASSWORD",
-      "ANIMIND_AUTH_SECRET",
-      "ANIMIND_DATA_DIR",
+      "ANIMINDLY_AUTH_SECRET",
+      "ANIMINDLY_DATA_DIR",
       "DATABASE_URL",
       "POSTGRES_URL",
       "BLOB_READ_WRITE_TOKEN",
       "BLOB_STORE_ID",
-      "ANIMIND_AUTH_URL",
+      "ANIMINDLY_AUTH_URL",
       "GOOGLE_CLIENT_ID",
       "GOOGLE_CLIENT_SECRET",
-      "ANIMIND_CHARACTER_ZIP",
+      "ANIMINDLY_CHARACTER_ZIP",
     ]) {
       assert.match(example, new RegExp(`^${name}=$`, "m"));
     }
+    assert.match(example, /ANIMIND_<NAME> is still read/);
     assert.doesNotMatch(example, /postgres:\/\/|vercel_blob|rw_/);
     const accountsDoc = await readFile(path.join(root, "docs", "ACCOUNTS.md"), "utf8");
     assert.match(accountsDoc, /animind-513520/);
@@ -169,7 +179,7 @@ describe("accounts and character library", { concurrency: false }, () => {
     const seeded = await run("scripts/seed-superadmin.ts", {
       SEED_SUPERADMIN_EMAIL: email,
       SEED_SUPERADMIN_PASSWORD: password,
-      ANIMIND_SKIP_CHARACTER_IMPORT: "1",
+      ANIMINDLY_SKIP_CHARACTER_IMPORT: "1",
     });
     assert.equal(seeded.code, 0, seeded.stderr);
     assert.equal(seeded.stdout.includes(password), false);
@@ -185,7 +195,7 @@ describe("accounts and character library", { concurrency: false }, () => {
     const again = await run("scripts/seed-superadmin.ts", {
       SEED_SUPERADMIN_EMAIL: email,
       SEED_SUPERADMIN_PASSWORD: password,
-      ANIMIND_SKIP_CHARACTER_IMPORT: "1",
+      ANIMINDLY_SKIP_CHARACTER_IMPORT: "1",
     });
     assert.equal(again.code, 0, again.stderr);
     const accounts = JSON.parse(await readFile(path.join(dir, "accounts.json"), "utf8")) as { users: { email: string }[] };
@@ -268,7 +278,7 @@ describe("accounts and character library", { concurrency: false }, () => {
     });
     assert.equal(zipped.code, 0, zipped.stderr);
 
-    const env = { SEED_SUPERADMIN_EMAIL: email, SEED_SUPERADMIN_PASSWORD: password, ANIMIND_CHARACTER_ZIP: zipPath };
+    const env = { SEED_SUPERADMIN_EMAIL: email, SEED_SUPERADMIN_PASSWORD: password, ANIMINDLY_CHARACTER_ZIP: zipPath };
     const seeded = await run("scripts/seed-superadmin.ts", env);
     assert.equal(seeded.code, 0, seeded.stderr);
     assert.equal(seeded.stdout.includes(password), false);
@@ -624,7 +634,8 @@ describe("accounts and character library", { concurrency: false }, () => {
     const clientSecret = `secret-${randomBytes(8).toString("hex")}`;
     process.env.GOOGLE_CLIENT_ID = "test-client";
     process.env.GOOGLE_CLIENT_SECRET = clientSecret;
-    process.env.ANIMIND_AUTH_URL = "https://preview.example.com/ignored-path";
+    delete process.env.ANIMIND_AUTH_URL;
+    process.env.ANIMINDLY_AUTH_URL = "https://preview.example.com/ignored-path";
     const key = secret();
     const email = `pilot-${randomBytes(4).toString("hex")}@example.com`;
     const password = randomBytes(18).toString("base64url");
@@ -744,7 +755,8 @@ describe("accounts and character library", { concurrency: false }, () => {
   it("refuses unverified Google emails, a mismatched state, and a missing client", async () => {
     process.env.GOOGLE_CLIENT_ID = "test-client";
     process.env.GOOGLE_CLIENT_SECRET = "test-secret";
-    process.env.ANIMIND_AUTH_URL = "https://preview.example.com";
+    delete process.env.ANIMIND_AUTH_URL;
+    process.env.ANIMINDLY_AUTH_URL = "https://preview.example.com";
     const email = `pilot-${randomBytes(4).toString("hex")}@example.com`;
     await upsertPilotSuperAdmin(email, randomBytes(18).toString("base64url"));
     const started = await startGoogle(new Request("https://preview.example.com/api/auth/google"));
@@ -798,6 +810,7 @@ describe("accounts and character library", { concurrency: false }, () => {
     );
     assert.equal(authOrigin(new Request("http://localhost:3000/api/auth/google", { headers: { "x-forwarded-host": "localhost:3000" } })), "http://localhost:3000");
     assert.equal(authOrigin(new Request("https://animind-abc123.vercel.app/api/auth/google")), "https://preview.example.com");
+    delete process.env.ANIMINDLY_AUTH_URL;
     delete process.env.ANIMIND_AUTH_URL;
     assert.equal(authOrigin(new Request("http://127.0.0.1:3000/api/auth/google")), "http://127.0.0.1:3000");
     const direct = await accountForVerifiedGoogle(`blank-${randomBytes(3).toString("hex")}@example.com`, "   ");
@@ -808,9 +821,13 @@ describe("accounts and character library", { concurrency: false }, () => {
   });
 
   it("signs a session and refuses a missing auth secret", () => {
+    delete process.env.ANIMINDLY_AUTH_SECRET;
     delete process.env.ANIMIND_AUTH_SECRET;
     assert.equal(authSecret(), null);
+    process.env.ANIMIND_AUTH_SECRET = "legacy-secret-value";
+    assert.equal(authSecret(), "legacy-secret-value");
     const key = secret();
+    assert.notEqual(authSecret(), "legacy-secret-value");
     const token = signSession("usr_123", key, 1_000);
     assert.deepEqual(readSession(token, key, 1_000), { sub: "usr_123" });
     assert.equal(readSession(token, key, 1_000 + 15 * 24 * 60 * 60 * 1000), null);

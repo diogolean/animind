@@ -1,3 +1,5 @@
+import { productEnv } from "../product-env";
+
 /** Hosted account and asset configuration. Values stay in the environment, never in git. */
 
 export class StoreConfigError extends Error {
@@ -17,7 +19,7 @@ export function usesBlob(): boolean {
 
 /** The Blob store is created as Public unless this is set to `private`. */
 export function blobAccess(): "public" | "private" {
-  return process.env.ANIMIND_BLOB_ACCESS === "private" ? "private" : "public";
+  return productEnv("BLOB_ACCESS") === "private" ? "private" : "public";
 }
 
 export function onVercel(): boolean {

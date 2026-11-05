@@ -2,6 +2,7 @@ import { existsSync, statSync } from "node:fs";
 import { readdir, readFile, realpath, stat } from "node:fs/promises";
 import path from "node:path";
 import { databaseUrl, usesBlob } from "../lib/accounts/config";
+import { productEnv } from "../lib/product-env";
 import { loadLocalEnv } from "../lib/accounts/env-file";
 import { importCharacterPackage, ImportError, type ImportFile } from "../lib/accounts/import-character";
 import { normalizeRel } from "../lib/accounts/paths";
@@ -85,11 +86,14 @@ export async function importOwnedCharacter(options: {
 
 /** Zip the seed should import for the pilot, when one is on disk. Absent means seed only the account. */
 export function characterPackagePath(): string | null {
-  if (process.env.ANIMIND_SKIP_CHARACTER_IMPORT === "1") return null;
-  const fromEnv = process.env.ANIMIND_CHARACTER_ZIP?.trim() ?? "";
+  if (productEnv("SKIP_CHARACTER_IMPORT") === "1") return null;
+  const fromNew = process.env.ANIMINDLY_CHARACTER_ZIP?.trim() ?? "";
+  const fromOld = process.env.ANIMIND_CHARACTER_ZIP?.trim() ?? "";
+  const fromEnv = fromNew || fromOld;
   if (fromEnv) {
     if (!existsSync(fromEnv) || !statSync(fromEnv).isFile()) {
-      throw new ImportError(`ANIMIND_CHARACTER_ZIP não é um arquivo: ${fromEnv}`);
+      const label = fromNew ? "ANIMINDLY_CHARACTER_ZIP" : "ANIMIND_CHARACTER_ZIP";
+      throw new ImportError(`${label} não é um arquivo: ${fromEnv}`);
     }
     return fromEnv;
   }

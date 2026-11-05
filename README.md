@@ -14,10 +14,10 @@ PWA (Next.js 16 App Router, React 19, TypeScript, Tailwind 4, shadcn/ui, framer-
   - `GET /api/voices?lang=` → catálogo de vozes por idioma; tenta `/v1/voices` e usa lista fake no mock/fallback
   - `POST /api/plan` → prompt livre para `CreationPlan`; tenta o futuro `/v1/plan` e usa a heurística local como fallback
   - `POST /api/scenarios` → contrato do gerador de cenário; usa cenário existente como fallback enquanto `/v1/scenarios` não existe
-- Com `ANIMIND_CORE_URL` definido, as rotas fazem proxy para `${ANIMIND_CORE_URL}/v1/*` com `ANIMIND_CORE_KEY` (só no servidor). Personagens por descrição são recortados pelo núcleo; catálogo e upload continuam como rig de foto feito no app.
+- Com `ANIMINDLY_CORE_URL` definido, as rotas fazem proxy para `${ANIMINDLY_CORE_URL}/v1/*` com `ANIMINDLY_CORE_KEY` (só no servidor). Personagens por descrição são recortados pelo núcleo; catálogo e upload continuam como rig de foto feito no app.
   - `GET /api/files/*` repassa as camadas PNG, a voz e o `preview.mp4` do núcleo pela mesma origem (o Canvas não fica “tainted” e o MediaRecorder grava).
   - `GET /api/health` diz o modo (`core`, `mock` ou `off`); o cabeçalho mostra “núcleo real”, “mock de dev” ou “núcleo não configurado”.
-- O mock (`lib/mock.ts`, silhuetas e jobs sem estado) é só fallback explícito de dev: `ANIMIND_CORE_MOCK=1`. Sem URL e sem essa flag, a API responde 503.
+- O mock (`lib/mock.ts`, silhuetas e jobs sem estado) é só fallback explícito de dev: `ANIMINDLY_CORE_MOCK=1`. Sem URL e sem essa flag, a API responde 503.
 - **Prévia no navegador:** enquanto o núcleo recorta o personagem, a tela mostra só uma silhueta de carregamento. O SVG local permanece apenas como fallback explícito (`mock de dev` ou núcleo fora). Assim que `POST /v1/characters` responde, as camadas reais entram no lugar. O player do núcleo é o `preview.mp4` (`GET /v1/jobs/:id` → `result.videoUrl`). Sem MP4 (mock), `lib/engine.ts` ainda desenha as camadas no Canvas. O visual cinematográfico (`lib/cinema.ts`) espelha o render do núcleo: cenários em camadas com paralaxe e desfoque de profundidade, luz de recorte e sombra suave nos personagens, câmera com push-in, balanço de mão e cortes por fala (dissolve e chicote), gradação de cor, vinheta, legendas e lower-thirds com nome e fonte.
 
 ## Roteiros: citações reais, paráfrases marcadas
@@ -97,36 +97,36 @@ Gemini com o perfil como referência); o core usa a frontal nas falas para a câ
 
 ## Rodar
 
-Para usar o núcleo real, crie o `.env.local` (ignorado pelo git) com `ANIMIND_CORE_URL=http://127.0.0.1:8787` e `ANIMIND_CORE_KEY=<chave do núcleo>`. O E2E contra o núcleo roda com `E2E_CORE_URL=... E2E_CORE_KEY=... npx playwright test --project=core`.
+Para usar o núcleo real, crie o `.env.local` (ignorado pelo git) com `ANIMINDLY_CORE_URL=http://127.0.0.1:8787` e `ANIMINDLY_CORE_KEY=<chave do núcleo>`. O E2E contra o núcleo roda com `E2E_CORE_URL=... E2E_CORE_KEY=... npx playwright test --project=core`.
 
 ```bash
 # núcleo (no Omni-Engine): CORE_API_KEY=... uvicorn products.animind_core.app:app --port 8787
-cp .env.example .env.local   # ANIMIND_CORE_URL=http://127.0.0.1:8787 e ANIMIND_CORE_KEY=...
+cp .env.example .env.local   # ANIMINDLY_CORE_URL=http://127.0.0.1:8787 e ANIMINDLY_CORE_KEY=...
 npm install
-npm run dev                  # sem núcleo: ANIMIND_CORE_MOCK=1 npm run dev
+npm run dev                  # sem núcleo: ANIMINDLY_CORE_MOCK=1 npm run dev
 ```
 
 Testes E2E (Playwright, projeto `mock` sem chaves e `core` contra o núcleo real): veja [`e2e/README.md`](e2e/README.md).
 
 ## Contas e biblioteca
 
-Papéis: `user`, `admin`, `super_admin`. Cada personagem pertence a uma conta. Um `super_admin` vê e gerencia a biblioteca de todo mundo; os outros papéis só a própria. A senha fica com scrypt e a sessão é um cookie assinado (`ANIMIND_AUTH_SECRET`, mínimo 16 caracteres). Nada disso entra no git.
+Papéis: `user`, `admin`, `super_admin`. Cada personagem pertence a uma conta. Um `super_admin` vê e gerencia a biblioteca de todo mundo; os outros papéis só a própria. A senha fica com scrypt e a sessão é um cookie assinado (`ANIMINDLY_AUTH_SECRET`, mínimo 16 caracteres). Nada disso entra no git.
 
-Os nomes de todas as variáveis estão em [`.env.example`](.env.example). Copie para `.env.local` (ignorado pelo git) e preencha só o modo que for usar. Valor vazio é o mesmo que ausente. Quem paga cada serviço, e onde fica a chave, está em [`docs/ACCOUNTS.md`](docs/ACCOUNTS.md).
+Os nomes de todas as variáveis estão em [`.env.example`](.env.example). O nome atual é `ANIMINDLY_*`. Se `ANIMINDLY_<NAME>` estiver vazio, o app ainda lê `ANIMIND_<NAME>`. Na Vercel, copie o valor para o nome novo e apague o antigo. Copie o exemplo para `.env.local` (ignorado pelo git) e preencha só o modo que for usar. Valor vazio é o mesmo que ausente. Quem paga cada serviço, e onde fica a chave, está em [`docs/ACCOUNTS.md`](docs/ACCOUNTS.md).
 
 A biblioteca guarda nome, referência da ficha, as vistas que a pasta trouxer (frente, 3/4 esquerda, 3/4 direita e perfil; o perfil é opcional), URL do `puppet.json`, URLs das camadas e o status (`draft`, `ready`, `archived`). A página do personagem mostra essas vistas e a ficha de emoções grande, com zoom. A ficha só guarda a URL `/api/library/assets/...`.
 
 ### Einstein aprovado (catálogo)
 
-O personagem aprovado (sem nova geração no Gemini) aparece em **Meus personagens** mesmo sem conta, Neon ou Blob. A ficha e o cartão mostram a frente, o 3/4 esquerdo e o 3/4 direito, as bocas Rhubarb A–H e X, a ficha de emoções, a prévia muda e os demos em português e inglês (vídeo, voz `voice_en.mp3` e o texto em inglês). **Novo vídeo** e **Debate** abrem o estúdio com esse rig: a câmera da esquerda usa `layers/three-quarter/` e a da direita usa `layers/three-quarter-right/`. O mock de dev devolve essas vistas no fim do job; sem `ANIMIND_CORE_URL` e sem `ANIMIND_CORE_MOCK=1`, `POST /api/render` continua respondendo 503.
+O personagem aprovado (sem nova geração no Gemini) aparece em **Meus personagens** mesmo sem conta, Neon ou Blob. A ficha e o cartão mostram a frente, o 3/4 esquerdo e o 3/4 direito, as bocas Rhubarb A–H e X, a ficha de emoções, a prévia muda e os demos em português e inglês (vídeo, voz `voice_en.mp3` e o texto em inglês). **Novo vídeo** e **Debate** abrem o estúdio com esse rig: a câmera da esquerda usa `layers/three-quarter/` e a da direita usa `layers/three-quarter-right/`. O mock de dev devolve essas vistas no fim do job; sem `ANIMINDLY_CORE_URL` e sem `ANIMINDLY_CORE_MOCK=1`, `POST /api/render` continua respondendo 503.
 
-Os arquivos ficam em `public/characters/einstein_approved/` (`views/front.png`, `views/three-quarter.png`, `views/three-quarter-right.png`, `layers/{front,three-quarter,three-quarter-right}/`, bocas, `puppet.json`, voz, demos). Não há `BLOB_READ_WRITE_TOKEN` neste fluxo: o catálogo não lê Blob. A biblioteca privada da conta continua usando, quando existirem, `DATABASE_URL` ou `POSTGRES_URL`, `BLOB_STORE_ID`, `BLOB_READ_WRITE_TOKEN` e `ANIMIND_BLOB_ACCESS` (`private` só se a loja for privada). `npm run import-character -- --dir public/characters/einstein_approved --email "$SEED_SUPERADMIN_EMAIL"` copia o mesmo pacote para a conta (disco ou Blob). Rodar de novo substitui pelo nome.
+Os arquivos ficam em `public/characters/einstein_approved/` (`views/front.png`, `views/three-quarter.png`, `views/three-quarter-right.png`, `layers/{front,three-quarter,three-quarter-right}/`, bocas, `puppet.json`, voz, demos). Não há `BLOB_READ_WRITE_TOKEN` neste fluxo: o catálogo não lê Blob. A biblioteca privada da conta continua usando, quando existirem, `DATABASE_URL` ou `POSTGRES_URL`, `BLOB_STORE_ID`, `BLOB_READ_WRITE_TOKEN` e `ANIMINDLY_BLOB_ACCESS` (`private` só se a loja for privada). `npm run import-character -- --dir public/characters/einstein_approved --email "$SEED_SUPERADMIN_EMAIL"` copia o mesmo pacote para a conta (disco ou Blob). Rodar de novo substitui pelo nome.
 
 As três vistas e as camadas vêm do zip aprovado. Os demos em português e inglês, a voz e os recortes Rhubarb de `mouths/` continuam no pacote. A fábrica de um clique (fundo azul, recorte e todas as vistas) fica para outro passo. `scripts/prepare-einstein-approved.py` só regrava a frente antiga a partir do pacote p82; não use esse script para atualizar as três vistas.
 
 ### Modo local (`npm run dev`, inclusive no Windows)
 
-Sem `DATABASE_URL`, `POSTGRES_URL`, `BLOB_STORE_ID` e `BLOB_READ_WRITE_TOKEN`, contas e PNG ficam em `./.data` (`accounts.json` e `objects/`). O diretório é criado no primeiro `npm run seed` e está no `.gitignore`. `ANIMIND_DATA_DIR` só muda essa pasta; vazio significa `./.data`.
+Sem `DATABASE_URL`, `POSTGRES_URL`, `BLOB_STORE_ID` e `BLOB_READ_WRITE_TOKEN`, contas e PNG ficam em `./.data` (`accounts.json` e `objects/`). O diretório é criado no primeiro `npm run seed` e está no `.gitignore`. `ANIMINDLY_DATA_DIR` só muda essa pasta; vazio significa `./.data`.
 
 No PowerShell, a partir da raiz do repositório:
 
@@ -140,21 +140,21 @@ npm run dev
 No `.env.local` local, preencha e deixe o resto vazio:
 
 ```text
-ANIMIND_AUTH_SECRET=<pelo menos 16 caracteres>
+ANIMINDLY_AUTH_SECRET=<pelo menos 16 caracteres>
 SEED_SUPERADMIN_EMAIL=diogolean@gmail.com
 SEED_SUPERADMIN_PASSWORD=<senha do piloto>
 GOOGLE_CLIENT_ID=<client id>
 GOOGLE_CLIENT_SECRET=<client secret>
-ANIMIND_AUTH_URL=http://localhost:3000
+ANIMINDLY_AUTH_URL=http://localhost:3000
 ```
 
 `DATABASE_URL`, `POSTGRES_URL`, `BLOB_STORE_ID` e `BLOB_READ_WRITE_TOKEN` ficam vazios nesse arquivo.
 
-`ANIMIND_AUTH_URL` pode ficar vazio: quem abre `http://localhost:3000` usa essa origem mesmo que a variável aponte para a Vercel. `localhost` e `127.0.0.1` são URIs diferentes. Deixe `ANIMIND_COOKIE_SECURE` vazio para o cookie valer em `http://`. Não defina `VERCEL=1` na máquina: com essa flag e sem `DATABASE_URL` a API responde 503 em vez de usar o disco.
+`ANIMINDLY_AUTH_URL` pode ficar vazio: quem abre `http://localhost:3000` usa essa origem mesmo que a variável aponte para a Vercel. `localhost` e `127.0.0.1` são URIs diferentes. Deixe `ANIMINDLY_COOKIE_SECURE` vazio para o cookie valer em `http://`. Não defina `VERCEL=1` na máquina: com essa flag e sem `DATABASE_URL` a API responde 503 em vez de usar o disco.
 
 `npm run seed` precisa imprimir `store=file assets=file`. Aí `http://localhost:3000` abre a conta do Diogo. O mesmo vale para `npm run import-character`. Os dois scripts leem `.env.local` sem substituir variável que já está no ambiente.
 
-Se `uploads/albert_einstein.zip`, `.data/inbox/albert_einstein.zip` ou o arquivo em `ANIMIND_CHARACTER_ZIP` existir, o seed importa esse pacote para o `SEED_SUPERADMIN_EMAIL`. O zip e os PNG ficam de fora do git. Os bytes vão para `./.data` ou para o Blob. Rodar o seed de novo, com o mesmo dono e o mesmo nome, substitui o personagem em vez de duplicar. `npm run import-character -- --zip <arquivo.zip> --email "$SEED_SUPERADMIN_EMAIL"` faz o mesmo import.
+Se `uploads/albert_einstein.zip`, `.data/inbox/albert_einstein.zip` ou o arquivo em `ANIMINDLY_CHARACTER_ZIP` existir, o seed importa esse pacote para o `SEED_SUPERADMIN_EMAIL`. O zip e os PNG ficam de fora do git. Os bytes vão para `./.data` ou para o Blob. Rodar o seed de novo, com o mesmo dono e o mesmo nome, substitui o personagem em vez de duplicar. `npm run import-character -- --zip <arquivo.zip> --email "$SEED_SUPERADMIN_EMAIL"` faz o mesmo import.
 
 O app manda o Google de volta para este caminho, já cadastrado no cliente **Animind web**:
 
@@ -181,16 +181,16 @@ Ao conectar o Neon, deixe desligada a opção de criar um branch de banco por pr
 
 Variáveis que você cria à mão, nos mesmos ambientes, só com o nome (o valor não entra no git):
 
-- `ANIMIND_AUTH_SECRET`
-- `ANIMIND_AUTH_URL` (origem do preview, sem caminho)
+- `ANIMINDLY_AUTH_SECRET`
+- `ANIMINDLY_AUTH_URL` (origem do preview, sem caminho)
 - `GOOGLE_CLIENT_ID`
 - `GOOGLE_CLIENT_SECRET`
 - `SEED_SUPERADMIN_EMAIL` (`diogolean@gmail.com`, para o login Google cair no `super_admin`)
 - `SEED_SUPERADMIN_PASSWORD`
 
-`VERCEL_OIDC_TOKEN` a Vercel injeta sozinha; não cole um valor. `ANIMIND_BLOB_ACCESS` só entra se a loja Blob for privada (`private`).
+`VERCEL_OIDC_TOKEN` a Vercel injeta sozinha; não cole um valor. `ANIMINDLY_BLOB_ACCESS` só entra se a loja Blob for privada (`private`).
 
-`ANIMIND_AUTH_URL` no preview é o alias estável, por exemplo `https://<project>-git-feat-mvp-ui-<team>.vercel.app`. O hostname com hash muda a cada deploy; quem abre esse host é enviado ao alias antes de ir ao Google, e a sessão fica nesse host. Em produção, a origem é `https://<domínio>`.
+`ANIMINDLY_AUTH_URL` no preview é o alias estável, por exemplo `https://<project>-git-feat-mvp-ui-<team>.vercel.app`. O hostname com hash muda a cada deploy; quem abre esse host é enviado ao alias antes de ir ao Google, e a sessão fica nesse host. Em produção, a origem é `https://<domínio>`.
 
 Redirect URIs do preview e da produção:
 
@@ -214,7 +214,7 @@ O seed e o import precisam imprimir `store=postgres assets=blob`. Aí o login no
 
 O botão **Entrar com Google** fica ao lado do e-mail e da senha, nos dois modos. O fluxo é o authorization code no servidor. O redirect URI que o app envia é `{origem}/api/auth/google/callback`. O e-mail só entra se o Google marcar `email_verified`. Se esse e-mail já tem conta, a sessão usa essa conta sem mudar papel, nome nem senha: `diogolean@gmail.com` cai no `super_admin` quando `SEED_SUPERADMIN_EMAIL` é esse endereço. Um e-mail novo vira `user` e não entra com senha. Rode o seed antes do primeiro login com Google para a conta já nascer `super_admin`. Um login anterior cria `user`; o seed seguinte promove esse e-mail.
 
-`ANIMIND_AUTH_SECRET` assina a sessão e o cookie de estado (`animind_google_state`, 10 minutos). Sem `GOOGLE_CLIENT_ID` e `GOOGLE_CLIENT_SECRET`, o botão volta para `/login?error=google_unconfigured` e não chama o Google.
+`ANIMINDLY_AUTH_SECRET` assina a sessão e o cookie de estado (`animind_google_state`, 10 minutos). Sem `GOOGLE_CLIENT_ID` e `GOOGLE_CLIENT_SECRET`, o botão volta para `/login?error=google_unconfigured` e não chama o Google.
 
 O cliente já existe. Projeto [animind-513520](https://console.cloud.google.com/apis/credentials?project=animind-513520), conta `contato@sosilha.com.br`, organização `sosilha.com.br`, nome **Animind web**. Consentimento External, em Testing, com test users `diogolean@gmail.com` e `contato@sosilha.com.br`. Copie o Client ID e o Client secret desse cliente para o `.env.local` e, no modo Vercel, para Preview e Production. O valor não entra no git. Antes do login no preview, acrescente no mesmo cliente o redirect URI `https://<project>-git-feat-mvp-ui-<team>.vercel.app/api/auth/google/callback` (e o da produção, quando houver domínio).
 

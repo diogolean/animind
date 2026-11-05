@@ -1,24 +1,25 @@
 import "server-only";
+import { productEnv } from "./product-env";
 
 /**
  * Server-side bridge to the Omni-Engine core (products/animind_core). Keys never leave the server.
  *
- *   ANIMIND_CORE_URL   core base URL, e.g. http://127.0.0.1:8787 (legacy name: CORE_URL)
- *   ANIMIND_CORE_KEY   bearer token, same value as the core's CORE_API_KEY (legacy name: CORE_API_KEY)
- *   ANIMIND_CORE_MOCK  "1" -> use the built-in mock (dev only) when no core URL is set
+ *   ANIMINDLY_CORE_URL   core base URL, e.g. http://127.0.0.1:8787 (older names: ANIMIND_CORE_URL, CORE_URL)
+ *   ANIMINDLY_CORE_KEY   bearer token, same value as the core's CORE_API_KEY (older names: ANIMIND_CORE_KEY, CORE_API_KEY)
+ *   ANIMINDLY_CORE_MOCK  "1" -> use the built-in mock (dev only) when no core URL is set (older name: ANIMIND_CORE_MOCK)
  *
  * With neither a URL nor the explicit mock flag the API answers 503, so a
  * deploy can never silently ship the mock.
  */
-export const coreUrl = () => (process.env.ANIMIND_CORE_URL || process.env.CORE_URL)?.replace(/\/$/, "") || null;
-const coreKey = () => process.env.ANIMIND_CORE_KEY || process.env.CORE_API_KEY || "";
+export const coreUrl = () => (productEnv("CORE_URL") || process.env.CORE_URL)?.replace(/\/$/, "") || null;
+const coreKey = () => productEnv("CORE_KEY") || process.env.CORE_API_KEY || "";
 
 export type CoreMode = "core" | "mock" | "off";
-export const coreMode = (): CoreMode => (coreUrl() ? "core" : process.env.ANIMIND_CORE_MOCK === "1" ? "mock" : "off");
+export const coreMode = (): CoreMode => (coreUrl() ? "core" : productEnv("CORE_MOCK") === "1" ? "mock" : "off");
 
 export async function coreFetch(path: string, init?: RequestInit): Promise<Response> {
   const base = coreUrl();
-  if (!base) throw new Error("ANIMIND_CORE_URL not set");
+  if (!base) throw new Error("ANIMINDLY_CORE_URL not set");
   const headers = new Headers(init?.headers);
   if (init?.body) headers.set("content-type", "application/json");
   const key = coreKey();
@@ -52,4 +53,4 @@ export async function proxyJson(path: string, init?: RequestInit): Promise<Respo
 export const json = (data: unknown, status = 200) => Response.json(data, { status });
 
 export const coreOff = () =>
-  json({ error: "Núcleo não configurado: defina ANIMIND_CORE_URL (ou ANIMIND_CORE_MOCK=1 em dev)" }, 503);
+  json({ error: "Núcleo não configurado: defina ANIMINDLY_CORE_URL (ou ANIMINDLY_CORE_MOCK=1 em dev)" }, 503);

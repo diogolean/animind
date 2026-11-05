@@ -5,7 +5,7 @@ import { dataDir } from "./paths";
 
 /**
  * Object storage for character binaries (puppet.json and PNG layers).
- * Each object is a key under ANIMIND_DATA_DIR/objects and is served by URL.
+ * Each object is a key under ANIMINDLY_DATA_DIR/objects and is served by URL.
  * The bytes stay out of git; character records store only the URLs.
  */
 const ASSET_PREFIX = "/api/library/assets/";

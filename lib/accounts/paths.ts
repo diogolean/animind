@@ -1,9 +1,10 @@
 import { randomBytes } from "node:crypto";
 import path from "node:path";
+import { productEnv } from "../product-env";
 
 /** Gitignored directory for accounts, character metadata, and object bytes. */
 export function dataDir(): string {
-  const configured = process.env.ANIMIND_DATA_DIR?.trim();
+  const configured = productEnv("DATA_DIR")?.trim();
   if (configured) return path.resolve(configured);
   return path.join(process.cwd(), ".data");
 }

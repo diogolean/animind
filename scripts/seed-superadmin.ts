@@ -13,7 +13,7 @@ import { characterPackagePath, importOwnedCharacter } from "./import-character";
  * Locally, `.env.local` is loaded when those variables are not already set.
  * When a character zip is present, the same run imports it for that account.
  * A later seed with the same owner and display name replaces the character.
- *   ANIMIND_CHARACTER_ZIP, or uploads/albert_einstein.zip, or .data/inbox/albert_einstein.zip
+ *   ANIMINDLY_CHARACTER_ZIP (or ANIMIND_CHARACTER_ZIP), or uploads/albert_einstein.zip, or .data/inbox/albert_einstein.zip
  */
 async function main() {
   await loadLocalEnv();

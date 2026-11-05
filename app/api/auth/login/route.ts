@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
 
 export async function POST(req: Request) {
   const secret = authSecret();
-  if (!secret) return json({ error: "Defina ANIMIND_AUTH_SECRET (mínimo de 16 caracteres)" }, 503);
+  if (!secret) return json({ error: "Defina ANIMINDLY_AUTH_SECRET (mínimo de 16 caracteres)" }, 503);
   let body: { email?: string; password?: string };
   try {
     body = (await req.json()) as { email?: string; password?: string };
