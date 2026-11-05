@@ -13,6 +13,7 @@ import {
 } from "./contract";
 import { mockSheet, type QuoteSheet } from "./quote-sheets";
 import { checkFidelity } from "./script-qa";
+import { applyApprovedCharacters } from "./approved/einstein";
 import { portraitById, portraitImageUrl } from "./catalog";
 
 const hash = (s: string) => {
@@ -192,7 +193,8 @@ export function mockGetJob(id: string): RenderJob {
   const { r, c } = unb64<MockJobState>(id.replace(/^mock_/, ""));
   const p = Math.min(1, (Date.now() - c) / RENDER_MS);
   if (p < 1) return { id, status: p < 0.15 ? "queued" : "running", progress: Math.round(p * 100) / 100 };
-  const lines = script(r);
+  const characters = applyApprovedCharacters(r.characters);
+  const lines = script({ ...r, characters });
   return {
     id,
     status: "done",
@@ -203,7 +205,7 @@ export function mockGetJob(id: string): RenderJob {
       width: r.format === "9:16" ? 1080 : 1280,
       height: r.format === "9:16" ? 1920 : 720,
       scenario: r.scenario,
-      characters: r.characters,
+      characters,
       script: lines,
       durationMs: (lines.at(-1)?.endMs ?? 0) + 2400, // end card (titles.END_S)
       audioUrl: null,

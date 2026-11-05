@@ -32,8 +32,17 @@ export interface UserRecord extends PublicUser {
 
 export interface LibraryLayer {
   name: string;
-  /** Object-storage URL. The PNG bytes are not stored on the character record. */
+  /** Object-storage URL, or a public path for a catalog character. The PNG bytes are not stored on the character record. */
   url: string;
+}
+
+/** A demo that ships with a catalog character. Bytes stay at `url` (or `text` for a short script). */
+export interface LibraryDemo {
+  id: string;
+  label: string;
+  kind: "video" | "audio" | "image" | "script";
+  url?: string;
+  text?: string;
 }
 
 export interface LibraryCharacter {
@@ -47,6 +56,9 @@ export interface LibraryCharacter {
   layers: LibraryLayer[];
   emotionSheetUrl: string | null;
   status: LibraryStatus;
+  /** Shipped with the app. Not a row in the account library, and not editable. */
+  catalog?: boolean;
+  demos?: LibraryDemo[];
   createdAt: string;
   updatedAt: string;
   /** Present when the viewer is a super_admin looking at someone else's library. */

@@ -68,13 +68,13 @@ export function SiteHeader() {
         animind
       </Link>
       <nav className="ml-auto flex max-w-full flex-wrap items-center justify-end gap-x-3 gap-y-1">
+      <Link href="/characters" data-testid="my-characters-link" className="text-sm text-muted-foreground hover:text-foreground">
+        Meus personagens
+      </Link>
       {user ? (
         <>
           <Link href="/biblioteca" data-testid="biblioteca-link" className="text-sm text-muted-foreground hover:text-foreground">
             Biblioteca
-          </Link>
-          <Link href="/characters" data-testid="my-characters-link" className="text-sm text-muted-foreground hover:text-foreground">
-            Meus personagens
           </Link>
           <span className="hidden text-sm text-muted-foreground sm:inline">{user.name}</span>
           <span data-testid="account-role" data-role={user.role} className="rounded-full border border-white/10 px-2 py-0.5 text-[10px] uppercase tracking-wide text-muted-foreground">

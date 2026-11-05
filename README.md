@@ -116,6 +116,14 @@ Os nomes de todas as variáveis estão em [`.env.example`](.env.example). Copie 
 
 A biblioteca guarda nome, referência da ficha, as vistas que a pasta trouxer (frente, 3/4 esquerda, 3/4 direita e perfil; o perfil é opcional), URL do `puppet.json`, URLs das camadas e o status (`draft`, `ready`, `archived`). A página do personagem mostra essas vistas e a ficha de emoções grande, com zoom. A ficha só guarda a URL `/api/library/assets/...`.
 
+### Einstein aprovado (catálogo)
+
+O personagem aprovado (pacote p82, sem nova geração no Gemini) aparece em **Meus personagens** mesmo sem conta, Neon ou Blob. A ficha mostra a frente, as bocas Rhubarb A–H e X, a ficha de emoções, a prévia muda e os demos em português e inglês (vídeo, voz `voice_en.mp3` e o texto em inglês). **Novo vídeo** e **Debate** abrem o estúdio com esse rig. O mock de dev devolve a placa no fim do job; sem `ANIMIND_CORE_URL` e sem `ANIMIND_CORE_MOCK=1`, `POST /api/render` continua respondendo 503.
+
+Os arquivos ficam em `public/characters/einstein_approved/` (frente, bocas, `puppet.json`, voz, demos). Não há `BLOB_READ_WRITE_TOKEN` neste fluxo: o catálogo não lê Blob. A biblioteca privada da conta continua usando, quando existirem, `DATABASE_URL` ou `POSTGRES_URL`, `BLOB_STORE_ID`, `BLOB_READ_WRITE_TOKEN` e `ANIMIND_BLOB_ACCESS` (`private` só se a loja for privada). `npm run import-character -- --dir public/characters/einstein_approved --email "$SEED_SUPERADMIN_EMAIL"` copia o mesmo pacote para a conta (disco ou Blob). Rodar de novo substitui pelo nome.
+
+A frente da ficha é um quadro do `ksheet.png`, sem a legenda. A placa do player teve o buraco da boca preenchido com a pele ao redor para as bocas do pacote entrarem no lugar, sem desenhar de novo. O sprite de olhos fechados não alinha com esse quadro e fica só em `pack/`. As vistas 3/4 não vieram no pacote: no debate a câmera reutiliza a frente. A fábrica de um clique (fundo azul, recorte e todas as vistas) fica para outro passo. `scripts/prepare-einstein-approved.py` regrava a pasta a partir do pacote original.
+
 ### Modo local (`npm run dev`, inclusive no Windows)
 
 Sem `DATABASE_URL`, `POSTGRES_URL`, `BLOB_STORE_ID` e `BLOB_READ_WRITE_TOKEN`, contas e PNG ficam em `./.data` (`accounts.json` e `objects/`). O diretório é criado no primeiro `npm run seed` e está no `.gitignore`. `ANIMIND_DATA_DIR` só muda essa pasta; vazio significa `./.data`.

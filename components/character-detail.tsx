@@ -6,7 +6,8 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
 import { STATUS_LABEL } from "@/lib/accounts/labels";
-import type { LibraryCharacter, LibraryStatus, LibraryViewName } from "@/lib/accounts/types";
+import type { LibraryCharacter, LibraryDemo, LibraryStatus, LibraryViewName } from "@/lib/accounts/types";
+import { VISEMES, type Character, type CharacterView } from "@/lib/contract";
 
 const VIEWS: { id: LibraryViewName; label: string; testId: string }[] = [
   { id: "front", label: "Frente", testId: "view-front" },
@@ -21,6 +22,7 @@ export function CharacterDetail() {
   const params = useParams<{ id: string }>();
   const id = params.id;
   const [character, setCharacter] = useState<LibraryCharacter | null>(null);
+  const [rig, setRig] = useState<Character | null>(null);
   const [error, setError] = useState("");
   const [pending, setPending] = useState(false);
   const [sheetOpen, setSheetOpen] = useState(false);
@@ -47,12 +49,15 @@ export function CharacterDetail() {
           router.replace(`/login?next=/characters/${id}`);
           return null;
         }
-        const data = (await response.json().catch(() => ({}))) as { error?: string; character?: LibraryCharacter };
+        const data = (await response.json().catch(() => ({}))) as { error?: string; character?: LibraryCharacter; rig?: Character | null };
         if (!response.ok) throw new Error(data.error ?? "Personagem não encontrado");
-        return data.character ?? null;
+        return { character: data.character ?? null, rig: data.rig ?? null };
       })
       .then((next) => {
-        if (!cancelled && next) setCharacter(next);
+        if (!cancelled && next?.character) {
+          setCharacter(next.character);
+          setRig(next.rig);
+        }
       })
       .catch((cause) => {
         if (!cancelled) setError((cause as Error).message);
@@ -137,6 +142,12 @@ export function CharacterDetail() {
           ) : null}
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          {character.catalog ? (
+            <span data-testid="catalog-badge" className="rounded-full border border-white/15 px-3 py-2 text-xs uppercase tracking-wide text-muted-foreground">
+              Catálogo aprovado
+            </span>
+          ) : (
+            <>
           <label className="text-xs uppercase tracking-wide text-muted-foreground" htmlFor="character-status">
             Status
           </label>
@@ -154,6 +165,8 @@ export function CharacterDetail() {
               </option>
             ))}
           </select>
+            </>
+          )}
         </div>
       </div>
 
@@ -167,6 +180,37 @@ export function CharacterDetail() {
           </figure>
         ))}
       </div>
+      {character.catalog ? (
+        <p className="mt-3 text-sm text-muted-foreground">
+          Frente do pacote aprovado, sem a legenda do quadro. As bocas A–H e X são as do pacote. As vistas 3/4 não vieram nele; o debate reutiliza esta frente.
+        </p>
+      ) : null}
+
+      {rig?.views.front.layers.length ? (
+        <section className="mt-8">
+          <h2 className="text-sm font-medium">Prévia muda</h2>
+          <p className="mt-1 text-sm text-muted-foreground">A boca troca no ritmo das formas aprovadas. Sem áudio e sem o núcleo.</p>
+          <div className="mt-3 overflow-hidden rounded-[1.5rem] border border-white/10 bg-black/30">
+            <MouthPreview view={rig.views.front} />
+          </div>
+        </section>
+      ) : null}
+
+      {mouthLayers(character).length ? (
+        <section className="mt-8">
+          <h2 className="text-sm font-medium">Bocas</h2>
+          <ul className="mt-3 grid grid-cols-3 gap-3 sm:grid-cols-5 lg:grid-cols-9">
+            {mouthLayers(character).map((layer) => (
+              <li key={layer.name} data-testid={`mouth-${layer.name}`} className="overflow-hidden rounded-2xl border border-white/10 bg-[#f2c9a0]">
+                <div className="flex aspect-square items-center justify-center p-2">
+                  <img src={layer.url} alt={`Boca ${layer.name}`} className="max-h-full max-w-full object-contain" />
+                </div>
+                <p className="border-t border-white/10 px-2 py-1.5 text-center text-xs">{layer.name}</p>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
 
       <section className="mt-8">
         <h2 className="text-sm font-medium">Ficha de emoções</h2>
@@ -205,7 +249,8 @@ export function CharacterDetail() {
         </div>
       ) : null}
 
-      {character.layers.length ? (
+      {character.demos?.length ? <Demos demos={character.demos} /> : null}
+      {character.layers.length && !character.catalog ? (
         <p className="mt-4 text-xs text-muted-foreground">{character.layers.length} camadas no armazenamento de objetos.</p>
       ) : null}
       {error ? <p className="mt-4 text-sm text-red-400">{error}</p> : null}
@@ -223,10 +268,70 @@ export function CharacterDetail() {
         ) : (
           <p className="text-sm text-muted-foreground">Marque o personagem como pronto para usá-lo num vídeo ou debate.</p>
         )}
-        <button type="button" data-testid="delete-character" disabled={pending} onClick={remove} className="rounded-full px-4 py-2.5 text-sm text-red-400">
-          Apagar
-        </button>
+        {character.catalog ? null : (
+          <button type="button" data-testid="delete-character" disabled={pending} onClick={remove} className="rounded-full px-4 py-2.5 text-sm text-red-400">
+            Apagar
+          </button>
+        )}
       </div>
     </div>
+  );
+}
+
+function mouthLayers(character: LibraryCharacter) {
+  const names = new Set<string>(VISEMES);
+  return VISEMES.flatMap((name) => character.layers.filter((layer) => layer.name === name && names.has(layer.name)));
+}
+
+function MouthPreview({ view }: { view: CharacterView }) {
+  const [index, setIndex] = useState(0);
+  useEffect(() => {
+    const timer = setInterval(() => setIndex((current) => (current + 1) % VISEMES.length), 320);
+    return () => clearInterval(timer);
+  }, []);
+  const viseme = VISEMES[index] ?? "X";
+  const mouth = view.visemes[viseme];
+  const { w, h } = view.canvas;
+  const parts = [...view.layers, ...(mouth ? [{ ...mouth, name: "mouth" }] : [])].sort((a, b) => a.z - b.z);
+  return (
+    <div data-testid="mouth-preview" data-viseme={viseme} className="relative mx-auto w-full max-w-md bg-black" style={{ aspectRatio: `${w} / ${h}` }}>
+      {parts.map((layer) => (
+        <img
+          key={`${layer.name}-${layer.url}`}
+          src={layer.url}
+          alt=""
+          className="absolute max-w-none"
+          style={{
+            left: `${(layer.x / w) * 100}%`,
+            top: `${(layer.y / h) * 100}%`,
+            width: `${(layer.w / w) * 100}%`,
+            height: `${(layer.h / h) * 100}%`,
+            zIndex: layer.z,
+          }}
+        />
+      ))}
+      <p className="absolute bottom-3 left-3 rounded-full bg-black/70 px-3 py-1 text-xs">Boca {viseme}</p>
+    </div>
+  );
+}
+
+function Demos({ demos }: { demos: LibraryDemo[] }) {
+  return (
+    <section className="mt-8">
+      <h2 className="text-sm font-medium">Demos do pacote</h2>
+      <ul className="mt-3 grid gap-4 sm:grid-cols-2">
+        {demos.map((demo) => (
+          <li key={demo.id} data-testid={demo.id} className="overflow-hidden rounded-[1.5rem] border border-white/10 bg-black/30">
+            <p className="px-4 pt-4 text-sm">{demo.label}</p>
+            <div className="p-4">
+              {demo.kind === "video" && demo.url ? <video src={demo.url} controls muted playsInline preload="metadata" className="w-full rounded-xl" /> : null}
+              {demo.kind === "audio" && demo.url ? <audio src={demo.url} controls preload="metadata" className="w-full" /> : null}
+              {demo.kind === "image" && demo.url ? <img src={demo.url} alt={demo.label} className="w-full rounded-xl" /> : null}
+              {demo.kind === "script" && demo.text ? <p className="text-sm leading-relaxed text-muted-foreground">{demo.text}</p> : null}
+            </div>
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }

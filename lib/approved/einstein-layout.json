@@ -1,0 +1,92 @@
+{
+  "id": "chr_einstein_approved",
+  "name": "Albert Einstein",
+  "personaSheetRef": "https://en.wikiquote.org/wiki/Albert_Einstein",
+  "createdAt": "2026-11-04T00:00:00.000Z",
+  "canvas": {
+    "w": 480,
+    "h": 620
+  },
+  "front": "/characters/einstein_approved/views/front.png",
+  "body": "/characters/einstein_approved/layers/front/body.png",
+  "emotionSheet": "/characters/einstein_approved/emotion-sheet.png",
+  "emotionSheetEn": "/characters/einstein_approved/emotion-sheet-en.jpg",
+  "voiceEn": "/characters/einstein_approved/voice_en.mp3",
+  "dialogEn": "Hmm, have you ever wondered why time doesn't pass the same for everyone? Oh yes! The faster you move, the slower your clock ticks! And no, this is not nonsense, it is proven physics! Sadly, I never got to travel near the speed of light. But my imagination did! Ha ha!",
+  "demoEn": "/characters/einstein_approved/demo/einstein_en.mp4",
+  "demoPt": "/characters/einstein_approved/demo/einstein_pt.mp4",
+  "visemes": {
+    "A": {
+      "x": 197,
+      "y": 479,
+      "w": 90,
+      "h": 18,
+      "z": 8,
+      "url": "/characters/einstein_approved/mouths/A.png"
+    },
+    "B": {
+      "x": 194,
+      "y": 477,
+      "w": 96,
+      "h": 28,
+      "z": 8,
+      "url": "/characters/einstein_approved/mouths/B.png"
+    },
+    "C": {
+      "x": 194,
+      "y": 470,
+      "w": 96,
+      "h": 39,
+      "z": 8,
+      "url": "/characters/einstein_approved/mouths/C.png"
+    },
+    "D": {
+      "x": 191,
+      "y": 458,
+      "w": 101,
+      "h": 65,
+      "z": 8,
+      "url": "/characters/einstein_approved/mouths/D.png"
+    },
+    "E": {
+      "x": 199,
+      "y": 470,
+      "w": 85,
+      "h": 42,
+      "z": 8,
+      "url": "/characters/einstein_approved/mouths/E.png"
+    },
+    "F": {
+      "x": 222,
+      "y": 466,
+      "w": 42,
+      "h": 50,
+      "z": 8,
+      "url": "/characters/einstein_approved/mouths/F.png"
+    },
+    "G": {
+      "x": 194,
+      "y": 472,
+      "w": 96,
+      "h": 35,
+      "z": 8,
+      "url": "/characters/einstein_approved/mouths/G.png"
+    },
+    "H": {
+      "x": 200,
+      "y": 467,
+      "w": 85,
+      "h": 42,
+      "z": 8,
+      "url": "/characters/einstein_approved/mouths/H.png"
+    },
+    "X": {
+      "x": 194,
+      "y": 479,
+      "w": 96,
+      "h": 18,
+      "z": 8,
+      "url": "/characters/einstein_approved/mouths/X.png"
+    }
+  }
+}

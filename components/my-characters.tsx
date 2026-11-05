@@ -3,13 +3,35 @@
 /* eslint-disable @next/next/no-img-element */
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
 import { STATUS_LABEL } from "@/lib/accounts/labels";
 import type { LibraryCharacter, PublicUser } from "@/lib/accounts/types";
 
+async function readLibrary(): Promise<{ characters: LibraryCharacter[]; viewer: PublicUser | null; error: string; notice: string }> {
+  const [approvedResponse, libraryResponse] = await Promise.all([
+    fetch("/api/library/approved", { cache: "no-store" }),
+    fetch("/api/library", { cache: "no-store" }),
+  ]);
+  const approved = (await approvedResponse.json().catch(() => ({}))) as { characters?: LibraryCharacter[] };
+  const catalog = approved.characters ?? [];
+  if (libraryResponse.status === 401 || libraryResponse.status === 503) {
+    return {
+      characters: catalog,
+      viewer: null,
+      error: catalog.length ? "" : libraryResponse.status === 401 ? "Entre para ver os seus personagens." : "A biblioteca da conta não está disponível neste deploy.",
+      notice: libraryResponse.status === 503 && catalog.length ? "A biblioteca da conta não está disponível neste deploy. O catálogo aprovado continua aqui." : "",
+    };
+  }
+  const data = (await libraryResponse.json().catch(() => ({}))) as { error?: string; characters?: LibraryCharacter[]; viewer?: PublicUser };
+  if (!libraryResponse.ok) {
+    return { characters: catalog, viewer: null, error: data.error ?? "Não foi possível carregar a biblioteca", notice: "" };
+  }
+  const mine = data.characters ?? [];
+  const extra = catalog.filter((character) => !mine.some((item) => item.id === character.id));
+  return { characters: [...mine, ...extra], viewer: data.viewer ?? null, error: "", notice: "" };
+}
+
 export function MyCharacters() {
-  const router = useRouter();
   const [viewer, setViewer] = useState<PublicUser | null>(null);
   const [characters, setCharacters] = useState<LibraryCharacter[] | null>(null);
   const [error, setError] = useState("");
@@ -23,40 +45,22 @@ export function MyCharacters() {
   }, []);
 
   const load = useCallback(async () => {
-    const response = await fetch("/api/library", { cache: "no-store" });
-    if (response.status === 401) {
-      router.replace("/login?next=/characters");
-      return;
-    }
-    const data = (await response.json().catch(() => ({}))) as { error?: string; characters?: LibraryCharacter[]; viewer?: PublicUser };
-    if (!response.ok) {
-      setError(data.error ?? "Não foi possível carregar a biblioteca");
-      setCharacters([]);
-      return;
-    }
-    setError("");
-    setViewer(data.viewer ?? null);
-    setCharacters(data.characters ?? []);
-  }, [router]);
+    const next = await readLibrary();
+    setCharacters(next.characters);
+    setViewer(next.viewer);
+    setError(next.error);
+    setNotice(next.notice);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
-    fetch("/api/library", { cache: "no-store" })
-      .then(async (response) => {
+    readLibrary()
+      .then((next) => {
         if (cancelled) return;
-        if (response.status === 401) {
-          router.replace("/login?next=/characters");
-          return;
-        }
-        const data = (await response.json().catch(() => ({}))) as { error?: string; characters?: LibraryCharacter[]; viewer?: PublicUser };
-        if (cancelled) return;
-        if (!response.ok) {
-          setError(data.error ?? "Não foi possível carregar a biblioteca");
-          setCharacters([]);
-          return;
-        }
-        setViewer(data.viewer ?? null);
-        setCharacters(data.characters ?? []);
+        setCharacters(next.characters);
+        setViewer(next.viewer);
+        setError(next.error);
+        setNotice(next.notice);
       })
       .catch((cause) => {
         if (!cancelled) setError((cause as Error).message);
@@ -64,7 +68,7 @@ export function MyCharacters() {
     return () => {
       cancelled = true;
     };
-  }, [router]);
+  }, []);
 
   async function onImport(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -104,12 +108,20 @@ export function MyCharacters() {
           <h1 className="text-3xl font-medium tracking-tight">Meus personagens</h1>
           <p className="mt-2 max-w-xl text-sm text-muted-foreground">
             {viewer?.role === "super_admin"
-              ? "Você vê e gerencia a biblioteca de todo mundo."
-              : "Personagens desta conta. Importe uma pasta com puppet.json e as camadas PNG."}
+              ? "Você vê e gerencia a biblioteca de todo mundo. O Einstein aprovado fica no catálogo."
+              : viewer
+                ? "Personagens desta conta, mais o catálogo aprovado. Importe uma pasta com puppet.json e as camadas PNG."
+                : "O Einstein aprovado está no catálogo. Entre para ver e importar os personagens da sua conta."}
           </p>
+          {viewer ? null : (
+            <Link href="/login?next=/characters" className="mt-3 inline-block text-sm underline">
+              Entrar
+            </Link>
+          )}
         </div>
       </div>
 
+      {notice ? <p className="mt-6 text-sm text-muted-foreground">{notice}</p> : null}
       {error ? (
         <p data-testid="characters-error" className="mt-6 text-sm text-red-400">
           {error}
@@ -143,6 +155,11 @@ export function MyCharacters() {
                 <div className="flex items-center justify-between gap-3 px-4 py-3">
                   <div className="min-w-0">
                     <p className="truncate font-medium">{character.name}</p>
+                    {character.catalog ? (
+                      <p data-testid="catalog-badge" className="text-xs text-muted-foreground">
+                        Catálogo aprovado
+                      </p>
+                    ) : null}
                     {character.owner ? (
                       <p data-testid="character-owner" className="truncate text-xs text-muted-foreground">
                         {character.owner.name}
@@ -159,7 +176,7 @@ export function MyCharacters() {
         </ul>
       )}
 
-      <form onSubmit={onImport} data-testid="import-character" className="mt-12 max-w-full rounded-[1.5rem] border border-white/10 bg-white/[0.025] p-5">
+      {viewer ? <form onSubmit={onImport} data-testid="import-character" className="mt-12 max-w-full rounded-[1.5rem] border border-white/10 bg-white/[0.025] p-5">
         <h2 className="text-sm font-medium">Importar pasta</h2>
         <p className="mt-1 text-sm text-muted-foreground">puppet.json, as vistas que a pasta tiver (frente e 3/4; perfil se houver), ficha de emoções e PNGs em layers/&lt;vista&gt;/.</p>
         <div className="mt-4 grid gap-3 sm:grid-cols-2">
@@ -189,7 +206,7 @@ export function MyCharacters() {
             {notice}
           </p>
         ) : null}
-      </form>
+      </form> : null}
     </div>
   );
 }
