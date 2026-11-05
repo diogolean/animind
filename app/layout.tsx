@@ -10,11 +10,19 @@ import "./globals.css";
 const geist = Geist({ variable: "--font-sans", subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: { default: "Animind", template: "%s · Animind" },
+  metadataBase: new URL("https://animindly.com"),
+  title: { default: "Animindly", template: "%s · Animindly" },
   description: "Crie personagens, roteiros e cenários para animações falantes.",
-  applicationName: "Animind",
-  appleWebApp: { capable: true, title: "Animind", statusBarStyle: "black-translucent" },
+  applicationName: "Animindly",
+  appleWebApp: { capable: true, title: "Animindly", statusBarStyle: "black-translucent" },
   icons: { icon: "/icons/192", apple: "/icons/180" },
+  openGraph: {
+    type: "website",
+    siteName: "Animindly",
+    locale: "pt_BR",
+    url: "https://animindly.com",
+  },
+  twitter: { card: "summary" },
 };
 
 export const viewport: Viewport = {

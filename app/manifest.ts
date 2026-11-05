@@ -2,8 +2,8 @@ import type { MetadataRoute } from "next";
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "Animind",
-    short_name: "Animind",
+    name: "Animindly",
+    short_name: "Animindly",
     description: "Personagens falantes animados em 3 cliques.",
     start_url: "/",
     display: "standalone",

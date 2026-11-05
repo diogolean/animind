@@ -128,7 +128,7 @@
     @apply font-sans;
   }
 }
-/* Animind: near-monochrome, one accent */
+/* Animindly: near-monochrome, one accent */
 :root {
   --accent-brand: oklch(0.6 0.2 258);
 }

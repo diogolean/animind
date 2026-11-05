@@ -6,7 +6,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   const p = portraitById(id);
   if (!p) return new Response("not found", { status: 404 });
   const r = await fetch(commonsFileUrl(p.file), {
-    headers: { "user-agent": "Animind/0.1 (https://github.com/diogolean/animind)" },
+    headers: { "user-agent": "Animindly/0.1 (https://github.com/diogolean/animind)" },
     next: { revalidate: 86400 },
   });
   if (!r.ok) return new Response("upstream error", { status: 502 });

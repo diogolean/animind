@@ -502,7 +502,7 @@ function drawWorld(g: CanvasRenderingContext2D, r: RenderResult, img: Images, sh
 function roleLine(c: Character, r: RenderResult) {
   const a = c.photo?.attribution;
   if (a?.author) return `Foto: ${a.author}${a.license ? ` · ${a.license}` : ""}`;
-  return { debate: "Debate", lesson: "Aula", solo: "Fala" }[r.template] + " · animind";
+  return { debate: "Debate", lesson: "Aula", solo: "Fala" }[r.template] + " · animindly";
 }
 
 const prettyName = (s: string) => {
@@ -789,7 +789,7 @@ export function drawFrame(g: CanvasRenderingContext2D, r: RenderResult, img: Ima
   g.font = "500 16px Geist, ui-sans-serif, system-ui";
   g.textAlign = "right";
   g.fillStyle = "rgba(255,255,255,.43)";
-  g.fillText("animind", FW / ks - 28, 46);
+  g.fillText("animindly", FW / ks - 28, 46);
   g.restore();
 }
 

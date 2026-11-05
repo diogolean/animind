@@ -1,5 +1,5 @@
-/* Minimal offline shell for the Animind PWA. API calls always hit the network. */
-const CACHE = "animind-v2";
+/* Minimal offline shell for the Animindly PWA. API calls always hit the network. */
+const CACHE = "animindly-v1";
 self.addEventListener("install", (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(["/"])).then(() => self.skipWaiting()));
 });

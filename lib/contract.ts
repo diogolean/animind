@@ -1,5 +1,5 @@
 /**
- * Animind <-> Omni-Engine core HTTP contract (v1).
+ * Animindly <-> Omni-Engine core HTTP contract (v1).
  *
  * The core (Aiwake character factory + Rigly scene engine) lives in
  * github.com/diogolean/Omni-Engine and is never copied here. The Next.js

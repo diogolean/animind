@@ -584,7 +584,7 @@ export function Composer() {
               ) : null}
               {result && audio ? (
                 <div className="mt-8" data-testid="render-result">
-                  <Player result={result} audioCtx={audio} fileName={`animind-${characters[0].name.toLowerCase().replace(/\W+/g, "-")}`} />
+                  <Player result={result} audioCtx={audio} fileName={`animindly-${characters[0].name.toLowerCase().replace(/\W+/g, "-")}`} />
                   <Transcript result={result} />
                 </div>
               ) : null}

@@ -6,7 +6,7 @@ import { cn } from "cn";
 import type { LanguageCode, VoiceLanguage } from "@/lib/contract";
 
 const SUGGESTED = ["en-US", "pt-BR", "es-ES"];
-const RECENTS_KEY = "animind-recent-languages";
+const RECENTS_KEY = "animindly-recent-languages";
 
 const fold = (value: string) =>
   value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase();

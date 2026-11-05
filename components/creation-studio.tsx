@@ -539,7 +539,7 @@ export function CreationStudio() {
 
       {result && audio ? (
         <motion.section data-testid="render-result" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="mx-auto mt-10 max-w-4xl">
-          <Player result={result} audioCtx={audio} fileName={`animind-${result.characters[0]?.name.toLowerCase().replace(/\W+/g, "-") ?? "criacao"}`} />
+          <Player result={result} audioCtx={audio} fileName={`animindly-${result.characters[0]?.name.toLowerCase().replace(/\W+/g, "-") ?? "criacao"}`} />
           <Transcript result={result} />
         </motion.section>
       ) : null}
