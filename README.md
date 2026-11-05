@@ -1,6 +1,6 @@
-# Animind
+# Animindly
 
-Painel para criar personagens falantes: **descreva → revise o plano → gere**.
+Painel em [animindly.com](https://animindly.com) para criar personagens falantes: **descreva → revise o plano → gere**.
 PWA (Next.js 16 App Router, React 19, TypeScript, Tailwind 4, shadcn/ui, framer-motion).
 
 ## Arquitetura
@@ -190,13 +190,13 @@ Variáveis que você cria à mão, nos mesmos ambientes, só com o nome (o valor
 
 `VERCEL_OIDC_TOKEN` a Vercel injeta sozinha; não cole um valor. `ANIMINDLY_BLOB_ACCESS` só entra se a loja Blob for privada (`private`).
 
-`ANIMINDLY_AUTH_URL` no preview é o alias estável, por exemplo `https://<project>-git-feat-mvp-ui-<team>.vercel.app`. O hostname com hash muda a cada deploy; quem abre esse host é enviado ao alias antes de ir ao Google, e a sessão fica nesse host. Em produção, a origem é `https://<domínio>`.
+`ANIMINDLY_AUTH_URL` no preview é o alias estável, por exemplo `https://<project>-git-feat-mvp-ui-<team>.vercel.app`. O hostname com hash muda a cada deploy; quem abre esse host é enviado ao alias antes de ir ao Google, e a sessão fica nesse host. Em produção, a origem é `https://animindly.com`.
 
 Redirect URIs do preview e da produção:
 
 ```text
 https://<project>-git-feat-mvp-ui-<team>.vercel.app/api/auth/google/callback
-https://<domínio-de-produção>/api/auth/google/callback
+https://animindly.com/api/auth/google/callback
 ```
 
 Depois do push de `feat/mvp-ui` e de um redeploy do preview, um `vercel env pull` grava o Neon e o Blob no `.env.local`. Com essas variáveis preenchidas, o `npm run dev` da mesma pasta fala com a Vercel, não com `./.data`. Para voltar ao disco local, esvazie `DATABASE_URL`, `POSTGRES_URL`, `BLOB_STORE_ID` e `BLOB_READ_WRITE_TOKEN`.
@@ -216,7 +216,7 @@ O botão **Entrar com Google** fica ao lado do e-mail e da senha, nos dois modos
 
 `ANIMINDLY_AUTH_SECRET` assina a sessão e o cookie de estado (`animind_google_state`, 10 minutos). Sem `GOOGLE_CLIENT_ID` e `GOOGLE_CLIENT_SECRET`, o botão volta para `/login?error=google_unconfigured` e não chama o Google.
 
-O cliente já existe. Projeto [animind-513520](https://console.cloud.google.com/apis/credentials?project=animind-513520), conta `contato@sosilha.com.br`, organização `sosilha.com.br`, nome **Animind web**. Consentimento External, em Testing, com test users `diogolean@gmail.com` e `contato@sosilha.com.br`. Copie o Client ID e o Client secret desse cliente para o `.env.local` e, no modo Vercel, para Preview e Production. O valor não entra no git. Antes do login no preview, acrescente no mesmo cliente o redirect URI `https://<project>-git-feat-mvp-ui-<team>.vercel.app/api/auth/google/callback` (e o da produção, quando houver domínio).
+O cliente já existe. Projeto [animind-513520](https://console.cloud.google.com/apis/credentials?project=animind-513520), conta `contato@sosilha.com.br`, organização `sosilha.com.br`, nome **Animind web** (nome no Google Cloud; o app se chama Animindly). Consentimento External, em Testing, com test users `diogolean@gmail.com` e `contato@sosilha.com.br`. Copie o Client ID e o Client secret desse cliente para o `.env.local` e, no modo Vercel, para Preview e Production. O valor não entra no git. Antes do login no preview, acrescente no mesmo cliente o redirect URI `https://<project>-git-feat-mvp-ui-<team>.vercel.app/api/auth/google/callback` e o de produção `https://animindly.com/api/auth/google/callback`.
 
 A página **Biblioteca** lista tudo o que a conta gerou: personagem, vista, ficha de emoções, imagem, roteiro, áudio, vídeo e debate. Cada item aponta para o personagem ou o job de origem. Um `super_admin` vê os de todo mundo. Importar um personagem grava essas linhas na hora; terminar uma criação grava roteiro, debate, imagem, áudio e vídeo sozinho. O texto vai para o mesmo armazenamento dos PNG (disco local ou Vercel Blob) e a ficha fica na mesma tabela de contas (`animind_assets` no Neon).
 

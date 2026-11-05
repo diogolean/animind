@@ -157,6 +157,7 @@ describe("accounts and character library", { concurrency: false }, () => {
     assert.match(accountsDoc, /Animind web/);
     assert.match(accountsDoc, /http:\/\/localhost:3000\/api\/auth\/google\/callback/);
     assert.match(accountsDoc, /diogolean\/animind/);
+    assert.match(accountsDoc, /https:\/\/animindly\.com\/api\/auth\/google\/callback/);
     assert.match(accountsDoc, /to confirm/);
     assert.doesNotMatch(accountsDoc, /GOCSPX-|AIza[0-9A-Za-z_-]{10}|sk-[A-Za-z0-9]{10}|postgres:\/\/|rw_[A-Za-z0-9]|BEGIN (RSA |OPENSSH )?PRIVATE KEY/);
     assert.equal(canSeeAll("user"), false);

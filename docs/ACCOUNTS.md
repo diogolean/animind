@@ -1,4 +1,4 @@
-# Animind accounts and invoices
+# Animindly accounts and invoices
 
 Names and links only. No client secrets, API keys, or passwords belong in git. Put values in `.env.local` on a machine, or in the Vercel project's environment variables. This file lists every service this app or its Omni-Engine core calls, which env var names it needs, where the value is kept, and where the invoice shows up.
 
@@ -10,7 +10,7 @@ The Next.js app reads [`.env.example`](../.env.example). Image, script, and spee
 
 | | |
 | --- | --- |
-| What | Sign-in with Google. Client name **Animind web**. Consent screen External, status Testing. |
+| What | Sign-in with Google. Client name **Animind web** (the name on the Google Cloud consent screen; this app is Animindly). Consent screen External, status Testing. |
 | Project | [animind-513520](https://console.cloud.google.com/home/dashboard?project=animind-513520) |
 | Organization | sosilha.com.br |
 | Account | contato@sosilha.com.br |
@@ -21,7 +21,7 @@ The Next.js app reads [`.env.example`](../.env.example). Image, script, and spee
 | Where the values live | Local `.env.local` and, for a deploy, Vercel env (Preview and Production). Never git. |
 | Callback this app sends | `{origin}/api/auth/google/callback` |
 | Registered today | `http://localhost:3000/api/auth/google/callback` (used). `http://localhost:3000/api/auth/callback/google` (registered, unused). |
-| Still to add on the client | The preview alias `https://<project>-git-feat-mvp-ui-<team>.vercel.app/api/auth/google/callback`, and the production origin when it exists. `http://127.0.0.1:3000/api/auth/google/callback` only if the browser uses that host. |
+| Still to add on the client | The preview alias `https://<project>-git-feat-mvp-ui-<team>.vercel.app/api/auth/google/callback`, and production `https://animindly.com/api/auth/google/callback`. `http://127.0.0.1:3000/api/auth/google/callback` only if the browser uses that host. |
 | Pilot link | `SEED_SUPERADMIN_EMAIL=diogolean@gmail.com` so that Google account is the `super_admin`. `contato@sosilha.com.br` is a test user and becomes role `user` unless seeded on purpose. |
 | Invoices | OAuth itself is not a metered API. The Cloud billing account for this login is [Billing](https://console.cloud.google.com/billing?authuser=3) (authuser 3, `contato@sosilha.com.br`). |
 
@@ -72,7 +72,7 @@ The Next.js app reads [`.env.example`](../.env.example). Image, script, and spee
 | What | Not referenced in this repo or in `.env.example`. No env var here. |
 | Env var | none |
 | Account | **to confirm** |
-| Invoices | [DeepInfra billing](https://deepinfra.com/dash/billing) only if a key exists outside this repo. Otherwise there is nothing to pay from Animind. |
+| Invoices | [DeepInfra billing](https://deepinfra.com/dash/billing) only if a key exists outside this repo. Otherwise there is nothing to pay from Animindly. |
 
 ## Vercel (hosting, env, Blob)
 
