@@ -1,10 +1,10 @@
 import { createHash, randomBytes } from "node:crypto";
 import { mkdir, open, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { neon, type NeonQueryFunction } from "@neondatabase/serverless";
 import { databaseUrl, onVercel } from "../accounts/config";
 import { dataDir } from "../accounts/paths";
 import type { SpendOperation } from "./catalog";
+import { sqlFor, type SqlQuery } from "./sql";
 
 export type SpendStatus = "reserved" | "succeeded" | "failed" | "timeout" | "blocked" | "uncertain" | "replay" | "read";
 
@@ -155,19 +155,22 @@ export function newSpendId(): string {
   return `spd_${randomBytes(9).toString("base64url")}`;
 }
 
-let sqlCache: { url: string; sql: NeonQueryFunction<false, false> } | null = null;
+let sqlCache: { url: string; sql: SqlQuery } | null = null;
 let schema: Promise<void> | null = null;
 
-function sql(): NeonQueryFunction<false, false> {
+function sql(): SqlQuery {
   const url = databaseUrl();
   if (!url) throw new Error("DATABASE_URL ausente");
-  if (!sqlCache || sqlCache.url !== url) sqlCache = { url, sql: neon(url) };
+  if (!sqlCache || sqlCache.url !== url) {
+    sqlCache = { url, sql: sqlFor(url) };
+    schema = null;
+  }
   return sqlCache.sql;
 }
 
-async function ready(): Promise<NeonQueryFunction<false, false>> {
+async function ready(): Promise<SqlQuery> {
   const db = sql();
-  schema ??= (async () => {
+  schema ??= db.session(async (db) => {
     await db`CREATE TABLE IF NOT EXISTS animind_spend_entries (
       id text PRIMARY KEY,
       request_id text NOT NULL,
@@ -315,7 +318,7 @@ async function ready(): Promise<NeonQueryFunction<false, false>> {
       RETURN 'ok';
     END
     $fn$`;
-  })().catch((error: unknown) => {
+  }).catch((error: unknown) => {
     schema = null;
     throw error;
   });
@@ -669,7 +672,7 @@ export async function reconcileStale(timeoutMs: number): Promise<number> {
   const cutoff = Date.now() - timeoutMs;
   if (usePostgres()) {
     const db = await ready();
-    const rows = await db`SELECT id FROM animind_spend_entries WHERE status = 'reserved' AND created_at < ${new Date(cutoff).toISOString()}`;
+    const rows = await db`SELECT id FROM animind_spend_entries WHERE status = 'reserved' AND created_at < ${new Date(cutoff).toISOString()}::timestamptz`;
     for (const row of rows) await settle(String(row.id), { status: "uncertain", block: "timeout" });
     return rows.length;
   }
