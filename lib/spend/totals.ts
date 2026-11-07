@@ -14,7 +14,8 @@ export function spendTotals(entries: SpendEntry[]) {
     else reported.set(entry.currency, (reported.get(entry.currency) ?? 0) + entry.reportedMinor);
   }
   return {
-    calls: entries.length,
+    calls: entries.filter((entry) => entry.status !== "read").length,
+    reads: entries.filter((entry) => entry.status === "read").length,
     reserved: entries.filter((entry) => entry.status === "reserved").length,
     blocked: entries.filter((entry) => entry.status === "blocked").length,
     failed: entries.filter((entry) => entry.status === "failed" || entry.status === "timeout").length,

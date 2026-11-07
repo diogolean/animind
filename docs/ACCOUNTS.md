@@ -113,6 +113,7 @@ The Next.js app reads [`.env.example`](../.env.example). Image, script, and spee
 | Env vars (this app) | `ANIMINDLY_CORE_URL` (older `ANIMIND_CORE_URL`, then `CORE_URL`), `ANIMINDLY_CORE_KEY` (same value as the core's `CORE_API_KEY`; older `ANIMIND_CORE_KEY`, then `CORE_API_KEY`). Dev only: `ANIMINDLY_CORE_MOCK=1` when no core URL is set (`ANIMIND_CORE_MOCK` still works). |
 | Where the values live | This app's `.env.local`, and Vercel env if the preview should reach a running core. The core's own provider keys stay on the core. Never git. |
 | Invoices | None for the core process. Provider invoices are the rows above. |
+| Metering | `products/animind_core` is on branch `feat/animind-core-api`, not the default branch. This app only records provider, model, usage, and cost when that response includes them. A change there belongs in a separate draft PR on Omni-Engine. This repo does not write that repository. |
 
 ## This app, no outside account
 
@@ -121,7 +122,8 @@ The Next.js app reads [`.env.example`](../.env.example). Image, script, and spee
 | `ANIMINDLY_AUTH_SECRET` | Signs the session cookie and the Google state cookie. Generate it locally. At least 16 characters. |
 | `ANIMINDLY_DATA_DIR` | Optional override for `./.data` when hosted database and Blob variables are empty. |
 | `ANIMINDLY_GENERATION` | Must be exactly `1` or every paid call is denied. Empty is off. |
-| `ANIMINDLY_SPEND_BUDGET_CENTS`, `ANIMINDLY_SPEND_USER_CENTS`, `ANIMINDLY_SPEND_TIMEOUT_MS`, `ANIMINDLY_SPEND_MAX_RETRIES`, `ANIMINDLY_SPEND_RATE_PER_MIN` | Required together before a paid call. No default numbers in code. Cents are USD minor units from the price table, not a subscription. |
+| `ANIMINDLY_SPEND_BUDGET_CENTS`, `ANIMINDLY_SPEND_USER_CENTS`, `ANIMINDLY_SPEND_TIMEOUT_MS`, `ANIMINDLY_SPEND_MAX_RETRIES`, `ANIMINDLY_SPEND_RATE_PER_MIN`, `ANIMINDLY_GENERATION_CONCURRENCY` | Required together before a paid call. No default numbers in code. Cents are USD minor units from the price table, not a subscription. Rate and concurrency are shared through the ledger. |
+| `ANIMINDLY_SPEND_MAX_INPUT_TOKENS`, `ANIMINDLY_SPEND_MAX_OUTPUT_TOKENS`, `ANIMINDLY_SPEND_MAX_TOTAL_TOKENS`, `ANIMINDLY_SPEND_MAX_IMAGES`, `ANIMINDLY_SPEND_MAX_AUDIO_SEC`, `ANIMINDLY_SPEND_MAX_VIDEO_SEC` | Required per-request caps. A request over a cap is rejected. The prompt is not rewritten. |
 | `ANIMINDLY_PRICE_TABLE_JSON` | Optional operator price table. Invalid JSON fails closed. Empty uses the unpublished table in the repo, which has no rows, so paid calls stay denied. |
 | `ANIMINDLY_GA_MEASUREMENT_ID` | Public GA4 measurement id. Empty disables the tag. Preview host only until collection is checked. Direct gtag, not GTM. |
 | `SEED_SUPERADMIN_PASSWORD` | Pilot password for email login. Local `.env.local` and Vercel env. Never git. |

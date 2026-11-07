@@ -20,7 +20,7 @@ export async function GET(req: Request) {
     ledger = false;
   }
   if (!ledger) return json({ error: "Livro de gastos indisponível", code: "ledger" }, 503);
-  const { entries, holds } = await listEntries();
+  const { entries, holds, inflight } = await listEntries();
   const url = new URL(req.url);
   const from = url.searchParams.get("from");
   const to = url.searchParams.get("to");
@@ -49,7 +49,8 @@ export async function GET(req: Request) {
     ledger: "ok",
     testData: filtered.length > 0 && filtered.every((entry) => entry.origin === "test"),
     priceVersion: limits.ok ? limits.limits.prices.version : null,
-    priceSource: limits.ok ? limits.limits.prices.source : "indisponível",
+    priceSource: limits.ok ? limits.limits.prices.source : "unavailable",
+    inflight,
     totals: spendTotals(filtered),
     holds: holds.map((hold) => ({
       scope: hold.scope.startsWith("user:") ? "user" : hold.scope,

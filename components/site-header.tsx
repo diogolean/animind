@@ -5,8 +5,10 @@ import { useEffect, useState } from "react";
 import { HEALTH_EVENT } from "@/lib/api";
 import { ROLE_LABEL } from "@/lib/accounts/labels";
 import type { PublicUser } from "@/lib/accounts/types";
+import { LanguageToggle, useI18n } from "@/components/locale";
 
 export function SiteHeader() {
+  const { t } = useI18n();
   const pathname = usePathname();
   const router = useRouter();
   const [mode, setMode] = useState<{ label: string; tone: string; note?: string } | null>(null);
@@ -71,28 +73,32 @@ export function SiteHeader() {
       {user ? (
         <>
           <Link href="/characters" data-testid="my-characters-link" className="inline-flex min-h-11 items-center text-sm text-muted-foreground hover:text-foreground">
-            Meus personagens
+            {t("characters")}
           </Link>
           {user.role === "super_admin" ? (
             <Link href="/admin/gastos" data-testid="spend-link" className="inline-flex min-h-11 items-center text-sm text-muted-foreground hover:text-foreground">
-              Gastos
+              {t("spend")}
             </Link>
           ) : null}
           <Link href="/biblioteca" data-testid="biblioteca-link" className="inline-flex min-h-11 items-center text-sm text-muted-foreground hover:text-foreground">
-            Biblioteca
+            {t("library")}
           </Link>
           <span className="hidden text-sm text-muted-foreground sm:inline">{user.name}</span>
           <span data-testid="account-role" data-role={user.role} className="rounded-full border border-white/10 px-2 py-1 text-[10px] uppercase tracking-wide text-muted-foreground">
             {ROLE_LABEL[user.role]}
           </span>
           <button type="button" data-testid="logout" onClick={logout} className="inline-flex min-h-11 items-center text-sm text-muted-foreground hover:text-foreground">
-            Sair
+            {t("signOut")}
           </button>
+          <LanguageToggle />
         </>
       ) : (
+        <>
         <Link href="/login" data-testid="login-link" className="inline-flex min-h-11 items-center text-sm text-muted-foreground hover:text-foreground">
-          Entrar
+          {t("signIn")}
         </Link>
+        <LanguageToggle />
+        </>
       )}
       </nav>
       {mode && (

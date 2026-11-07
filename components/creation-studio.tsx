@@ -34,6 +34,7 @@ import { fallbackVoiceCatalog } from "@/lib/voices";
 import { loadDraft, saveDraft } from "@/lib/draft";
 import { track } from "@/lib/analytics-client";
 import type { PublicUser } from "@/lib/accounts/types";
+import { useI18n } from "@/components/locale";
 import { CharacterListEditor } from "@/components/flow/character-list-editor";
 import { CharacterVoicesEditor } from "@/components/flow/character-voices-editor";
 import { ChoiceCard } from "@/components/flow/choice-card";
@@ -104,6 +105,7 @@ export function CreationStudio() {
   const [format, setFormat] = useState<VideoFormat>("16:9");
   const [viewer, setViewer] = useState<PublicUser | null>(null);
   const [loginOpen, setLoginOpen] = useState(false);
+  const { t } = useI18n();
 
   const [rendering, setRendering] = useState(false);
   const [status, setStatus] = useState("");
@@ -412,7 +414,7 @@ export function CreationStudio() {
             }}
             rows={6}
             maxLength={1200}
-            placeholder="Descreva sua criação&#10;Uma conversa entre Jesus e o diabo debatendo temas bíblicos"
+            placeholder={t("promptPlaceholder")}
             className="min-h-52 w-full resize-none bg-transparent p-4 text-xl leading-relaxed tracking-tight outline-none placeholder:text-muted-foreground/40 sm:p-6 sm:text-2xl"
           />
           <div className="flex flex-wrap items-center justify-between gap-3 border-t border-white/8 px-3 pt-3 pb-1 sm:px-6">
@@ -439,7 +441,7 @@ export function CreationStudio() {
                 <span className={cn("absolute top-2 left-2 size-7 rounded-full bg-white shadow transition-transform", automatic ? "translate-x-5" : "translate-x-0")} />
                 <span className="sr-only">{automatic ? "Desligar automático" : "Ligar automático"}</span>
               </button>
-              <span className="text-sm font-medium">Automático</span>
+              <span className="text-sm font-medium">{t("automatic")}</span>
             </div>
             <div className="ml-auto flex items-center gap-2">
               <button
@@ -475,35 +477,35 @@ export function CreationStudio() {
                 className="inline-flex min-h-11 items-center gap-2 rounded-full bg-white px-5 text-sm font-medium text-black transition hover:bg-white/90 disabled:cursor-not-allowed disabled:opacity-25"
               >
                 {rendering || planning ? <Loader2 className="size-4 animate-spin" /> : <Sparkles className="size-4" />}
-                {planning ? "Entendendo" : rendering ? "Criando" : result ? "Criar novamente" : "Criar"}
+                {planning ? t("understanding") : rendering ? t("creating") : result ? t("create") : t("create")}
               </button>
             </div>
           </div>
         </div>
         {plan?.source === "local" ? (
           <p data-testid="planner-source" className="mt-3 text-xs text-muted-foreground">
-            Entendendo usa regras locais neste servidor. Nenhum modelo de provedor é chamado nesse passo.
+            {t("localPlan")}
           </p>
         ) : plan?.source === "core" ? (
           <p data-testid="planner-source" className="mt-3 text-xs text-muted-foreground">
-            O plano veio do núcleo. Esta resposta não informa o id do modelo.
+            {t("corePlan")}
           </p>
         ) : null}
         {loginOpen ? (
           <div role="dialog" aria-modal="true" data-testid="login-gate" className="fixed inset-0 z-50 flex items-end justify-center bg-black/70 p-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:items-center">
             <div className="w-full max-w-md rounded-3xl border border-white/10 bg-neutral-950 p-6">
-              <h2 className="text-lg font-medium">Entre para criar</h2>
-              <p className="mt-2 text-sm text-muted-foreground">Sua ideia fica neste aparelho. O texto não entra no endereço de login.</p>
+              <h2 className="text-lg font-medium">{t("loginTitle")}</h2>
+              <p className="mt-2 text-sm text-muted-foreground">{t("loginBody")}</p>
               <a data-testid="login-gate-google" href="/api/auth/google?next=/" className="mt-5 flex min-h-11 items-center justify-center rounded-full bg-white text-sm font-medium text-black" onClick={() => {
                 saveDraft(prompt, format);
                 window.sessionStorage.setItem("animindly-login", "google");
               }}>
-                Continuar com Google
+                {t("signInGoogle")}
               </a>
               <a href="/login?next=/" className="mt-3 flex min-h-11 items-center justify-center rounded-full border border-white/15 text-sm" onClick={() => saveDraft(prompt, format)}>
-                Entrar com senha
+                {t("signInPassword")}
               </a>
-              <button type="button" className="mt-3 min-h-11 text-sm text-muted-foreground" onClick={() => setLoginOpen(false)}>Agora não</button>
+              <button type="button" className="mt-3 min-h-11 text-sm text-muted-foreground" onClick={() => setLoginOpen(false)}>{t("notNow")}</button>
             </div>
           </div>
         ) : null}
@@ -519,7 +521,7 @@ export function CreationStudio() {
               className="mt-4 overflow-hidden rounded-[1.5rem] border border-white/8 bg-white/[0.018] p-5"
             >
               <div className="mb-5 flex items-center justify-between">
-                <p className="text-sm font-medium">{automatic ? "O que será criado" : "Direção manual"}</p>
+                <p className="text-sm font-medium">{automatic ? t("willCreate") : t("manualDirection")}</p>
                 <div className="flex gap-1">
                   {(["16:9", "9:16"] as const).map((item) => (
                     <button
@@ -557,7 +559,7 @@ export function CreationStudio() {
                       ) : null}
                     </AnimatePresence>
                   </>
-                ) : <p className="text-sm text-muted-foreground">{planning ? "Entendendo sua criação…" : "Escreva uma ideia para ver os detalhes."}</p>
+                ) : <p className="text-sm text-muted-foreground">{planning ? t("understanding") : t("writeIdea")}</p>
               ) : (
                 <div data-testid="manual-controls" className="space-y-9">
                   <ManualControls
@@ -730,10 +732,11 @@ interface ManualControlsProps {
 }
 
 function ManualControls(props: ManualControlsProps) {
+  const { t } = useI18n();
   return (
     <>
       <section className="max-w-xs">
-        <Label>Idioma</Label>
+        <Label>{t("contentLanguage")}</Label>
         <LanguageCombobox
           testId="manual-language"
           value={props.language}

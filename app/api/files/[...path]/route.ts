@@ -1,22 +1,22 @@
-import { guardedGeneration } from "@/lib/accounts/generation";
+import { guardedRead } from "@/lib/accounts/generation";
 import { coreFetch, coreMode, json } from "@/lib/core";
 
-/** Same-origin proxy for core art and media (PNG layers, voice.wav, preview.mp4). */
+/** Download an existing core file. One fetch, no retry, no token meter. */
 export async function GET(req: Request, context: { params: Promise<{ path: string[] }> }) {
-  return guardedGeneration(req, "file", () => perform(req, context));
+  return guardedRead(req, "file", () => perform(req, context));
 }
 
 async function perform(req: Request, { params }: { params: Promise<{ path: string[] }> }) {
   const { path } = await params;
   if (coreMode() !== "core") return json({ error: "Arquivo não encontrado" }, 404);
-  if (path.some((p) => p === ".." || p.includes("\\"))) return json({ error: "Caminho inválido" }, 400);
+  if (path.some((part) => part === ".." || part.includes("\\"))) return json({ error: "Caminho inválido" }, 400);
   const range = req.headers.get("range");
-  const r = await coreFetch(`/files/${path.map(encodeURIComponent).join("/")}`, range ? { headers: { range } } : undefined);
+  const response = await coreFetch(`/files/${path.map(encodeURIComponent).join("/")}`, range ? { headers: { range } } : undefined);
   const headers = new Headers();
-  for (const h of ["content-type", "content-length", "content-range", "accept-ranges", "etag", "last-modified"]) {
-    const v = r.headers.get(h);
-    if (v) headers.set(h, v);
+  for (const name of ["content-type", "content-length", "content-range", "accept-ranges", "etag", "last-modified"]) {
+    const value = response.headers.get(name);
+    if (value) headers.set(name, value);
   }
   headers.set("cache-control", "private, max-age=3600");
-  return new Response(r.body, { status: r.status, headers });
+  return new Response(response.body, { status: response.status, headers });
 }

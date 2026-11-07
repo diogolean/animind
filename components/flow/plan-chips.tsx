@@ -4,32 +4,40 @@ import { Pencil } from "lucide-react";
 import type { CreationPlan, ToneOption, VoiceCatalog } from "@/lib/contract";
 import { ART_STYLES } from "@/lib/contract";
 import { languageLabel } from "@/components/flow/language-combobox";
+import { useI18n } from "@/components/locale";
 
 export type PlanField = "language" | "mode" | "characters" | "topic" | "tone" | "objective" | "style" | "scenario" | "duration" | `voice-${number}`;
 
-const MODES = { monologue: "Monólogo", dialogue: "Diálogo", debate: "Debate" };
-const OBJECTIVES = { ensinar: "Ensinar", debater: "Debater", entreter: "Entreter", convencer: "Convencer" };
+const MODES = {
+  en: { monologue: "Monologue", dialogue: "Dialogue", debate: "Debate" },
+  "pt-BR": { monologue: "Monólogo", dialogue: "Diálogo", debate: "Debate" },
+} as const;
+const OBJECTIVES = {
+  en: { ensinar: "Teach", debater: "Debate", entreter: "Entertain", convencer: "Persuade" },
+  "pt-BR": { ensinar: "Ensinar", debater: "Debater", entreter: "Entreter", convencer: "Convencer" },
+} as const;
 
 export function PlanChips({ plan, tones, voices, onEdit }: { plan: CreationPlan; tones: ToneOption[]; voices: VoiceCatalog; onEdit: (field: PlanField) => void }) {
+  const { locale, t } = useI18n();
   const chips: { field: PlanField; label: string; value: string }[] = [
-    { field: "language", label: "Idioma", value: languageLabel(voices.languages.find((language) => language.id === plan.language), plan.language) },
-    { field: "mode", label: "Modo", value: MODES[plan.mode] },
-    { field: "characters", label: "Elenco", value: plan.characters.map((character) => character.name).join(" + ") },
+    { field: "language", label: t("contentLanguage"), value: languageLabel(voices.languages.find((language) => language.id === plan.language), plan.language) },
+    { field: "mode", label: t("mode"), value: MODES[locale][plan.mode] },
+    { field: "characters", label: t("cast"), value: plan.characters.map((character) => character.name).join(" + ") },
     ...plan.characters.map((character, index) => {
       const gender = character.gender ?? "male";
       const selected = voices.voices.find((voice) => voice.id === character.voiceId);
       return {
         field: `voice-${index}` as const,
         label: character.name,
-        value: `${gender === "male" ? "Masc." : "Fem."} · ${selected?.label ?? "Auto"}`,
+        value: `${gender === "male" ? (locale === "en" ? "Male" : "Masc.") : locale === "en" ? "Female" : "Fem."} · ${selected?.label ?? "Auto"}`,
       };
     }),
-    { field: "topic", label: "Tema", value: plan.topic },
-    { field: "tone", label: "Tom", value: tones.find((tone) => tone.id === plan.tone)?.label ?? plan.tone },
-    { field: "objective", label: "Objetivo", value: OBJECTIVES[plan.objective] },
-    { field: "style", label: "Estilo", value: ART_STYLES.find((style) => style.id === plan.artStyle)?.label ?? plan.artStyle },
-    { field: "scenario", label: "Cenário", value: plan.scenarioLabel },
-    { field: "duration", label: "Duração", value: `${plan.duration}s` },
+    { field: "topic", label: t("topic"), value: plan.topic },
+    { field: "tone", label: t("tone"), value: tones.find((tone) => tone.id === plan.tone)?.label ?? plan.tone },
+    { field: "objective", label: t("objective"), value: OBJECTIVES[locale][plan.objective] },
+    { field: "style", label: t("style"), value: ART_STYLES.find((style) => style.id === plan.artStyle)?.label ?? plan.artStyle },
+    { field: "scenario", label: t("scene"), value: plan.scenarioLabel },
+    { field: "duration", label: t("duration"), value: `${plan.duration}s` },
   ];
   return (
     <div data-testid="plan-chips" className="flex flex-wrap gap-2">

@@ -1,11 +1,11 @@
 /** Pure GA4 scrubbing. Safe to import from tests. No measurement ID lives here. */
 
 const PATH_TITLES: Record<string, string> = {
-  "/": "Início",
-  "/login": "Entrar",
-  "/characters": "Personagens",
-  "/characters/item": "Personagem",
-  "/biblioteca": "Biblioteca",
+  "/": "Home",
+  "/login": "Sign in",
+  "/characters": "Characters",
+  "/characters/item": "Character",
+  "/biblioteca": "Library",
   "/other": "Animindly",
 };
 

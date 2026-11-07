@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 import { pageLocation, pageTitle, sanitizePath } from "@/lib/analytics";
 import { setAnalyticsHandler } from "@/lib/analytics-client";
+import { useI18n } from "@/components/locale";
 
 const CONSENT = "animindly-consent";
 
@@ -18,6 +19,7 @@ declare global {
 
 export function Analytics() {
   const pathname = usePathname();
+  const { t } = useI18n();
   const [enabled, setEnabled] = useState(false);
   const [measurementId, setMeasurementId] = useState("");
   const [consent, setConsent] = useState<Consent>("unknown");
@@ -91,19 +93,19 @@ export function Analytics() {
       data-testid="consent-banner"
       className="fixed inset-x-3 bottom-[max(0.75rem,env(safe-area-inset-bottom))] z-40 mx-auto flex max-w-xl flex-col gap-3 rounded-3xl border border-white/15 bg-neutral-950/95 p-4 shadow-2xl sm:flex-row sm:items-center"
     >
-      <p className="text-sm text-muted-foreground">A medição de audiência só começa se você permitir. Ela não envia o texto das ideias.</p>
+      <p className="text-sm text-muted-foreground">{t("consent")}</p>
       <div className="flex gap-2">
         <button type="button" data-testid="consent-deny" className="inline-flex min-h-11 items-center rounded-full border border-white/15 px-4 text-sm" onClick={() => {
           window.localStorage.setItem(CONSENT, "denied");
           setConsent("denied");
         }}>
-          Recusar
+          {t("decline")}
         </button>
         <button type="button" data-testid="consent-grant" className="inline-flex min-h-11 items-center rounded-full bg-white px-4 text-sm font-medium text-black" onClick={() => {
           window.localStorage.setItem(CONSENT, "granted");
           setConsent("granted");
         }}>
-          Permitir
+          {t("allow")}
         </button>
       </div>
     </div>

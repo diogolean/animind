@@ -9,7 +9,7 @@ describe("ga4 sanitizer", () => {
     assert.equal(sanitizePath("/login?error=google_denied"), "/login");
     assert.equal(sanitizePath("/biblioteca"), "/biblioteca");
     assert.equal(sanitizePath("/admin/gastos"), "/other");
-    assert.equal(pageTitle("/characters/item"), "Personagem");
+    assert.equal(pageTitle("/characters/item"), "Character");
     assert.equal(pageLocation("https://animindly.com", "/"), "https://animindly.com/");
   });
 

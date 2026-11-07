@@ -54,19 +54,19 @@ Sábio, Ensinar, Ghibli retrô, Ágora e 60s.
 
 ## Idioma e vozes
 
-O idioma padrão é `en-US` (English); `pt-BR` também está disponível e a lista em código aceita novos
-idiomas. No Automático, `lib/planner.ts` detecta português por vocabulário/acentos, senão usa inglês.
+A interface abre em inglês. O seletor EN/PT grava `animindly-locale` e não troca a moeda: os gastos continuam em USD.
+O idioma do vídeo começa em `en-US` e segue a escolha do usuário (ou a detecção do texto). Nomes próprios não são traduzidos.
+`pt-BR` também está na lista de idiomas de conteúdo e a lista em código aceita novos idiomas. No Automático, `lib/planner.ts` detecta português por vocabulário/acentos, senão usa inglês.
 `CreationPlan.language` aparece como chip editável e o render envia `language`; o adapter também
 preenche `lang` para compatibilidade com a PR #93 do núcleo.
 
 Cada personagem tem gênero vocal (`male`/`female`) e `voiceId` opcional. Sem escolha explícita, a UI
 seleciona vozes distintas do gênero indicado; o chip de cada personagem abre gênero, catálogo e botão
-de prévia. `GET /api/voices?lang=` normaliza `GET /v1/voices` (`voiceId`, gênero, idioma). Se o núcleo
-não responder, o app marca e usa o catálogo edge-tts embutido; a prévia usa a URL do catálogo
+de prévia. `GET /api/voices?lang=` devolve o catálogo local e não chama o núcleo. A prévia usa a URL do catálogo
 quando houver e Web Speech como fallback.
 
-Os tons de produto são Humor, Terror, Educacional, Sábio e Sério. `GET /api/tones` mantém o id
-quando o núcleo já o anuncia. Só um catálogo antigo, sem esse id, cai no alias: Humor → `comedia`,
+Os tons de produto são Humor, Terror, Educacional, Sábio e Sério. `GET /api/tones` devolve o catálogo local e não chama o núcleo.
+No render pago, o núcleo ainda pode ser consultado uma vez dentro da mesma reserva. Um catálogo antigo, sem o id, cai no alias: Humor → `comedia`,
 Terror → `horror`, Educacional e Sábio → `serio`. O render envia `tone`, `objective` e `duration`
 (a partir de `targetDurationSec`) para o núcleo.
 

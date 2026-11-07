@@ -5,7 +5,8 @@ import type { Role } from "./types";
  * Generation is fail-closed.
  * ANIMINDLY_GENERATION must be exactly "1". Unset denies everyone.
  * Any other value is a broken config and the API answers 503.
- * ANIMINDLY_GENERATION_CONCURRENCY is an optional in-process cap, not a quota.
+ * ANIMINDLY_GENERATION_CONCURRENCY is a required shared slot cap for paid calls.
+ * Unset is not "unlimited".
  */
 export function generationSwitch(): { state: "on" } | { state: "off"; code: "disabled" | "unavailable" } {
   const value = productEnv("GENERATION");
@@ -14,10 +15,9 @@ export function generationSwitch(): { state: "on" } | { state: "off"; code: "dis
   return { state: "off", code: "unavailable" };
 }
 
-export function generationConcurrency(): { cap: number | null } | { error: true } {
+export function generationConcurrency(): { cap: number } | { error: true } {
   const value = productEnv("GENERATION_CONCURRENCY");
-  if (value === undefined) return { cap: null };
-  if (!/^[1-9]\d{0,3}$/.test(value)) return { error: true };
+  if (value === undefined || !/^[1-9]\d{0,3}$/.test(value)) return { error: true };
   return { cap: Number(value) };
 }
 

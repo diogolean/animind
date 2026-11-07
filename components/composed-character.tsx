@@ -4,13 +4,15 @@
 import { useState } from "react";
 import type { LibraryCharacter, LibraryViewName } from "@/lib/accounts/types";
 import type { Character, CharacterView, Layer, ViewName } from "@/lib/contract";
+import { useI18n } from "@/components/locale";
+import type { MessageKey } from "@/lib/i18n";
 
-const VIEWS: { id: LibraryViewName; label: string; testId: string; rig: ViewName }[] = [
-  { id: "front", label: "Frente", testId: "view-front", rig: "front" },
-  { id: "three_quarter_left", label: "3/4 esquerda", testId: "view-three-quarter-left", rig: "left" },
-  { id: "three_quarter", label: "3/4 esquerda", testId: "view-three-quarter", rig: "left" },
-  { id: "three_quarter_right", label: "3/4 direita", testId: "view-three-quarter-right", rig: "right" },
-  { id: "profile", label: "Perfil", testId: "view-profile", rig: "right" },
+const VIEWS: { id: LibraryViewName; label: MessageKey; testId: string; rig: ViewName }[] = [
+  { id: "front", label: "front", testId: "view-front", rig: "front" },
+  { id: "three_quarter_left", label: "left", testId: "view-three-quarter-left", rig: "left" },
+  { id: "three_quarter", label: "left", testId: "view-three-quarter", rig: "left" },
+  { id: "three_quarter_right", label: "right", testId: "view-three-quarter-right", rig: "right" },
+  { id: "profile", label: "profile", testId: "view-profile", rig: "right" },
 ];
 
 const EMOTION_LABEL: Record<string, string> = {
@@ -23,7 +25,18 @@ const EMOTION_LABEL: Record<string, string> = {
   stressed_grimace: "Tenso",
 };
 
+const EN_EMOTION: Record<string, string> = {
+  happy: "Happy",
+  angry: "Angry",
+  sad: "Sad",
+  surprise: "Surprise",
+  smug_smile: "Smile",
+  ironic: "Ironic",
+  stressed_grimace: "Tense",
+};
+
 export function ComposedCharacter({ character, rig }: { character: LibraryCharacter; rig: Character | null }) {
+  const { t, locale } = useI18n();
   const views = VIEWS.filter((view) => character.views[view.id]).filter((view) => view.id !== "three_quarter" || !character.views.three_quarter_left);
   const [viewId, setViewId] = useState<LibraryViewName>(views[0]?.id ?? "front");
   const selected = views.find((view) => view.id === viewId) ?? views[0];
@@ -61,28 +74,28 @@ export function ComposedCharacter({ character, rig }: { character: LibraryCharac
             }}
             className="inline-flex min-h-11 items-center rounded-full border border-white/15 px-4 text-sm"
           >
-            {view.label}
+            {t(view.label)}
           </button>
         ))}
       </div>
       {emotions.length ? (
         <div className="mt-3 flex flex-wrap gap-2">
-          <Choice pressed={emotion === "rest"} onClick={() => setEmotion("rest")} label="Repouso" />
+          <Choice pressed={emotion === "rest"} onClick={() => setEmotion("rest")} label={t("rest")} />
           {emotions.map((name) => (
-            <Choice key={name} pressed={emotion === name} onClick={() => setEmotion(name)} label={EMOTION_LABEL[name] ?? name.replaceAll("_", " ")} />
+            <Choice key={name} pressed={emotion === name} onClick={() => setEmotion(name)} label={(locale === "en" ? EN_EMOTION : EMOTION_LABEL)[name] ?? name.replaceAll("_", " ")} />
           ))}
         </div>
       ) : null}
       {hasRig ? (
         <div className="mt-3 flex flex-wrap gap-2">
-          <Choice pressed={eyes === "open"} onClick={() => setEyes("open")} label="Olhos abertos" />
-          <Choice pressed={eyes === "half"} onClick={() => setEyes("half")} label="Olhos meio" />
-          <Choice pressed={eyes === "closed"} onClick={() => setEyes("closed")} label="Olhos fechados" />
-          <Choice pressed label="Sobrancelhas em repouso" />
+          <Choice pressed={eyes === "open"} onClick={() => setEyes("open")} label={t("eyesOpen")} />
+          <Choice pressed={eyes === "half"} onClick={() => setEyes("half")} label={t("eyesHalf")} />
+          <Choice pressed={eyes === "closed"} onClick={() => setEyes("closed")} label={t("eyesClosed")} />
+          <Choice pressed label={t("browsRest")} />
         </div>
       ) : null}
       {missingSides ? (
-        <p className="mt-3 text-sm text-muted-foreground">As vistas 3/4 desta charge ainda não existem. A única vista composta é a frontal.</p>
+        <p className="mt-3 text-sm text-muted-foreground">{t("missingSides")}</p>
       ) : null}
     </section>
   );

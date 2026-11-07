@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Loader2 } from "lucide-react";
+import { useI18n } from "@/components/locale";
 
 function nextPath(value: string | null): string {
   if (!value || !value.startsWith("/") || value.startsWith("//") || value.includes("\\") || value.includes("://")) return "/characters";
@@ -23,6 +24,7 @@ export function LoginForm() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState(GOOGLE_ERRORS[params.get("error") ?? ""] ?? "");
   const [pending, setPending] = useState(false);
+  const { t, locale } = useI18n();
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
@@ -49,10 +51,10 @@ export function LoginForm() {
   return (
     <div className="mx-auto flex w-full max-w-md flex-1 flex-col justify-center px-5 py-8 landscape:py-4 sm:py-16">
       <form onSubmit={submit} className="rounded-[2rem] border border-white/10 bg-white/[0.03] p-6 shadow-2xl shadow-black/20 sm:p-8">
-        <h1 className="text-2xl font-medium tracking-tight">Entrar</h1>
-        <p className="mt-2 text-sm text-muted-foreground">A biblioteca de personagens fica na sua conta.</p>
+        <h1 className="text-2xl font-medium tracking-tight">{t("signIn")}</h1>
+        <p className="mt-2 text-sm text-muted-foreground">{t("libraryNote")}</p>
         <label className="mt-8 block text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground" htmlFor="login-email">
-          E-mail
+          {t("email")}
         </label>
         <input
           id="login-email"
@@ -65,7 +67,7 @@ export function LoginForm() {
           className="mt-2 min-h-11 w-full rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-base outline-none focus:border-white/30"
         />
         <label className="mt-5 block text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground" htmlFor="login-password">
-          Senha
+          {t("password")}
         </label>
         <input
           id="login-password"
@@ -89,11 +91,11 @@ export function LoginForm() {
           className="mt-6 flex min-h-11 w-full items-center justify-center gap-2 rounded-full bg-white text-base font-medium text-black disabled:opacity-50"
         >
           {pending ? <Loader2 className="size-4 animate-spin" /> : null}
-          Entrar
+          {t("signIn")}
         </button>
         <div className="mt-5 flex items-center gap-3 text-xs uppercase tracking-[0.12em] text-muted-foreground">
           <span className="h-px flex-1 bg-white/10" />
-          ou
+          {locale === "en" ? "or" : "ou"}
           <span className="h-px flex-1 bg-white/10" />
         </div>
         <a
@@ -102,7 +104,7 @@ export function LoginForm() {
           onClick={() => window.sessionStorage.setItem("animindly-login", "google")}
           className="mt-5 flex min-h-11 w-full items-center justify-center rounded-full border border-white/15 text-base font-medium hover:bg-white/5"
         >
-          Entrar com Google
+          {t("signInGoogle")}
         </a>
       </form>
     </div>

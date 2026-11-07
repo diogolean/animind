@@ -5,6 +5,8 @@ export interface SpendFrame {
   maxRetries: number;
   retries: number;
   noteRetry: (count: number) => void;
+  /** Return false to stop before another provider attempt. */
+  allowRetry?: () => Promise<boolean>;
 }
 
 const storage = new AsyncLocalStorage<SpendFrame>();

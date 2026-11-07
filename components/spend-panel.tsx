@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { SPEND_PATHS, UNMETERED_CORE } from "@/lib/spend/catalog";
+import { SPEND_PATHS } from "@/lib/spend/catalog";
+import { useI18n } from "@/components/locale";
 
 interface Row {
   id: string;
@@ -36,6 +37,7 @@ interface Payload {
   priceSource: string;
   totals: {
     calls: number;
+    reads: number;
     reserved: number;
     blocked: number;
     failed: number;
@@ -45,20 +47,24 @@ interface Payload {
     estimatedUnknown: number;
     reportedUnknown: number;
   };
+  inflight: number;
   holds: { scope: string; reservedMinor: number; settledMinor: number; limitMinor: number; currency: string }[];
   entries: Row[];
   error?: string;
 }
 
-const money = (minor: number | null, currency: string | null) => {
-  if (minor === null || !currency) return "sem preço";
-  return `${currency} ${(minor / 100).toFixed(2)}`;
+const money = (minor: number | null, currency: string | null, missing: string) => {
+  if (minor === null || !currency) return missing;
+  if (currency !== "USD") return `${currency} ${(minor / 100).toFixed(2)}`;
+  return `USD ${(minor / 100).toFixed(2)}`;
 };
 
 export function SpendPanel() {
   const [data, setData] = useState<Payload | null>(null);
   const [error, setError] = useState("");
   const [query, setQuery] = useState({ provider: "", model: "", user: "", operation: "", status: "" });
+  const { t, locale } = useI18n();
+  const en = locale === "en";
 
   useEffect(() => {
     let cancelled = false;
@@ -91,35 +97,35 @@ export function SpendPanel() {
 
   return (
     <div data-testid="spend-panel" className="mx-auto w-full max-w-6xl px-4 py-6 sm:px-6">
-      <h1 className="text-2xl font-medium tracking-tight">Gastos da geração</h1>
-      <p className="mt-2 max-w-3xl text-sm text-muted-foreground">
-        Livro operacional privado. Estimativa e valor reportado pelo provedor ficam separados. Um preço desconhecido não entra como zero.
-      </p>
+      <h1 className="text-2xl font-medium tracking-tight">{t("spendTitle")}</h1>
+      <p className="mt-2 max-w-3xl text-sm text-muted-foreground">{t("spendIntro")}</p>
       {data?.testData ? (
         <p data-testid="spend-test-banner" className="mt-4 rounded-2xl border border-amber-400/40 bg-amber-400/10 px-4 py-3 text-sm">
-          DADOS DE TESTE. Não é uso de produção e não é uma fatura.
+          {t("testBanner")}
         </p>
       ) : null}
       {error ? <p className="mt-4 text-sm text-red-400">{error}</p> : null}
       {data ? (
         <>
           <p data-testid="spend-lag" className="mt-4 text-xs text-muted-foreground">
-            Consulta {data.serverNow} · atraso {Math.max(0, Math.round(data.lagMs / 1000))}s · tabela {data.priceVersion ?? "sem tabela"} · {data.priceSource}
+            {en ? "As of" : "Consulta"} {data.serverNow} · {en ? "lag" : "atraso"} {Math.max(0, Math.round(data.lagMs / 1000))}s · {en ? "table" : "tabela"} {data.priceVersion ?? (en ? "none" : "sem tabela")} · {data.priceSource}
           </p>
           <dl className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <Stat label="Chamadas" value={String(data.totals.calls)} />
-            <Stat label="Reservas" value={String(data.totals.reserved)} />
-            <Stat label="Bloqueios" value={String(data.totals.blocked)} />
-            <Stat label="Incertos" value={String(data.totals.uncertain)} />
+            <Stat label={t("calls")} value={String(data.totals.calls)} />
+            <Stat label={t("reads")} value={String(data.totals.reads)} />
+            <Stat label={t("reservations")} value={String(data.totals.reserved)} />
+            <Stat label={t("blocks")} value={String(data.totals.blocked)} />
+            <Stat label={t("uncertain")} value={String(data.totals.uncertain)} />
+            <Stat label={t("inflight")} value={String(data.inflight)} />
           </dl>
           <p className="mt-4 text-sm">
-            Estimado: {data.totals.estimated.length ? data.totals.estimated.map((row) => money(row.minor, row.currency)).join(", ") : "nenhum"} · sem estimativa: {data.totals.estimatedUnknown}
+            {t("estimated")}: {data.totals.estimated.length ? data.totals.estimated.map((row) => money(row.minor, row.currency, t("noPrice"))).join(", ") : t("none")} · {data.totals.estimatedUnknown}
           </p>
           <p className="text-sm">
-            Reportado: {data.totals.reported.length ? data.totals.reported.map((row) => money(row.minor, row.currency)).join(", ") : "nenhum"} · sem reporte: {data.totals.reportedUnknown}
+            {t("reported")}: {data.totals.reported.length ? data.totals.reported.map((row) => money(row.minor, row.currency, t("noPrice"))).join(", ") : t("none")} · {data.totals.reportedUnknown}
           </p>
           <p className="mt-2 text-xs text-muted-foreground">
-            Saldos: {data.holds.map((hold) => `${hold.scope} reservado ${money(hold.reservedMinor, hold.currency)} / liquidado ${money(hold.settledMinor, hold.currency)} / teto ${money(hold.limitMinor, hold.currency)}`).join(" · ") || "sem reserva"}
+            {data.holds.map((hold) => `${hold.scope} ${money(hold.reservedMinor, hold.currency, t("noPrice"))} / ${money(hold.settledMinor, hold.currency, t("noPrice"))} / ${money(hold.limitMinor, hold.currency, t("noPrice"))}`).join(" · ") || t("none")}
           </p>
           <form className="mt-4 flex flex-wrap gap-2" onSubmit={(event) => event.preventDefault()}>
             {(["provider", "model", "user", "operation", "status"] as const).map((key) => (
@@ -137,16 +143,16 @@ export function SpendPanel() {
             <table className="w-full min-w-[720px] text-left text-xs">
               <thead className="text-muted-foreground">
                 <tr>
-                  <th className="py-2 pr-3">Quando</th>
-                  <th className="py-2 pr-3">Operação</th>
-                  <th className="py-2 pr-3">Provedor</th>
-                  <th className="py-2 pr-3">Modelo</th>
-                  <th className="py-2 pr-3">Usuário</th>
+                  <th className="py-2 pr-3">{en ? "When" : "Quando"}</th>
+                  <th className="py-2 pr-3">{en ? "Operation" : "Operação"}</th>
+                  <th className="py-2 pr-3">{en ? "Provider" : "Provedor"}</th>
+                  <th className="py-2 pr-3">{en ? "Model" : "Modelo"}</th>
+                  <th className="py-2 pr-3">{en ? "User" : "Usuário"}</th>
                   <th className="py-2 pr-3">Status</th>
-                  <th className="py-2 pr-3">Tokens in/out/cache/think</th>
-                  <th className="py-2 pr-3">Imagens / áudio / vídeo</th>
-                  <th className="py-2 pr-3">Estimado</th>
-                  <th className="py-2">Reportado</th>
+                  <th className="py-2 pr-3">{en ? "Tokens in/out/cache/think" : "Tokens in/out/cache/think"}</th>
+                  <th className="py-2 pr-3">{en ? "Images / audio / video" : "Imagens / áudio / vídeo"}</th>
+                  <th className="py-2 pr-3">{t("estimated")}</th>
+                  <th className="py-2">{t("reported")}</th>
                 </tr>
               </thead>
               <tbody>
@@ -155,28 +161,28 @@ export function SpendPanel() {
                     <td className="py-2 pr-3">{entry.createdAt.slice(11, 19)}</td>
                     <td className="py-2 pr-3">{entry.operation}</td>
                     <td className="py-2 pr-3">{entry.provider}</td>
-                    <td className="py-2 pr-3">{entry.model ?? "não informado"}</td>
+                    <td className="py-2 pr-3">{entry.model ?? (en ? "not reported" : "não informado")}</td>
                     <td className="py-2 pr-3">{entry.userId}</td>
                     <td className="py-2 pr-3">{entry.status}{entry.block ? ` · ${entry.block}` : ""}</td>
                     <td className="py-2 pr-3">{entry.inputTokens ?? "–"}/{entry.outputTokens ?? "–"}/{entry.cachedTokens ?? "–"}/{entry.thinkingTokens ?? "–"}</td>
                     <td className="py-2 pr-3">{entry.imageCount ?? "–"} / {entry.audioSeconds ?? "–"}s / {entry.videoSeconds ?? "–"}s</td>
-                    <td className="py-2 pr-3">{money(entry.estimatedMinor, entry.currency)}</td>
-                    <td className="py-2">{money(entry.reportedMinor, entry.currency)}</td>
+                    <td className="py-2 pr-3">{money(entry.estimatedMinor, entry.currency, t("noPrice"))}</td>
+                    <td className="py-2">{money(entry.reportedMinor, entry.currency, t("noPrice"))}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
-          <h2 className="mt-8 text-sm font-medium">Cobertura</h2>
+          <h2 className="mt-8 text-sm font-medium">{t("coverage")}</h2>
           <div className="mt-2 overflow-x-auto">
             <table data-testid="spend-coverage" className="w-full min-w-[720px] text-left text-xs">
               <thead className="text-muted-foreground">
                 <tr>
-                  <th className="py-2 pr-3">Rota</th>
-                  <th className="py-2 pr-3">Operação</th>
-                  <th className="py-2 pr-3">Trava</th>
-                  <th className="py-2 pr-3">Se negar</th>
-                  <th className="py-2">Prova</th>
+                  <th className="py-2 pr-3">Route</th>
+                  <th className="py-2 pr-3">Operation</th>
+                  <th className="py-2 pr-3">Guard</th>
+                  <th className="py-2 pr-3">If denied</th>
+                  <th className="py-2">Proof</th>
                 </tr>
               </thead>
               <tbody>
@@ -187,15 +193,6 @@ export function SpendPanel() {
                     <td className="py-2 pr-3">{path.guard}</td>
                     <td className="py-2 pr-3">{path.denial}</td>
                     <td className="py-2">{path.test}</td>
-                  </tr>
-                ))}
-                {UNMETERED_CORE.map((path) => (
-                  <tr key={path.path} className="border-t border-white/10">
-                    <td className="py-2 pr-3">{path.method} {path.path}</td>
-                    <td className="py-2 pr-3">fora do livro</td>
-                    <td className="py-2 pr-3">nenhuma</td>
-                    <td className="py-2 pr-3">{path.note}</td>
-                    <td className="py-2">lacuna conhecida</td>
                   </tr>
                 ))}
               </tbody>

@@ -9,11 +9,13 @@ import { STATUS_LABEL } from "@/lib/accounts/labels";
 import type { LibraryCharacter, LibraryDemo, LibraryStatus } from "@/lib/accounts/types";
 import type { Character } from "@/lib/contract";
 import { ComposedCharacter } from "@/components/composed-character";
+import { useI18n } from "@/components/locale";
 
 export function CharacterDetail() {
   const router = useRouter();
   const params = useParams<{ id: string }>();
   const id = params.id;
+  const { t } = useI18n();
   const [character, setCharacter] = useState<LibraryCharacter | null>(null);
   const [rig, setRig] = useState<Character | null>(null);
   const [error, setError] = useState("");
@@ -106,7 +108,7 @@ export function CharacterDetail() {
   if (!character) {
     return (
       <p className="mx-auto flex w-full max-w-5xl items-center gap-2 px-5 py-16 text-sm text-muted-foreground">
-        <Loader2 className="size-4 animate-spin" /> Carregando
+        <Loader2 className="size-4 animate-spin" /> {t("loading")}
       </p>
     );
   }
@@ -115,13 +117,13 @@ export function CharacterDetail() {
   return (
     <div data-testid="character-detail" className="mx-auto w-full min-w-0 max-w-5xl flex-1 px-5 py-6 landscape:py-4 sm:px-8 sm:py-10">
       <Link href="/characters" className="inline-flex min-h-11 items-center text-sm text-muted-foreground hover:text-foreground">
-        Meus personagens
+        {t("characters")}
       </Link>
       <div className="mt-2 flex flex-wrap items-end justify-between gap-4">
         <div className="min-w-0">
           <h1 className="break-words text-3xl font-medium tracking-tight">{character.name}</h1>
           <p className="mt-2 break-words text-sm text-muted-foreground">
-            Ficha: {character.personaSheetRef ? <span data-testid="persona-ref">{character.personaSheetRef}</span> : "sem referência"}
+            {t("sheet")}: {character.personaSheetRef ? <span data-testid="persona-ref">{character.personaSheetRef}</span> : t("noReference")}
           </p>
           {character.owner ? (
             <p data-testid="character-owner" className="mt-1 break-words text-sm text-muted-foreground">
@@ -161,15 +163,15 @@ export function CharacterDetail() {
       <ComposedCharacter character={character} rig={rig} />
 
       <section className="mt-8">
-        <h2 className="text-sm font-medium">Ficha de emoções</h2>
+        <h2 className="text-sm font-medium">{t("emotionSheet")}</h2>
         <div data-testid="emotion-sheet" className="mt-3 overflow-hidden rounded-[1.5rem] border border-white/10 bg-black/30">
           {character.emotionSheetUrl ? (
             <button type="button" data-testid="emotion-sheet-zoom" onClick={() => setSheetOpen(true)} className="block min-h-11 w-full cursor-zoom-in text-left">
               <img src={character.emotionSheetUrl} alt="Ficha de emoções" className="w-full" />
-              <span className="block px-4 py-3 text-sm text-muted-foreground">Toque para ver em tamanho real</span>
+              <span className="block px-4 py-3 text-sm text-muted-foreground">{t("zoom")}</span>
             </button>
           ) : (
-            <p className="px-4 py-10 text-sm text-muted-foreground">Esta pasta não trouxe uma ficha de emoções.</p>
+            <p className="px-4 py-10 text-sm text-muted-foreground">{t("noSheet")}</p>
           )}
         </div>
       </section>
@@ -184,7 +186,7 @@ export function CharacterDetail() {
         >
           <div className="sticky top-0 z-10 mb-3 flex justify-end">
             <button type="button" onClick={() => setSheetOpen(false)} className="inline-flex min-h-11 items-center rounded-full border border-white/20 bg-black/80 px-4 text-sm">
-              Fechar
+              {t("close")}
             </button>
           </div>
           <img
@@ -206,10 +208,10 @@ export function CharacterDetail() {
         {ready ? (
           <>
             <Link href={`/?library=${encodeURIComponent(character.id)}&intent=video`} data-testid="use-video" className="inline-flex min-h-11 items-center justify-center rounded-full bg-white px-5 text-sm font-medium text-black">
-              Novo vídeo
+              {t("newVideo")}
             </Link>
             <Link href={`/?library=${encodeURIComponent(character.id)}&intent=debate`} data-testid="use-debate" className="inline-flex min-h-11 items-center justify-center rounded-full border border-white/15 px-5 text-sm font-medium">
-              Debate
+              {t("debate")}
             </Link>
           </>
         ) : (
@@ -217,7 +219,7 @@ export function CharacterDetail() {
         )}
         {character.catalog ? null : (
           <button type="button" data-testid="delete-character" disabled={pending} onClick={remove} className="inline-flex min-h-11 items-center justify-center rounded-full px-4 text-sm text-red-400">
-            Apagar
+            {t("delete")}
           </button>
         )}
       </div>
@@ -227,9 +229,10 @@ export function CharacterDetail() {
 }
 
 function Demos({ demos }: { demos: LibraryDemo[] }) {
+  const { t } = useI18n();
   return (
     <section className="mt-8">
-      <h2 className="text-sm font-medium">Demos do pacote</h2>
+      <h2 className="text-sm font-medium">{t("demos")}</h2>
       <ul className="mt-3 grid gap-4 sm:grid-cols-2">
         {demos.map((demo) => (
           <li key={demo.id} data-testid={demo.id} className="overflow-hidden rounded-[1.5rem] border border-white/10 bg-black/30">

@@ -8,7 +8,7 @@ import os from "node:os";
 import path from "node:path";
 import { after, beforeEach, describe, it } from "node:test";
 import { createAccount, upsertPilotSuperAdmin } from "../lib/accounts/store";
-import { SPEND_PATHS, UNMETERED_CORE } from "../lib/spend/catalog";
+import { SPEND_PATHS } from "../lib/spend/catalog";
 import {
   findReplay,
   insertEntry,
@@ -20,7 +20,7 @@ import {
   settle,
   type SpendEntry,
 } from "../lib/spend/ledger";
-import { quoteCall, readSpendLimits } from "../lib/spend/policy";
+import { quoteCall, readSpendLimits, requestOverCap } from "../lib/spend/policy";
 import { findPrice, parsePriceTable, PUBLISHED_PRICE_TABLE } from "../lib/spend/prices";
 import { spendTotals } from "../lib/spend/totals";
 
@@ -72,6 +72,12 @@ function clearSpendEnv(): void {
     "ANIMINDLY_PRICE_TABLE_JSON",
     "ANIMINDLY_SPEND_LEDGER",
     "ANIMINDLY_GENERATION_CONCURRENCY",
+    "ANIMINDLY_SPEND_MAX_INPUT_TOKENS",
+    "ANIMINDLY_SPEND_MAX_OUTPUT_TOKENS",
+    "ANIMINDLY_SPEND_MAX_TOTAL_TOKENS",
+    "ANIMINDLY_SPEND_MAX_IMAGES",
+    "ANIMINDLY_SPEND_MAX_AUDIO_SEC",
+    "ANIMINDLY_SPEND_MAX_VIDEO_SEC",
     "ANIMINDLY_CORE_URL",
     "ANIMIND_CORE_URL",
     "CORE_URL",
@@ -110,10 +116,14 @@ describe("price table", () => {
     process.env.ANIMINDLY_SPEND_TIMEOUT_MS = "1000";
     process.env.ANIMINDLY_SPEND_MAX_RETRIES = "0";
     process.env.ANIMINDLY_SPEND_RATE_PER_MIN = "2";
+    assert.equal(readSpendLimits().ok, false);
+    Object.assign(process.env, spendCaps());
     const limits = readSpendLimits();
     assert.equal(limits.ok, true);
     if (!limits.ok) return;
     assert.equal(quoteCall(limits.limits, "render", "core", "unspecified"), null);
+    assert.equal(requestOverCap({ prompt: "unchanged", maxInputTokens: limits.limits.maxInputTokens + 1 }, limits.limits), "input");
+    assert.equal(requestOverCap({ prompt: "unchanged" }, limits.limits), null);
   });
 });
 
@@ -122,31 +132,62 @@ describe("ledger", () => {
     const first = entry({ userId: "usr_a" });
     const second = entry({ userId: "usr_b" });
     const [a, b] = await Promise.all([
-      reserve({ entry: first, globalLimit: 1, userLimit: 1, ratePerMin: 10 }),
-      reserve({ entry: second, globalLimit: 1, userLimit: 1, ratePerMin: 10 }),
+      reserve({ entry: first, globalLimit: 1, userLimit: 1, ratePerMin: 10, concurrency: 2 }),
+      reserve({ entry: second, globalLimit: 1, userLimit: 1, ratePerMin: 10, concurrency: 2 }),
     ]);
     const oks = [a, b].filter((result) => result.ok);
     assert.equal(oks.length, 1);
+    assert.equal([a, b].find((result) => !result.ok && "block" in result)?.block, "budget");
     const { holds } = await listEntries();
     assert.equal(holds.find((hold) => hold.scope === "global")?.reservedMinor, 1);
   });
 
   it("does not treat a second key from another user as a replay", async () => {
     await saveReplay("usr_a", "same-key-1", 504, "timeout");
-    assert.deepEqual(await findReplay("usr_a", "same-key-1"), { status: 504, code: "timeout" });
+    assert.deepEqual(await findReplay("usr_a", "same-key-1"), { status: 504, code: "timeout", bodyHash: "" });
     assert.equal(await findReplay("usr_b", "same-key-1"), null);
   });
 
+  it("shares the last cent across two processes", async () => {
+    const dir = process.env.ANIMINDLY_DATA_DIR ?? "";
+    const run = (user: string) =>
+      new Promise<string>((resolve, reject) => {
+        const child = spawn(process.execPath, ["--import", "tsx", path.join(root, "tests", "spend-reserve-cli.ts"), user], {
+          cwd: root,
+          env: {
+            ...process.env,
+            ANIMINDLY_DATA_DIR: dir,
+            ANIMINDLY_SKIP_ENV_FILE: "1",
+            DATABASE_URL: "",
+            POSTGRES_URL: "",
+          },
+        });
+        let out = "";
+        let err = "";
+        child.stdout?.setEncoding("utf8");
+        child.stderr?.setEncoding("utf8");
+        child.stdout?.on("data", (chunk) => {
+          out += chunk;
+        });
+        child.stderr?.on("data", (chunk) => {
+          err += chunk;
+        });
+        child.on("exit", (code) => (code === 0 ? resolve(out.trim()) : reject(new Error(err || out))));
+      });
+    const [left, right] = await Promise.all([run("usr_a"), run("usr_b")]);
+    assert.deepEqual([left, right].sort(), ["budget", "ok"]);
+  });
+
   it("blocks the second call in the same minute", async () => {
-    const ok = await reserve({ entry: entry(), globalLimit: 10, userLimit: 10, ratePerMin: 1 });
-    const blocked = await reserve({ entry: entry(), globalLimit: 10, userLimit: 10, ratePerMin: 1 });
+    const ok = await reserve({ entry: entry(), globalLimit: 10, userLimit: 10, ratePerMin: 1, concurrency: 2 });
+    const blocked = await reserve({ entry: entry(), globalLimit: 10, userLimit: 10, ratePerMin: 1, concurrency: 2 });
     assert.equal(ok.ok, true);
     assert.deepEqual(blocked, { ok: false, block: "rate" });
   });
 
   it("reconciles a stale reservation as uncertain and does not sum a missing bill as zero", async () => {
     const stale = entry({ createdAt: new Date(Date.now() - 60_000).toISOString(), estimatedMinor: 4, reportedMinor: null });
-    assert.equal((await reserve({ entry: stale, globalLimit: 10, userLimit: 10, ratePerMin: 10 })).ok, true);
+    assert.equal((await reserve({ entry: stale, globalLimit: 10, userLimit: 10, ratePerMin: 10, concurrency: 2 })).ok, true);
     assert.equal(await reconcileStale(1000), 1);
     const { entries, holds } = await listEntries();
     assert.equal(entries[0]?.status, "uncertain");
@@ -167,7 +208,7 @@ describe("ledger", () => {
 });
 
 describe("route coverage", () => {
-  it("guards every paid route in source and leaves health unmetered", async () => {
+  it("classifies every route and guards only the paid ones", async () => {
     const files: Record<string, string> = {
       "/api/plan": "app/api/plan/route.ts",
       "/api/render": "app/api/render/route.ts",
@@ -180,26 +221,36 @@ describe("route coverage", () => {
       "/api/personas/sheet": "app/api/personas/sheet/route.ts",
       "/api/voices": "app/api/voices/route.ts",
       "/api/tones": "app/api/tones/route.ts",
+      "/api/health": "app/api/health/route.ts",
     };
-    for (const path of SPEND_PATHS) {
-      const file = files[path.path];
-      assert.ok(file, path.path);
+    for (const item of SPEND_PATHS) {
+      const file = files[item.path];
+      assert.ok(file, item.path);
       const source = await readFile(file, "utf8");
-      const guardAt = source.indexOf("guardedGeneration");
-      assert.ok(guardAt >= 0, file);
-      const fetchAt = source.indexOf("coreFetch");
-      if (fetchAt >= 0) assert.ok(guardAt < fetchAt, file);
+      if (item.guard === "beginGeneration") {
+        const guardAt = source.indexOf("guardedGeneration");
+        assert.ok(guardAt >= 0, file);
+        const fetchAt = source.indexOf("coreFetch");
+        if (fetchAt >= 0) assert.ok(guardAt < fetchAt, file);
+      } else if (item.guard === "guardedRead") {
+        assert.equal(source.includes("guardedRead"), true, file);
+        assert.equal(source.includes("guardedGeneration"), false, file);
+      } else if (item.operation === "health") {
+        assert.equal(source.includes("guardedGeneration"), false, file);
+      } else {
+        assert.equal(source.includes("guardedGeneration"), false, file);
+        assert.equal(source.includes("coreFetch"), false, file);
+      }
     }
-    const health = await readFile("app/api/health/route.ts", "utf8");
-    assert.equal(health.includes("guardedGeneration"), false);
-    assert.equal(UNMETERED_CORE[0]?.path, "/api/health");
     const plan = await readFile("app/api/plan/route.ts", "utf8");
     assert.match(plan, /inferCreationPlan/);
+    const render = await readFile("app/api/render/route.ts", "utf8");
+    assert.match(render, /coreFetch\("\/tones"\)/);
   });
 });
 
 describe("paid routes with a fixture core", () => {
-  it("denies with zero provider calls, then times out and replays without a new call", { timeout: 180_000 }, async () => {
+  it("denies with zero provider calls, then times out and replays without a new call", { timeout: 240_000 }, async () => {
     const dir = process.env.ANIMINDLY_DATA_DIR ?? "";
     const secret = randomBytes(24).toString("base64url");
     process.env.ANIMINDLY_AUTH_SECRET = secret;
@@ -226,6 +277,7 @@ describe("paid routes with a fixture core", () => {
       ANIMINDLY_SPEND_TIMEOUT_MS: "1000",
       ANIMINDLY_SPEND_MAX_RETRIES: "0",
       ANIMINDLY_SPEND_RATE_PER_MIN: "10",
+      ...spendCaps(),
     });
     try {
       const plan = await call(closedApp.base, "/api/plan", { prompt: secretPrompt });
@@ -244,6 +296,18 @@ describe("paid routes with a fixture core", () => {
         assert.equal(userRender.status, 403);
         assert.match(userRender.text, /unapproved/);
       }
+      const voices = await fetch(`${closedApp.base}/api/voices`);
+      assert.equal(voices.status, 200);
+      const job = await fetch(`${closedApp.base}/api/jobs/job_existing`);
+      assert.equal(job.status, 401);
+      const same = await call(closedApp.base, "/api/render", renderBody(), adminCookie, "idem-body-1");
+      assert.equal(same.status, 403);
+      const replayed = await call(closedApp.base, "/api/render", renderBody(), adminCookie, "idem-body-1");
+      assert.equal(replayed.status, 403);
+      assert.match(replayed.text, /replay/);
+      const conflict = await call(closedApp.base, "/api/render", { ...renderBody(), topic: `${secretPrompt}-other` }, adminCookie, "idem-body-1");
+      assert.equal(conflict.status, 409);
+      assert.match(conflict.text, /idempotency_conflict/);
       assert.equal(closed.hits(), 0);
       const ledger = await readFile(path.join(dir, "spend.json"), "utf8").catch(() => "");
       assert.equal(ledger.includes(secretPrompt), false);
@@ -266,9 +330,13 @@ describe("paid routes with a fixture core", () => {
       ANIMINDLY_SPEND_MAX_RETRIES: "0",
       ANIMINDLY_SPEND_RATE_PER_MIN: "10",
       ANIMINDLY_PRICE_TABLE_JSON: priceTable(),
+      ...spendCaps(),
     });
     try {
       const adminCookie = await login(pricedApp.base, admin.email, password);
+      const over = await call(pricedApp.base, "/api/render", { ...renderBody(), maxInputTokens: 5000 }, adminCookie);
+      assert.equal(over.status, 400);
+      assert.match(over.text, /over_cap/);
       const denied = await call(pricedApp.base, "/api/render", renderBody(), adminCookie);
       assert.equal(denied.status, 403);
       assert.match(denied.text, /budget/);
@@ -297,6 +365,7 @@ describe("paid routes with a fixture core", () => {
       ANIMINDLY_SPEND_MAX_RETRIES: "1",
       ANIMINDLY_SPEND_RATE_PER_MIN: "10",
       ANIMINDLY_PRICE_TABLE_JSON: priceTable(),
+      ...spendCaps(),
     });
     try {
       const adminCookie = await login(live.base, admin.email, password);
@@ -317,17 +386,95 @@ describe("paid routes with a fixture core", () => {
         assert.equal(hanging.hits(), afterTimeout);
       }
       const ledger = JSON.parse(await readFile(path.join(dir, "spend.json"), "utf8")) as { entries: SpendEntry[] };
-      const timedOut = ledger.entries.find((row) => row.status === "timeout");
+      const timedOut = ledger.entries.find((row) => row.block === "timeout" && row.status === "uncertain");
       assert.ok(timedOut);
-      assert.equal(timedOut?.estimatedMinor, 1);
+      assert.ok((timedOut?.estimatedMinor ?? 0) >= 1);
       assert.equal(timedOut?.reportedMinor, null);
       assert.equal(JSON.stringify(ledger).includes(secretPrompt), false);
     } finally {
       await live.stop();
       await hanging.close();
     }
+
+    const snapshot = JSON.parse(await readFile(path.join(dir, "spend.json"), "utf8")) as { holds?: { scope: string; settledMinor: number }[] };
+    const settled = snapshot.holds?.find((hold) => hold.scope === "global")?.settledMinor ?? 0;
+    const tight = await listen((req, res) => {
+      const url = req.url ?? "";
+      if (url.includes("/tones") || url.includes("/health")) {
+        req.resume();
+        res.writeHead(200, { "content-type": "application/json" });
+        res.end("{}");
+        return;
+      }
+      req.resume();
+    });
+    const tightApp = await startApp(dir, secret, {
+      ANIMINDLY_CORE_URL: tight.url,
+      ANIMINDLY_GENERATION: "1",
+      ANIMINDLY_SPEND_BUDGET_CENTS: String(settled + 1),
+      ANIMINDLY_SPEND_USER_CENTS: String(settled + 1),
+      ANIMINDLY_SPEND_TIMEOUT_MS: "200",
+      ANIMINDLY_SPEND_MAX_RETRIES: "1",
+      ANIMINDLY_SPEND_RATE_PER_MIN: "10",
+      ANIMINDLY_PRICE_TABLE_JSON: priceTable(),
+      ...spendCaps(),
+    });
+    try {
+      const adminCookie = await login(tightApp.base, admin.email, password);
+      const refused = await call(tightApp.base, "/api/render", renderBody(), adminCookie, "idem-retry-1");
+      assert.equal(refused.status, 504);
+      assert.equal(tight.hits(), 2);
+      const again = JSON.parse(await readFile(path.join(dir, "spend.json"), "utf8")) as { entries: SpendEntry[] };
+      const row = again.entries.find((item) => item.idempotencyKey === "idem-retry-1");
+      assert.equal(row?.status, "uncertain");
+      assert.equal(row?.estimatedMinor, 1);
+      assert.equal(row?.reportedMinor, null);
+    } finally {
+      await tightApp.stop();
+      await tight.close();
+    }
+
+    const outage = await listen((req, res) => {
+      req.resume();
+      res.writeHead(500, { "content-type": "application/json" });
+      res.end("{}");
+    });
+    const outageApp = await startApp(dir, secret, {
+      ANIMINDLY_CORE_URL: outage.url,
+      ANIMINDLY_GENERATION: "1",
+      ANIMINDLY_SPEND_BUDGET_CENTS: "5",
+      ANIMINDLY_SPEND_USER_CENTS: "5",
+      ANIMINDLY_SPEND_TIMEOUT_MS: "1000",
+      ANIMINDLY_SPEND_MAX_RETRIES: "1",
+      ANIMINDLY_SPEND_RATE_PER_MIN: "10",
+      ANIMINDLY_PRICE_TABLE_JSON: priceTable(),
+      ANIMINDLY_SPEND_LEDGER: "unavailable",
+      ...spendCaps(),
+    });
+    try {
+      const adminCookie = await login(outageApp.base, admin.email, password);
+      const down = await call(outageApp.base, "/api/render", renderBody(), adminCookie, "idem-ledger-1");
+      assert.equal(down.status, 503);
+      assert.match(down.text, /ledger/);
+      assert.equal(outage.hits(), 0);
+    } finally {
+      await outageApp.stop();
+      await outage.close();
+    }
   });
 });
+
+function spendCaps(): Record<string, string> {
+  return {
+    ANIMINDLY_GENERATION_CONCURRENCY: "2",
+    ANIMINDLY_SPEND_MAX_INPUT_TOKENS: "1000",
+    ANIMINDLY_SPEND_MAX_OUTPUT_TOKENS: "1000",
+    ANIMINDLY_SPEND_MAX_TOTAL_TOKENS: "2000",
+    ANIMINDLY_SPEND_MAX_IMAGES: "1",
+    ANIMINDLY_SPEND_MAX_AUDIO_SEC: "10",
+    ANIMINDLY_SPEND_MAX_VIDEO_SEC: "10",
+  };
+}
 
 function priceTable(): string {
   return JSON.stringify({

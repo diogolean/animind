@@ -3,6 +3,7 @@
 /* eslint-disable @next/next/no-img-element */
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { useI18n } from "@/components/locale";
 import { Loader2 } from "lucide-react";
 import { STATUS_LABEL } from "@/lib/accounts/labels";
 import type { LibraryCharacter, PublicUser } from "@/lib/accounts/types";
@@ -23,6 +24,7 @@ async function readLibrary(): Promise<{ characters: LibraryCharacter[]; viewer: 
 }
 
 export function MyCharacters() {
+  const { t } = useI18n();
   const [viewer, setViewer] = useState<PublicUser | null>(null);
   const [characters, setCharacters] = useState<LibraryCharacter[] | null>(null);
   const [error, setError] = useState("");
@@ -96,17 +98,17 @@ export function MyCharacters() {
     <div data-testid="my-characters" className="mx-auto w-full min-w-0 max-w-5xl flex-1 px-5 py-6 landscape:py-4 sm:px-8 sm:py-10">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-medium tracking-tight">Meus personagens</h1>
+          <h1 className="text-3xl font-medium tracking-tight">{t("charactersTitle")}</h1>
           <p className="mt-2 max-w-xl text-sm text-muted-foreground">
             {viewer?.role === "super_admin"
-              ? "Você vê e gerencia a biblioteca de todo mundo. Os personagens continuam privados para as outras contas."
+              ? t("charactersAdmin")
               : viewer
-                ? "Só os personagens desta conta. Importe uma pasta com puppet.json e as camadas PNG."
-                : "Entre para ver os personagens da sua conta."}
+                ? t("charactersOwn")
+                : t("charactersGuest")}
           </p>
           {viewer ? null : (
             <Link href="/login?next=/characters" className="mt-3 inline-block text-sm underline">
-              Entrar
+              {t("signIn")}
             </Link>
           )}
         </div>

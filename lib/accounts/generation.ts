@@ -3,17 +3,20 @@ import { json, coreMode } from "@/lib/core";
 import type { SpendOperation } from "@/lib/spend/catalog";
 import { runWithSpend, spendFrame, type SpendFrame } from "@/lib/spend/context";
 import {
+  attachUsage,
+  bodyHash,
   findReplay,
   insertEntry,
   jobRef,
   ledgerAvailable,
   newSpendId,
   reserve,
+  reserveMore,
   saveReplay,
   settle,
   type SpendEntry,
 } from "@/lib/spend/ledger";
-import { providerForMode, quoteCall, readSpendLimits, type SpendBlock } from "@/lib/spend/policy";
+import { providerForMode, quoteCall, readSpendLimits, requestOverCap, type SpendBlock, type SpendLimits } from "@/lib/spend/policy";
 import { generationSwitch, idempotencyKey, userMayGenerate } from "./generation-policy";
 import { currentUser, isUser, requireUser } from "./http";
 import type { PublicUser } from "./types";
@@ -23,6 +26,9 @@ export type GenerationTicket = {
   key: string | null;
   entryId: string;
   requestId: string;
+  bodyHash: string;
+  limits: SpendLimits;
+  priceMinor: number;
   release: () => void;
 };
 
@@ -45,7 +51,7 @@ function blankEntry(partial: Pick<SpendEntry, "userId" | "operation" | "provider
     model: partial.model ?? null,
     status: partial.status,
     block: partial.block ?? null,
-    latencyMs: null,
+    latencyMs: partial.latencyMs ?? null,
     inputTokens: null,
     outputTokens: null,
     cachedTokens: null,
@@ -64,16 +70,16 @@ function blankEntry(partial: Pick<SpendEntry, "userId" | "operation" | "provider
   };
 }
 
-async function remember(userId: string, key: string | null, status: number, code: string): Promise<void> {
+async function remember(userId: string, key: string | null, status: number, code: string, hash: string): Promise<void> {
   if (!key) return;
-  await saveReplay(userId, key, status, code);
+  await saveReplay(userId, key, status, code, hash);
 }
 
 /**
  * Authorize a paid call. Returns a ticket only after a reservation.
  * A Response means the provider must not be called.
  */
-export async function beginGeneration(req: Request, operation: SpendOperation): Promise<GenerationTicket | Response> {
+export async function beginGeneration(req: Request, operation: SpendOperation, hash = ""): Promise<GenerationTicket | Response> {
   if (!(await ledgerAvailable())) return deny(503, "ledger", "Livro de gastos indisponível");
   const limits = readSpendLimits();
   if (!limits.ok) return deny(503, "unavailable", "Geração indisponível");
@@ -84,7 +90,10 @@ export async function beginGeneration(req: Request, operation: SpendOperation): 
   if ("error" in parsedKey) return json({ error: "Idempotency-Key inválida" }, 400);
   if (parsedKey.key) {
     const again = await findReplay(actor.id, parsedKey.key);
-    if (again) return json({ error: "Pedido já registrado", code: again.code, replay: true }, again.status);
+    if (again) {
+      if (again.bodyHash !== hash) return json({ error: "Idempotency-Key already used for a different request", code: "idempotency_conflict" }, 409);
+      return json({ error: "Pedido já registrado", code: again.code, replay: true }, again.status);
+    }
   }
   const requestId = `req_${newSpendId()}`;
   const block = async (status: number, code: SpendBlock, error: string, provider: string) => {
@@ -98,7 +107,7 @@ export async function beginGeneration(req: Request, operation: SpendOperation): 
       idempotencyKey: parsedKey.key,
     });
     await insertEntry(entry);
-    await remember(actor.id, parsedKey.key, status, code);
+    await remember(actor.id, parsedKey.key, status, code, hash);
     return deny(status, code, error);
   };
   if (switched.state !== "on") return block(403, "disabled", "Geração desligada", "none");
@@ -107,9 +116,15 @@ export async function beginGeneration(req: Request, operation: SpendOperation): 
   const named = providerForMode(mode);
   const price = quoteCall(limits.limits, operation, named.provider, named.model);
   if (!price) return block(403, "price_unavailable", "Preço desta chamada não está publicado", named.provider);
-  if (limits.limits.concurrency !== null && inflight.n >= limits.limits.concurrency) {
-    return block(429, "busy", "Geração ocupada", named.provider);
+  let asked: unknown = null;
+  if (hash) {
+    try {
+      asked = JSON.parse(await req.clone().text());
+    } catch {
+      asked = null;
+    }
   }
+  if (requestOverCap(asked, limits.limits)) return block(400, "over_cap", "Pedido acima do limite configurado", named.provider);
   const entry = blankEntry({
     userId: actor.id,
     operation,
@@ -127,10 +142,11 @@ export async function beginGeneration(req: Request, operation: SpendOperation): 
     globalLimit: limits.limits.budgetMinor,
     userLimit: limits.limits.userMinor,
     ratePerMin: limits.limits.ratePerMin,
+    concurrency: limits.limits.concurrency,
   });
   if (!held.ok) {
-    const status = held.block === "rate" ? 429 : 403;
-    const error = held.block === "rate" ? "Limite de chamadas por minuto" : "Orçamento de geração esgotado";
+    const status = held.block === "budget" ? 403 : 429;
+    const error = held.block === "rate" ? "Limite de chamadas por minuto" : held.block === "busy" ? "Geração ocupada" : "Orçamento de geração esgotado";
     await insertEntry(blankEntry({
       userId: actor.id,
       operation,
@@ -144,7 +160,7 @@ export async function beginGeneration(req: Request, operation: SpendOperation): 
       priceVersion: limits.limits.prices.version,
       idempotencyKey: parsedKey.key,
     }));
-    await remember(actor.id, parsedKey.key, status, held.block);
+    await remember(actor.id, parsedKey.key, status, held.block, hash);
     return deny(status, held.block, error);
   }
   inflight.n += 1;
@@ -154,7 +170,16 @@ export async function beginGeneration(req: Request, operation: SpendOperation): 
     released = true;
     inflight.n = Math.max(0, inflight.n - 1);
   };
-  return { user: actor, key: parsedKey.key, entryId: entry.id, requestId, release };
+  return {
+    user: actor,
+    key: parsedKey.key,
+    entryId: entry.id,
+    requestId,
+    bodyHash: hash,
+    limits: limits.limits,
+    priceMinor: price.minor,
+    release,
+  };
 }
 
 function usageFrom(text: string): Partial<SpendEntry> {
@@ -200,17 +225,21 @@ export async function finishGeneration(ticket: GenerationTicket, response: Respo
   try {
     const text = await response.clone().text();
     const usage = usageFrom(text);
+    for (const key of Object.keys(usage) as (keyof typeof usage)[]) {
+      if (usage[key] === undefined) delete usage[key];
+    }
     const status = response.status;
     const waive = response.headers.get("x-animind-spend") === "waive";
-    const next = waive ? "failed" : status >= 200 && status < 300 ? (status === 202 ? "uncertain" : "succeeded") : status === 504 ? "timeout" : "failed";
+    const over = usageOverCap(usage, ticket.limits);
+    const next = waive ? "failed" : status === 504 || status === 202 ? "uncertain" : status >= 200 && status < 300 ? "succeeded" : "failed";
     await settle(ticket.entryId, {
       status: next,
       latencyMs: null,
       ...usage,
-      block: waive ? "local-fallback" : status === 504 ? "timeout" : started > 0 ? "retry" : null,
+      block: waive ? "local-fallback" : status === 504 ? "timeout" : over ? "over_cap" : started > 0 ? "retry" : null,
     });
     const code = next === "succeeded" || next === "uncertain" ? "accepted" : "failed";
-    await remember(ticket.user.id, ticket.key, status, code);
+    await remember(ticket.user.id, ticket.key, status, code, ticket.bodyHash);
     const headers = new Headers(response.headers);
     headers.delete("x-animind-spend");
     return new Response(text, { status, headers });
@@ -220,31 +249,96 @@ export async function finishGeneration(ticket: GenerationTicket, response: Respo
 }
 
 export async function withSpend<T>(ticket: GenerationTicket, fn: () => Promise<T>): Promise<T> {
-  const limits = readSpendLimits();
+  const limits = ticket.limits;
   const frame: SpendFrame = {
-    timeoutMs: limits.ok ? limits.limits.timeoutMs : 1,
-    maxRetries: limits.ok ? limits.limits.maxRetries : 0,
+    timeoutMs: limits.timeoutMs,
+    maxRetries: limits.maxRetries,
     retries: 0,
     noteRetry(count) {
       frame.retries = count;
+    },
+    async allowRetry() {
+      const more = await reserveMore(ticket.entryId, ticket.priceMinor, limits.budgetMinor, limits.userMinor, limits.ratePerMin);
+      return more.ok;
     },
   };
   return runWithSpend(frame, fn);
 }
 
 export async function guardedGeneration(req: Request, operation: SpendOperation, perform: () => Promise<Response>): Promise<Response> {
-  const gate = await beginGeneration(req, operation);
+  const hash = bodyHash(await req.clone().text().catch(() => ""));
+  const gate = await beginGeneration(req, operation, hash);
   if (gate instanceof Response) return gate;
   try {
     const response = await withSpend(gate, perform);
     return await finishGeneration(gate, response);
   } catch {
-    await settle(gate.entryId, { status: "timeout", block: "timeout" });
-    await remember(gate.user.id, gate.key, 504, "timeout");
+    await settle(gate.entryId, { status: "uncertain", block: "timeout" });
+    await remember(gate.user.id, gate.key, 504, "timeout", gate.bodyHash);
     return deny(504, "timeout", "Tempo esgotado");
   } finally {
     gate.release();
   }
+}
+
+/**
+ * Auth-only read. No reservation, no retry, no invented tokens.
+ * A job payload can fill a missing usage report once.
+ */
+export async function guardedRead(req: Request, operation: "job" | "file", perform: () => Promise<Response>): Promise<Response> {
+  const actor = await requireUser();
+  if (!isUser(actor)) return actor;
+  const started = Date.now();
+  const response = await perform();
+  if (operation === "job") {
+    try {
+      const body = JSON.parse(await response.clone().text()) as { id?: unknown; usage?: Record<string, unknown>; reportedMinor?: unknown; model?: unknown };
+      const ref = jobRef(typeof body.id === "string" ? body.id : null);
+      if (ref) {
+        const numberOrNull = (value: unknown) => (typeof value === "number" && Number.isFinite(value) ? value : null);
+        const reported = body.reportedMinor;
+        await attachUsage(ref, {
+          inputTokens: numberOrNull(body.usage?.inputTokens),
+          outputTokens: numberOrNull(body.usage?.outputTokens),
+          cachedTokens: numberOrNull(body.usage?.cachedTokens),
+          thinkingTokens: numberOrNull(body.usage?.thinkingTokens),
+          imageCount: numberOrNull(body.usage?.imageCount),
+          audioSeconds: numberOrNull(body.usage?.audioSeconds),
+          videoSeconds: numberOrNull(body.usage?.videoSeconds),
+          reportedMinor: typeof reported === "number" && Number.isInteger(reported) && reported >= 0 ? reported : null,
+          model: typeof body.model === "string" && /^[A-Za-z0-9._:-]{1,80}$/.test(body.model) ? body.model : undefined,
+        });
+      }
+    } catch {
+      // A non-JSON job body is still a read. Nothing is billed.
+    }
+  }
+  if (await ledgerAvailable()) {
+    await insertEntry(blankEntry({
+      userId: actor.id,
+      operation,
+      provider: "none",
+      status: "read" as SpendEntry["status"],
+      block: "unbilled",
+      latencyMs: Date.now() - started,
+      estimatedMinor: null,
+      reportedMinor: null,
+    }));
+  }
+  return response;
+}
+
+function usageOverCap(usage: Partial<SpendEntry>, limits: SpendLimits): boolean {
+  const input = usage.inputTokens ?? 0;
+  const output = usage.outputTokens ?? 0;
+  const thinking = usage.thinkingTokens ?? 0;
+  if (usage.inputTokens !== null && usage.inputTokens !== undefined && input > limits.maxInputTokens) return true;
+  if (usage.outputTokens !== null && usage.outputTokens !== undefined && output > limits.maxOutputTokens) return true;
+  if ((usage.inputTokens !== null || usage.outputTokens !== null) && input + output + thinking > limits.maxTotalTokens) return true;
+  if (usage.imageCount !== null && usage.imageCount !== undefined && usage.imageCount > limits.maxImages) return true;
+  if (usage.audioSeconds !== null && usage.audioSeconds !== undefined && usage.audioSeconds > limits.maxAudioSeconds) return true;
+  if (usage.videoSeconds !== null && usage.videoSeconds !== undefined && usage.videoSeconds > limits.maxVideoSeconds) return true;
+  return false;
 }
 
 /** Local catalogs only, unless this caller could open a paid reservation right now. */

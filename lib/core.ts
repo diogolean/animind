@@ -39,6 +39,8 @@ export async function coreFetch(path: string, init?: RequestInit): Promise<Respo
     } catch (error) {
       lastError = error;
       if (!frame || attempt === attempts - 1) throw error;
+      const allowed = frame.allowRetry ? await frame.allowRetry() : false;
+      if (!allowed) throw error;
       frame.noteRetry(attempt + 1);
     }
   }

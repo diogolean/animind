@@ -1,9 +1,10 @@
-import { guardedGeneration } from "@/lib/accounts/generation";
+import { guardedRead } from "@/lib/accounts/generation";
 import { coreMode, json, proxyJson } from "@/lib/core";
 import { mockGetJob } from "@/lib/mock";
 
+/** Read an existing job. This does not reserve money and does not start a generation. */
 export async function GET(req: Request, context: { params: Promise<{ id: string }> }) {
-  return guardedGeneration(req, "job", () => perform(context));
+  return guardedRead(req, "job", () => perform(context));
 }
 
 async function perform({ params }: { params: Promise<{ id: string }> }) {
