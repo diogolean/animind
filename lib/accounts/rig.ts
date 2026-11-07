@@ -30,6 +30,7 @@ function asView(value: unknown): CharacterView | null {
       if (parsed && (VISEMES as readonly string[]).includes(name)) visemes[name as Viseme] = parsed;
     }
   }
+  const eyeRig = asEyeRig(view.eyeRig);
   return {
     canvas: {
       w: typeof view.canvas?.w === "number" ? view.canvas.w : 512,
@@ -38,7 +39,24 @@ function asView(value: unknown): CharacterView | null {
     layers,
     visemes,
     ...(expressions ? { expressions } : {}),
+    ...(eyeRig ? { eyeRig } : {}),
   };
+}
+
+function asEyeRig(value: unknown): CharacterView["eyeRig"] | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
+  const rig = value as { maxShift?: unknown; irises?: unknown };
+  if (!Array.isArray(rig.maxShift) || rig.maxShift.length !== 2 || !Array.isArray(rig.irises)) return undefined;
+  const [x, y] = rig.maxShift;
+  if (typeof x !== "number" || typeof y !== "number" || !Number.isFinite(x) || !Number.isFinite(y)) return undefined;
+  const irises: [number, number, number][] = [];
+  for (const item of rig.irises) {
+    if (!Array.isArray(item) || item.length < 3) return undefined;
+    const [cx, cy, radius] = item;
+    if (![cx, cy, radius].every((part) => typeof part === "number" && Number.isFinite(part))) return undefined;
+    irises.push([cx, cy, radius]);
+  }
+  return { maxShift: [x, y], irises };
 }
 
 function asExpressions(value: unknown): Record<string, Layer> | undefined {

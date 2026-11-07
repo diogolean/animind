@@ -1,6 +1,7 @@
-import type { CreateCharacterRequest } from "@/lib/contract";
+import type { Character, CreateCharacterRequest } from "@/lib/contract";
 import { guardedGeneration } from "@/lib/accounts/generation";
 import { coreMode, coreOff, json, proxyJson } from "@/lib/core";
+import { holdUnprovenCharacter } from "@/lib/eye-rig";
 import { mockCreateCharacter } from "@/lib/mock";
 
 export async function POST(req: Request) {
@@ -8,6 +9,19 @@ export async function POST(req: Request) {
 }
 
 const MAX_UPLOAD = 6 * 1024 * 1024;
+
+async function gateEyes(response: Response): Promise<Response> {
+  const text = await response.text();
+  const headers = { "content-type": "application/json" };
+  if (!response.ok) return new Response(text, { status: response.status, headers });
+  try {
+    const character = JSON.parse(text) as Character;
+    if (!character || typeof character !== "object" || !character.views) return new Response(text, { status: response.status, headers });
+    return json(holdUnprovenCharacter(character), response.status);
+  } catch {
+    return new Response(text, { status: response.status, headers });
+  }
+}
 
 async function perform(req: Request) {
   let body: CreateCharacterRequest;
@@ -40,10 +54,11 @@ async function perform(req: Request) {
       ...(body.gender ? { gender: body.gender } : {}),
       ...(body.voiceId ? { voiceId: body.voiceId } : {}),
     };
-    return proxyJson("/characters", { method: "POST", body: JSON.stringify(coreBody) });
+    const response = await proxyJson("/characters", { method: "POST", body: JSON.stringify(coreBody) });
+    return gateEyes(response);
   }
   try {
-    return json(mockCreateCharacter(body), 201);
+    return json(holdUnprovenCharacter(mockCreateCharacter(body)), 201);
   } catch (e) {
     return json({ error: (e as Error).message }, 404);
   }

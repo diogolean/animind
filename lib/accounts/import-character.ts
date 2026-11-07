@@ -1,6 +1,7 @@
 import { deleteObjectPrefix, keyFromAssetUrl, putObject } from "./object-store";
 import { newId, normalizeRel } from "./paths";
 import { findOwnedCharacter, writeImportedCharacter } from "./store";
+import { blockReadyWithoutEyes } from "../eye-gate";
 import type { LibraryCharacter, LibraryDemo, LibraryStatus, LibraryViewName } from "./types";
 import { isLibraryStatus } from "./types";
 
@@ -323,6 +324,8 @@ export async function importCharacterPackage(options: {
     .map((file) => ({ name: basenameKey(file.path), url: urls.get(file.path)! }))
     .filter((layer) => layer.url && !gallery.has(layer.url));
 
+  let status = ((options.status as LibraryStatus) || "ready");
+  if (status === "ready" && blockReadyWithoutEyes(puppet, files)) status = "draft";
   const character: LibraryCharacter = {
     id,
     ownerId: options.ownerId,
@@ -333,7 +336,7 @@ export async function importCharacterPackage(options: {
     layers,
     emotionSheetUrl,
     ...(demos.length ? { demos } : {}),
-    status: (options.status as LibraryStatus) || "ready",
+    status,
     createdAt: previous?.createdAt ?? now,
     updatedAt: now,
   };
