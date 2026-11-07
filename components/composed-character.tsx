@@ -3,8 +3,10 @@
 /* eslint-disable @next/next/no-img-element */
 import { useState } from "react";
 import type { LibraryCharacter, LibraryViewName } from "@/lib/accounts/types";
-import type { Character, CharacterView, Layer, ViewName } from "@/lib/contract";
+import type { Character, ViewName } from "@/lib/contract";
+import { AvatarStage } from "@/components/avatar-stage";
 import { useI18n } from "@/components/locale";
+import type { EyeCapability, GazeDirection } from "@/lib/eye-rig";
 import type { MessageKey } from "@/lib/i18n";
 
 const VIEWS: { id: LibraryViewName; label: MessageKey; testId: string; rig: ViewName }[] = [
@@ -45,13 +47,24 @@ export function ComposedCharacter({ character, rig }: { character: LibraryCharac
   const emotions = Object.keys(rigView?.expressions ?? {});
   const [emotion, setEmotion] = useState("rest");
   const [eyes, setEyes] = useState<"open" | "half" | "closed">("open");
+  const [gaze, setGaze] = useState<GazeDirection>("center");
+  const [eyeCapability, setEyeCapability] = useState<EyeCapability | "pending">("pending");
+  const lids = Boolean(rigView?.layers.some((layer) => layer.name === "eyes_half" || layer.name === "eyes_closed"));
+  const brows = Boolean(rigView?.layers.some((layer) => layer.name === "brows" || layer.name === "brow_left"));
+  const gazeReady = eyeCapability === "separable" || eyeCapability === "recovered";
   const missingSides = Boolean(character.views.front) && !character.views.three_quarter_left && !character.views.three_quarter && !character.views.three_quarter_right;
   return (
     <section className="mt-6" data-testid="composed-character">
       <div className="overflow-hidden rounded-[1.5rem] border border-white/10 bg-black/30">
         {selected && hasRig && rigView ? (
-          <figure data-testid={selected.testId} className="mx-auto w-full max-w-md">
-            <ComposedRig view={rigView} emotion={emotion} eyes={eyes} />
+          <figure data-testid={selected.testId} className="mx-auto w-full max-w-md bg-black">
+            <AvatarStage
+              view={rigView}
+              emotion={emotion}
+              lids={eyes}
+              gaze={gaze}
+              onCapability={(capability) => setEyeCapability(capability)}
+            />
           </figure>
         ) : selected && character.views[selected.id] ? (
           <figure data-testid={selected.testId} className="mx-auto flex max-h-[70dvh] w-full max-w-md items-center justify-center">
@@ -71,8 +84,10 @@ export function ComposedCharacter({ character, rig }: { character: LibraryCharac
             onClick={() => {
               setViewId(view.id);
               setEmotion("rest");
+              setGaze("center");
+              setEyeCapability("pending");
             }}
-            className="inline-flex min-h-11 items-center rounded-full border border-white/15 px-4 text-sm"
+            className={chip(selected?.id === view.id)}
           >
             {t(view.label)}
           </button>
@@ -86,13 +101,22 @@ export function ComposedCharacter({ character, rig }: { character: LibraryCharac
           ))}
         </div>
       ) : null}
-      {hasRig ? (
-        <div className="mt-3 flex flex-wrap gap-2">
+      {hasRig && lids ? (
+        <div className="mt-3 flex flex-wrap gap-2" role="group" aria-label={t("eyesOpen")}>
           <Choice pressed={eyes === "open"} onClick={() => setEyes("open")} label={t("eyesOpen")} />
           <Choice pressed={eyes === "half"} onClick={() => setEyes("half")} label={t("eyesHalf")} />
           <Choice pressed={eyes === "closed"} onClick={() => setEyes("closed")} label={t("eyesClosed")} />
-          <Choice pressed label={t("browsRest")} />
+          {brows ? <Choice pressed label={t("browsRest")} /> : null}
         </div>
+      ) : null}
+      {hasRig && gazeReady ? (
+        <div className="mt-3 flex flex-wrap gap-2" role="group" aria-label={t("gaze")} data-testid="gaze-controls" data-gaze={eyeCapability}>
+          {(["center", "left", "right", "up", "down"] as const).map((direction) => (
+            <Choice key={direction} pressed={gaze === direction} onClick={() => setGaze(direction)} label={t(GAZE_LABEL[direction])} testId={`gaze-${direction}`} />
+          ))}
+        </div>
+      ) : hasRig && eyeCapability === "unavailable" ? (
+        <p className="mt-3 text-sm text-muted-foreground" data-testid="gaze-unavailable">{t("gazeUnavailable")}</p>
       ) : null}
       {missingSides ? (
         <p className="mt-3 text-sm text-muted-foreground">{t("missingSides")}</p>
@@ -101,49 +125,25 @@ export function ComposedCharacter({ character, rig }: { character: LibraryCharac
   );
 }
 
-function Choice({ pressed, onClick, label }: { pressed: boolean; onClick?: () => void; label: string }) {
+const GAZE_LABEL: Record<GazeDirection, MessageKey> = {
+  center: "gazeCenter",
+  left: "gazeLeft",
+  right: "gazeRight",
+  up: "gazeUp",
+  down: "gazeDown",
+};
+
+function chip(pressed: boolean): string {
+  return pressed
+    ? "inline-flex min-h-11 items-center rounded-full border border-white bg-white px-4 text-sm text-black outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white motion-reduce:transition-none"
+    : "inline-flex min-h-11 items-center rounded-full border border-white/15 px-4 text-sm outline-none hover:border-white/50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white motion-reduce:transition-none";
+}
+
+function Choice({ pressed, onClick, label, testId }: { pressed: boolean; onClick?: () => void; label: string; testId?: string }) {
   return (
-    <button type="button" aria-pressed={pressed} onClick={onClick} className="inline-flex min-h-11 items-center rounded-full border border-white/15 px-4 text-sm">
+    <button type="button" data-testid={testId} aria-pressed={pressed} onClick={onClick} className={chip(pressed)}>
       {label}
     </button>
   );
 }
 
-function ComposedRig({ view, emotion, eyes }: { view: CharacterView; emotion: string; eyes: "open" | "half" | "closed" }) {
-  const { w, h } = view.canvas;
-  const movable = view.layers.some((layer) => layer.name === "eye_socket") && view.layers.some((layer) => layer.name === "iris") && view.layers.some((layer) => layer.name === "eye_white");
-  const expression = emotion !== "rest" ? view.expressions?.[emotion] : undefined;
-  const mouth = expression ?? view.visemes.X;
-  const parts = [
-    ...view.layers.filter((layer) => keepLayer(layer, eyes, movable)),
-    ...(mouth ? [{ ...mouth, name: expression ? "expression" : "mouth" }] : []),
-  ].sort((a, b) => a.z - b.z);
-  return (
-    <div data-testid="composed-preview" className="relative mx-auto w-full bg-black" style={{ aspectRatio: `${w} / ${h}` }}>
-      {parts.map((layer) => (
-        <img
-          key={`${layer.name}-${layer.url}`}
-          src={layer.url}
-          alt=""
-          className="absolute max-w-none"
-          style={{
-            left: `${(layer.x / w) * 100}%`,
-            top: `${(layer.y / h) * 100}%`,
-            width: `${(layer.w / w) * 100}%`,
-            height: `${(layer.h / h) * 100}%`,
-            zIndex: layer.z,
-          }}
-        />
-      ))}
-    </div>
-  );
-}
-
-function keepLayer(layer: Layer, eyes: "open" | "half" | "closed", movable: boolean): boolean {
-  if (layer.name === "eye_socket") return false;
-  if (layer.name === "eyes_closed") return eyes === "closed";
-  if (layer.name === "eyes_half") return eyes === "half";
-  if (eyes !== "open" && (layer.name === "eyes" || layer.name === "iris" || layer.name === "eye_white")) return false;
-  if (movable && eyes === "open" && layer.name === "eyes") return false;
-  return true;
-}

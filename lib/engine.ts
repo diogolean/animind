@@ -5,6 +5,8 @@
 import { PARODY_DISCLAIMER, type Character, type Layer, type RenderResult, type ScriptLine, type ViewName, type Viseme } from "./contract";
 import { ACCENT, BOARD, BUST_BOTTOM, BUST_H, camera, contactShadow, depthTransform, drawPlate, ease, FACE_Y, FADE_IN_S, FADE_OUT_S, grade, H, lectern, LECTERN_BASE, LECTERN_TOP, LECTERN_W, lightFor, litLayer, PLACES, planShots, plates, soft, blurNow, W, VW, VH, handheld, type Cut, type Light, type Shot } from "./cinema";
 import { blink, gaze, type Lids } from "./eyes";
+import { composeRecoveredOffset, composeSeparable, fitTravel, recoverPaintedEyes, type RecoveredEyes } from "./eye-rig";
+import type { Raster } from "./png-rgba";
 
 export { H, VH, VW, W };
 export const FPS_ENV = 100; // envelope samples per second
@@ -179,19 +181,77 @@ export function visemeFade(vis: Viseme[], k: number): { cur: Viseme; prev: Visem
   return { cur, prev, w: prev === cur || XFADE_MS <= 0 ? 1 : Math.min(1, ((k - j) * 10) / XFADE_MS) };
 }
 
-let irisCanvas: HTMLCanvasElement | null = null;
-/** The iris layer moved by the gaze and clipped to the eye opening (socket), in canvas space. */
-function movedIris(iris: HTMLImageElement, l: Layer, sock: HTMLImageElement, s: Layer, dx: number, dy: number) {
-  irisCanvas ??= document.createElement("canvas");
-  irisCanvas.width = s.w;
-  irisCanvas.height = s.h;
-  const o = irisCanvas.getContext("2d")!;
-  o.clearRect(0, 0, s.w, s.h);
-  o.drawImage(iris, l.x - s.x + dx, l.y - s.y + dy, l.w, l.h);
-  o.globalCompositeOperation = "destination-in";
-  o.drawImage(sock, 0, 0, s.w, s.h);
-  o.globalCompositeOperation = "source-over";
-  return irisCanvas;
+const rasterCache = new WeakMap<HTMLImageElement, Raster>();
+const recoveredCache = new WeakMap<HTMLImageElement, RecoveredEyes | null>();
+
+function rasterOf(image: HTMLImageElement): Raster {
+  const cached = rasterCache.get(image);
+  if (cached) return cached;
+  const canvas = document.createElement("canvas");
+  canvas.width = image.naturalWidth || image.width;
+  canvas.height = image.naturalHeight || image.height;
+  const context = canvas.getContext("2d", { willReadFrequently: true });
+  if (!context) return { width: canvas.width, height: canvas.height, data: new Uint8ClampedArray(canvas.width * canvas.height * 4) };
+  context.drawImage(image, 0, 0);
+  const frame = context.getImageData(0, 0, canvas.width, canvas.height);
+  const raster = { width: canvas.width, height: canvas.height, data: frame.data };
+  rasterCache.set(image, raster);
+  return raster;
+}
+
+function canvasFromRaster(raster: Raster): HTMLCanvasElement {
+  const canvas = document.createElement("canvas");
+  canvas.width = raster.width;
+  canvas.height = raster.height;
+  const context = canvas.getContext("2d");
+  if (context) context.putImageData(new ImageData(new Uint8ClampedArray(raster.data), raster.width, raster.height), 0, 0);
+  return canvas;
+}
+
+function drawProvedEyes(g: CanvasRenderingContext2D, img: Images, plateLayer: Layer, irisLayer: Layer, socket: Layer, eye: EyeState, breathe: number, published: [number, number]): boolean {
+  const plateIm = img.get(plateLayer.url);
+  const irisIm = img.get(irisLayer.url);
+  const socketIm = img.get(socket.url);
+  if (!plateIm || !irisIm || !socketIm) return false;
+  const plate = rasterOf(plateIm);
+  const iris = rasterOf(irisIm);
+  const mask = rasterOf(socketIm);
+  const travel = fitTravel(mask, iris, irisLayer.x - socket.x, irisLayer.y - socket.y, [
+    Math.max(8, published[0]),
+    Math.max(4, published[1]),
+  ]);
+  if (!travel) return false;
+  const gx = Math.max(-1, Math.min(1, eye.gaze[0]));
+  const gy = Math.max(-1, Math.min(1, eye.gaze[1]));
+  const composed = composeSeparable({
+    plate,
+    iris,
+    socket: mask,
+    plateOrigin: [plateLayer.x, plateLayer.y],
+    irisOrigin: [irisLayer.x, irisLayer.y],
+    socketOrigin: [socket.x, socket.y],
+    offset: [Math.round(gx * travel[0]), Math.round(gy * travel[1])],
+  });
+  const dy = breathe * (BREATH_SHARE[irisLayer.name] ?? 1);
+  g.drawImage(canvasFromRaster(composed), socket.x, socket.y + dy);
+  return true;
+}
+
+function drawRecoveredEyes(g: CanvasRenderingContext2D, img: Images, body: Layer, eye: EyeState, breathe: number): boolean {
+  const image = img.get(body.url);
+  if (!image) return false;
+  let eyes = recoveredCache.get(image);
+  if (eyes === undefined) {
+    eyes = recoverPaintedEyes(rasterOf(image));
+    recoveredCache.set(image, eyes);
+  }
+  if (!eyes) return false;
+  const gx = Math.max(-1, Math.min(1, eye.gaze[0]));
+  const gy = Math.max(-1, Math.min(1, eye.gaze[1]));
+  const composed = composeRecoveredOffset(rasterOf(image), eyes, [gx * eyes.travel[0], gy * eyes.travel[1]]);
+  const dy = breathe * (BREATH_SHARE[body.name] ?? 1);
+  g.drawImage(canvasFromRaster(composed), body.x, body.y + dy);
+  return true;
 }
 
 /** Where character idx looks (mirrors Scene.gaze in the core). */
@@ -245,21 +305,20 @@ function drawCharacter(g: CanvasRenderingContext2D, c: Character, img: Images, c
   const mouth = v.visemes[vis] ?? v.visemes.X;
   const parts = [...v.layers, ...(mouth ? [{ ...mouth, name: "mouth", z: mouth.z ?? 99 }] : [])].sort((a, b) => a.z - b.z);
   const socket = v.layers.find((l) => l.name === "eye_socket");
-  const movable = !!socket && v.layers.some((l) => l.name === "iris") && v.layers.some((l) => l.name === "eye_white");
-  const [mx, my] = v.eyeRig?.maxShift ?? [0, 0];
+  const plateLayer = v.layers.find((l) => l.name === "eye_white") ?? v.layers.find((l) => l.name === "eyes");
+  const irisLayer = v.layers.find((l) => l.name === "iris");
+  const movable = !!socket && !!irisLayer && !!plateLayer && lids === "open";
+  const proved = movable && socket && plateLayer && irisLayer ? drawProvedEyes(g, img, plateLayer, irisLayer, socket, eye, breathe, v.eyeRig?.maxShift ?? [0, 0]) : false;
+  const body = v.layers.find((l) => l.name === "body");
+  const recovered = !movable && lids === "open" && body ? drawRecoveredEyes(g, img, body, eye, breathe) : false;
   for (const l of parts) {
-    if (l.name === "eye_socket" || (movable && l.name === "eyes")) continue;
+    if (l.name === "eye_socket" || (proved && (l.name === "eyes" || l.name === "eye_white" || l.name === "iris"))) continue;
+    if (recovered && l.name === "body") continue;
     if ((l.name === "eyes" && lids === "closed") || (l.name === "eyes_closed" && lids !== "closed") || (l.name === "eyes_half" && lids !== "half")) continue;
     const im = img.get(l.url);
     if (!im) continue;
     // The face no longer rides the jaw: only the mouth layer changes with speech.
     const dy = breathe * (BREATH_SHARE[l.name] ?? 1) + (l.name === "brows" ? -amp * 2 : 0);
-    if (l.name === "iris" && socket) {
-      const sk = img.get(socket.url);
-      const gx = Math.max(-1, Math.min(1, eye.gaze[0])), gy = Math.max(-1, Math.min(1, eye.gaze[1]));  // iris never leaves the socket
-      if (sk) g.drawImage(movedIris(im, l, sk, socket, gx * mx, gy * my), socket.x, socket.y + dy, socket.w, socket.h);
-      continue;
-    }
     const lit = ["body", "torso", "neck", "head", "hair"].includes(l.name);
     const src = l.name === "mouth" || l.name === "iris" || l.name.startsWith("eye") ? im : litLayer(im, l, cw, ch, light, lit);
     const fade = l.name === "mouth" && speakingFade && speakingFade.cur === vis ? speakingFade : null;

@@ -131,6 +131,13 @@ const EN = {
   eyesHalf: "Eyes half",
   eyesClosed: "Eyes closed",
   browsRest: "Brows at rest",
+  gaze: "Gaze",
+  gazeCenter: "Center",
+  gazeLeft: "Left",
+  gazeRight: "Right",
+  gazeUp: "Up",
+  gazeDown: "Down",
+  gazeUnavailable: "These eyes cannot be moved yet. The picture stays as painted.",
 } as const;
 
 const PT: Record<keyof typeof EN, string> = {
@@ -264,6 +271,13 @@ const PT: Record<keyof typeof EN, string> = {
   eyesHalf: "Olhos meio",
   eyesClosed: "Olhos fechados",
   browsRest: "Sobrancelhas em repouso",
+  gaze: "Olhar",
+  gazeCenter: "Centro",
+  gazeLeft: "Esquerda",
+  gazeRight: "Direita",
+  gazeUp: "Cima",
+  gazeDown: "Baixo",
+  gazeUnavailable: "Estes olhos ainda não se movem. A imagem fica como foi pintada.",
 };
 
 export type MessageKey = keyof typeof EN;
