@@ -63,7 +63,9 @@ describe("private Einstein packs", () => {
     assert.equal(other.ok, true);
     if (!other.ok) return;
     const newbie = await accountForVerifiedGoogle(`new-${randomBytes(3).toString("hex")}@example.com`, "Visitante");
+    assert.equal(owner.generationEnabled, true);
     assert.equal(newbie?.role, "user");
+    assert.equal(newbie?.generationEnabled, false);
     assert.notEqual(newbie?.id, owner.id);
 
     const imported = await importOwnedCharacter({

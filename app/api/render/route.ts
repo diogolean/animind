@@ -1,14 +1,19 @@
 import type { RenderRequest } from "@/lib/contract";
+import { guardedGeneration } from "@/lib/accounts/generation";
 import { coreFetch, coreMode, coreOff, json, proxyJson } from "@/lib/core";
 import { mockCreateJob } from "@/lib/mock";
 import { coreToneId, normalizeToneCatalog } from "@/lib/tones";
+
+export async function POST(req: Request) {
+  return guardedGeneration(req, "render", () => perform(req));
+}
 
 const TEMPLATES = ["debate", "lesson", "solo"];
 const SCENARIOS = ["studio", "classroom", "arena", "space", "agora"];
 const TONES = ["humor", "terror", "educacional", "sabio", "serio"];
 const OBJECTIVES = ["ensinar", "debater", "entreter", "convencer"];
 
-export async function POST(req: Request) {
+async function perform(req: Request) {
   let body: RenderRequest;
   try {
     body = (await req.json()) as RenderRequest;

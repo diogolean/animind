@@ -1,10 +1,15 @@
 import type { CreateCharacterRequest } from "@/lib/contract";
+import { guardedGeneration } from "@/lib/accounts/generation";
 import { coreMode, coreOff, json, proxyJson } from "@/lib/core";
 import { mockCreateCharacter } from "@/lib/mock";
 
+export async function POST(req: Request) {
+  return guardedGeneration(req, "character", () => perform(req));
+}
+
 const MAX_UPLOAD = 6 * 1024 * 1024;
 
-export async function POST(req: Request) {
+async function perform(req: Request) {
   let body: CreateCharacterRequest;
   try {
     body = (await req.json()) as CreateCharacterRequest;

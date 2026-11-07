@@ -68,11 +68,16 @@ export function SiteHeader() {
         animindly
       </Link>
       <nav className="ml-auto flex max-w-full flex-wrap items-center justify-end gap-x-3 gap-y-1">
-      <Link href="/characters" data-testid="my-characters-link" className="inline-flex min-h-11 items-center text-sm text-muted-foreground hover:text-foreground">
-        Meus personagens
-      </Link>
       {user ? (
         <>
+          <Link href="/characters" data-testid="my-characters-link" className="inline-flex min-h-11 items-center text-sm text-muted-foreground hover:text-foreground">
+            Meus personagens
+          </Link>
+          {user.role === "super_admin" ? (
+            <Link href="/admin/gastos" data-testid="spend-link" className="inline-flex min-h-11 items-center text-sm text-muted-foreground hover:text-foreground">
+              Gastos
+            </Link>
+          ) : null}
           <Link href="/biblioteca" data-testid="biblioteca-link" className="inline-flex min-h-11 items-center text-sm text-muted-foreground hover:text-foreground">
             Biblioteca
           </Link>

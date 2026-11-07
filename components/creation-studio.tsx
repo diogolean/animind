@@ -31,6 +31,9 @@ import { previewFromCharacter, stickPreview } from "@/lib/character-preview";
 import { captureGeneration } from "@/lib/library-capture";
 import { normalizeToneCatalog } from "@/lib/tones";
 import { fallbackVoiceCatalog } from "@/lib/voices";
+import { loadDraft, saveDraft } from "@/lib/draft";
+import { track } from "@/lib/analytics-client";
+import type { PublicUser } from "@/lib/accounts/types";
 import { CharacterListEditor } from "@/components/flow/character-list-editor";
 import { CharacterVoicesEditor } from "@/components/flow/character-voices-editor";
 import { ChoiceCard } from "@/components/flow/choice-card";
@@ -99,6 +102,8 @@ export function CreationStudio() {
   const [manualDuration, setManualDuration] = useState<30 | 60 | 90>(60);
   const [manualLanguage, setManualLanguage] = useState<LanguageCode>("en-US");
   const [format, setFormat] = useState<VideoFormat>("16:9");
+  const [viewer, setViewer] = useState<PublicUser | null>(null);
+  const [loginOpen, setLoginOpen] = useState(false);
 
   const [rendering, setRendering] = useState(false);
   const [status, setStatus] = useState("");
@@ -113,6 +118,21 @@ export function CreationStudio() {
   const [voiceCatalog, setVoiceCatalog] = useState<VoiceCatalog>(fallbackVoiceCatalog("en-US"));
 
   useEffect(() => {
+    fetch("/api/auth/me", { cache: "no-store" })
+      .then(async (response) => {
+        if (!response.ok) return null;
+        const data = (await response.json()) as { user?: PublicUser | null };
+        return data.user ?? null;
+      })
+      .then(setViewer)
+      .catch(() => setViewer(null));
+    if (!libraryId) {
+      const draft = loadDraft();
+      if (draft) {
+        setPrompt(draft.prompt);
+        setFormat(draft.format);
+      }
+    }
     getTones().then((catalog) => setTones(catalog.tones)).catch(() => {});
     return () => {
       if (timer.current) clearTimeout(timer.current);
@@ -387,6 +407,7 @@ export function CreationStudio() {
             value={prompt}
             onChange={(event) => {
               setPrompt(event.target.value);
+              saveDraft(event.target.value, format);
               if (automatic) requestPlan(event.target.value);
             }}
             rows={6}
@@ -435,7 +456,22 @@ export function CreationStudio() {
                 type="button"
                 data-testid="generate"
                 disabled={!valid || rendering || planning}
-                onClick={generate}
+                onClick={() => {
+                  saveDraft(prompt, format);
+                  if (!viewer) {
+                    track("create_attempt", { result: "login_required" });
+                    setLoginOpen(true);
+                    return;
+                  }
+                  if (!viewer.generationEnabled) {
+                    track("create_attempt", { result: "unapproved" });
+                    track("access_denied", { reason: "unapproved" });
+                    toast.error("Esta conta ainda não pode gerar");
+                    return;
+                  }
+                  track("create_attempt", { result: "started" });
+                  void generate();
+                }}
                 className="inline-flex min-h-11 items-center gap-2 rounded-full bg-white px-5 text-sm font-medium text-black transition hover:bg-white/90 disabled:cursor-not-allowed disabled:opacity-25"
               >
                 {rendering || planning ? <Loader2 className="size-4 animate-spin" /> : <Sparkles className="size-4" />}
@@ -444,6 +480,33 @@ export function CreationStudio() {
             </div>
           </div>
         </div>
+        {plan?.source === "local" ? (
+          <p data-testid="planner-source" className="mt-3 text-xs text-muted-foreground">
+            Entendendo usa regras locais neste servidor. Nenhum modelo de provedor é chamado nesse passo.
+          </p>
+        ) : plan?.source === "core" ? (
+          <p data-testid="planner-source" className="mt-3 text-xs text-muted-foreground">
+            O plano veio do núcleo. Esta resposta não informa o id do modelo.
+          </p>
+        ) : null}
+        {loginOpen ? (
+          <div role="dialog" aria-modal="true" data-testid="login-gate" className="fixed inset-0 z-50 flex items-end justify-center bg-black/70 p-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:items-center">
+            <div className="w-full max-w-md rounded-3xl border border-white/10 bg-neutral-950 p-6">
+              <h2 className="text-lg font-medium">Entre para criar</h2>
+              <p className="mt-2 text-sm text-muted-foreground">Sua ideia fica neste aparelho. O texto não entra no endereço de login.</p>
+              <a data-testid="login-gate-google" href="/api/auth/google?next=/" className="mt-5 flex min-h-11 items-center justify-center rounded-full bg-white text-sm font-medium text-black" onClick={() => {
+                saveDraft(prompt, format);
+                window.sessionStorage.setItem("animindly-login", "google");
+              }}>
+                Continuar com Google
+              </a>
+              <a href="/login?next=/" className="mt-3 flex min-h-11 items-center justify-center rounded-full border border-white/15 text-sm" onClick={() => saveDraft(prompt, format)}>
+                Entrar com senha
+              </a>
+              <button type="button" className="mt-3 min-h-11 text-sm text-muted-foreground" onClick={() => setLoginOpen(false)}>Agora não</button>
+            </div>
+          </div>
+        ) : null}
 
         <AnimatePresence>
           {detailsOpen ? (

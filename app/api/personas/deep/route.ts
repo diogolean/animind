@@ -1,3 +1,5 @@
+import { guardedGeneration } from "@/lib/accounts/generation";
+import type { SpendOperation } from "@/lib/spend/catalog";
 import { coreMode, coreOff, json, proxyJson } from "@/lib/core";
 
 /** Deep persona knowledge (background RAG build in the core). Mock answers "ready" at once. */
@@ -5,6 +7,10 @@ const mock = (name: string, lang: string) =>
   json({ name, lang, status: "ready", mode: "deep", chunks: 120, counts: { quote: 12, wikipedia: 60, wikiquote: 20, wikisource: 28 } });
 
 export async function GET(req: Request) {
+  return guardedGeneration(req, "persona_deep" satisfies SpendOperation, () => readDeep(req));
+}
+
+async function readDeep(req: Request) {
   const u = new URL(req.url);
   const name = u.searchParams.get("name")?.trim() ?? "";
   const lang = u.searchParams.get("lang") || "pt-BR";
@@ -16,6 +22,10 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
+  return guardedGeneration(req, "persona_deep", () => writeDeep(req));
+}
+
+async function writeDeep(req: Request) {
   let body: { name?: string; lang?: string };
   try {
     body = await req.json();

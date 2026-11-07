@@ -1,14 +1,10 @@
 import { existsSync, statSync } from "node:fs";
-import { readdir, readFile, realpath, stat } from "node:fs/promises";
 import path from "node:path";
 import { databaseUrl, usesBlob } from "../lib/accounts/config";
 import { productEnv } from "../lib/product-env";
 import { loadLocalEnv } from "../lib/accounts/env-file";
-import { importCharacterPackage, ImportError, type ImportFile } from "../lib/accounts/import-character";
-import { normalizeRel } from "../lib/accounts/paths";
-import { listUsers } from "../lib/accounts/store";
-import type { LibraryCharacter } from "../lib/accounts/types";
-import { readZip } from "../lib/accounts/zip-package";
+import { ImportError } from "../lib/accounts/import-character";
+import { importOwnedCharacter } from "../lib/accounts/import-owned";
 
 /**
  * Loads a generated character folder or zip into a user's library.
@@ -17,72 +13,13 @@ import { readZip } from "../lib/accounts/zip-package";
  * Optional: --name, --persona, --status ready|draft|archived
  * Importing the same owner and display name again replaces that character.
  */
-const ALLOWED = new Set(["png", "webp", "jpg", "jpeg", "json", "txt", "md", "mp4", "mp3"]);
-const MAX_FILE = 8 * 1024 * 1024;
-
 function arg(name: string): string | undefined {
   const index = process.argv.indexOf(`--${name}`);
   const value = index >= 0 ? process.argv[index + 1] : undefined;
   return value && !value.startsWith("--") ? value : undefined;
 }
 
-async function collect(dir: string): Promise<ImportFile[]> {
-  const root = await realpath(dir);
-  const files: ImportFile[] = [];
-  async function walk(current: string): Promise<void> {
-    const entries = await readdir(current, { withFileTypes: true });
-    for (const entry of entries) {
-      if (entry.name.startsWith(".")) continue;
-      const abs = path.join(current, entry.name);
-      if (entry.isSymbolicLink()) continue;
-      if (entry.isDirectory()) {
-        await walk(abs);
-        continue;
-      }
-      if (!entry.isFile()) continue;
-      const ext = entry.name.split(".").pop()?.toLowerCase() ?? "";
-      if (!ALLOWED.has(ext)) continue;
-      const info = await stat(abs);
-      if (info.size > MAX_FILE) throw new ImportError(`${entry.name} passa de 8 MB`, 413);
-      const rel = normalizeRel(path.relative(root, abs).split(path.sep).join("/"));
-      if (!rel) continue;
-      files.push({ path: rel, bytes: await readFile(abs) });
-    }
-  }
-  await walk(root);
-  return files;
-}
-
-async function filesFromZip(zipPath: string): Promise<ImportFile[]> {
-  const bytes = await readFile(zipPath);
-  return readZip(bytes).map((entry) => ({ path: entry.path, bytes: entry.bytes }));
-}
-
-export async function importOwnedCharacter(options: {
-  email: string;
-  dir?: string;
-  zip?: string;
-  name?: string;
-  persona?: string;
-  status?: string;
-}): Promise<LibraryCharacter> {
-  const email = options.email.trim().toLowerCase();
-  if (!email || Boolean(options.dir) === Boolean(options.zip)) {
-    throw new ImportError("Informe o e-mail e exatamente um de --dir ou --zip");
-  }
-  const owner = (await listUsers()).find((user) => user.email === email);
-  if (!owner) throw new ImportError("Usuário não encontrado. Rode npm run seed antes, ou crie a conta.");
-  const source = options.zip ?? options.dir;
-  if (!source || !existsSync(source)) throw new ImportError("Pasta ou zip não encontrado");
-  const files = options.zip ? await filesFromZip(options.zip) : await collect(options.dir!);
-  return importCharacterPackage({
-    ownerId: owner.id,
-    name: options.name,
-    personaSheetRef: options.persona,
-    status: options.status,
-    files,
-  });
-}
+export { importOwnedCharacter } from "../lib/accounts/import-owned";
 
 /** Zip the seed should import for the pilot, when one is on disk. Absent means seed only the account. */
 export function characterPackagePath(): string | null {

@@ -36,6 +36,7 @@ export function LoginForm() {
       });
       const data = (await response.json().catch(() => ({}))) as { error?: string };
       if (!response.ok) throw new Error(data.error ?? "Não foi possível entrar");
+      window.sessionStorage.setItem("animindly-login", "password");
       router.push(nextPath(params.get("next")));
       router.refresh();
     } catch (cause) {
@@ -98,6 +99,7 @@ export function LoginForm() {
         <a
           data-testid="login-google"
           href={`/api/auth/google?next=${encodeURIComponent(nextPath(params.get("next")))}`}
+          onClick={() => window.sessionStorage.setItem("animindly-login", "google")}
           className="mt-5 flex min-h-11 w-full items-center justify-center rounded-full border border-white/15 text-base font-medium hover:bg-white/5"
         >
           Entrar com Google

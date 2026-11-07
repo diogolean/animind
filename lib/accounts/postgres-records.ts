@@ -30,6 +30,9 @@ async function ready(): Promise<Sql> {
       password_hash text NOT NULL,
       created_at timestamptz NOT NULL
     )`;
+    await db`ALTER TABLE animind_users ADD COLUMN IF NOT EXISTS generation_enabled boolean`;
+    await db`UPDATE animind_users SET generation_enabled = true WHERE role = 'super_admin' AND generation_enabled IS NULL`;
+    await db`UPDATE animind_users SET generation_enabled = false WHERE generation_enabled IS NULL`;
     await db`CREATE TABLE IF NOT EXISTS animind_characters (
       id text PRIMARY KEY,
       owner_id text NOT NULL REFERENCES animind_users (id),
@@ -74,6 +77,11 @@ function asJson<T>(value: unknown): T {
   return value as T;
 }
 
+function asOptionalBoolean(value: unknown): boolean | undefined {
+  if (value === true || value === false) return value;
+  return undefined;
+}
+
 function userFrom(row: Record<string, unknown>): UserRecord {
   return {
     id: String(row.id),
@@ -82,6 +90,7 @@ function userFrom(row: Record<string, unknown>): UserRecord {
     role: String(row.role) as Role,
     passwordHash: String(row.password_hash),
     createdAt: asIso(row.created_at),
+    generationEnabled: asOptionalBoolean(row.generation_enabled),
   };
 }
 
@@ -121,24 +130,24 @@ export function postgresRecords(): AccountRecords {
   return {
     async users() {
       const db = await ready();
-      const rows = await db`SELECT id, email, name, role, password_hash, created_at FROM animind_users ORDER BY created_at`;
+      const rows = await db`SELECT id, email, name, role, password_hash, created_at, generation_enabled FROM animind_users ORDER BY created_at`;
       return rows.map((row) => userFrom(row));
     },
     async userById(id) {
       const db = await ready();
-      const rows = await db`SELECT id, email, name, role, password_hash, created_at FROM animind_users WHERE id = ${id} LIMIT 1`;
+      const rows = await db`SELECT id, email, name, role, password_hash, created_at, generation_enabled FROM animind_users WHERE id = ${id} LIMIT 1`;
       return rows[0] ? userFrom(rows[0]) : null;
     },
     async userByEmail(email) {
       const db = await ready();
-      const rows = await db`SELECT id, email, name, role, password_hash, created_at FROM animind_users WHERE email = ${email} LIMIT 1`;
+      const rows = await db`SELECT id, email, name, role, password_hash, created_at, generation_enabled FROM animind_users WHERE email = ${email} LIMIT 1`;
       return rows[0] ? userFrom(rows[0]) : null;
     },
     async insertUser(user) {
       const db = await ready();
       try {
-        await db`INSERT INTO animind_users (id, email, name, role, password_hash, created_at)
-          VALUES (${user.id}, ${user.email}, ${user.name}, ${user.role}, ${user.passwordHash}, ${user.createdAt})`;
+        await db`INSERT INTO animind_users (id, email, name, role, password_hash, created_at, generation_enabled)
+          VALUES (${user.id}, ${user.email}, ${user.name}, ${user.role}, ${user.passwordHash}, ${user.createdAt}, ${user.generationEnabled === true})`;
         return true;
       } catch (error) {
         if (isUnique(error)) return false;
@@ -148,7 +157,8 @@ export function postgresRecords(): AccountRecords {
     async updateUser(user) {
       const db = await ready();
       const rows = await db`UPDATE animind_users
-        SET email = ${user.email}, name = ${user.name}, role = ${user.role}, password_hash = ${user.passwordHash}
+        SET email = ${user.email}, name = ${user.name}, role = ${user.role}, password_hash = ${user.passwordHash},
+            generation_enabled = ${user.generationEnabled === true}
         WHERE id = ${user.id} RETURNING id`;
       if (!rows.length) throw new Error("Usuário não encontrado");
     },

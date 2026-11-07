@@ -1,6 +1,6 @@
 import { json } from "@/lib/core";
 import { isUser, requireUser } from "@/lib/accounts/http";
-import { createAccount, listUsers } from "@/lib/accounts/store";
+import { createAccount, listUsers, setGenerationAccess } from "@/lib/accounts/store";
 import { isRole } from "@/lib/accounts/types";
 
 export const runtime = "nodejs";
@@ -31,4 +31,19 @@ export async function POST(req: Request) {
   });
   if (!created.ok) return json({ error: created.error }, created.status);
   return json({ user: created.value }, 201);
+}
+
+export async function PATCH(req: Request) {
+  const actor = await requireUser();
+  if (!isUser(actor)) return actor;
+  let body: { email?: string; generationEnabled?: boolean };
+  try {
+    body = (await req.json()) as { email?: string; generationEnabled?: boolean };
+  } catch {
+    return json({ error: "JSON inválido" }, 400);
+  }
+  if (typeof body.generationEnabled !== "boolean") return json({ error: "Informe generationEnabled" }, 400);
+  const updated = await setGenerationAccess(actor, body.email ?? "", body.generationEnabled);
+  if (!updated.ok) return json({ error: updated.error }, updated.status);
+  return json({ user: updated.value });
 }

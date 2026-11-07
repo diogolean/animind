@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { Geist } from "next/font/google";
 import { ThemeProvider } from "next-themes";
 import { Toaster } from "@/components/ui/sonner";
+import { Analytics } from "@/components/analytics";
 import { SiteHeader } from "@/components/site-header";
 import { SwRegister } from "@/components/sw-register";
 import "./globals.css";
@@ -45,6 +46,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
           <footer className="px-4 py-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] text-center text-xs text-muted-foreground/70">Paródia • Gerado por IA em todo vídeo</footer>
           <Toaster position="top-center" />
           <SwRegister />
+          <Analytics />
         </ThemeProvider>
       </body>
     </html>

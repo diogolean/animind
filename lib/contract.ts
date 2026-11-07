@@ -44,6 +44,8 @@ export interface CharacterView {
   layers: Layer[];
   /** Mouth sprite per viseme, drawn at its own box (z above head). Missing -> falls back to "X". */
   visemes: Partial<Record<Viseme, Layer>>;
+  /** Mouth-sized expression plates drawn on the full character. Not a parts gallery. */
+  expressions?: Record<string, Layer>;
   /** Movable eyes: max iris travel (canvas px) and iris circles [cx, cy, r]. */
   eyeRig?: { maxShift: [number, number]; irises: [number, number, number][] };
 }

@@ -1,6 +1,12 @@
 import type { ScenarioRequest, ScenarioResolution } from "@/lib/contract";
+import { guardedGeneration } from "@/lib/accounts/generation";
 import { coreFetch, coreMode, json, rewriteFileUrls } from "@/lib/core";
 import { placeForPersona, placeForPrompt } from "@/lib/eras";
+
+export async function POST(req: Request) {
+  return guardedGeneration(req, "scenario", () => perform(req));
+}
+
 
 const fallback = (body: ScenarioRequest): ScenarioResolution => {
   const era = body.characterNames.map(placeForPersona).find(Boolean);
@@ -17,7 +23,7 @@ const fallback = (body: ScenarioRequest): ScenarioResolution => {
   };
 };
 
-export async function POST(req: Request) {
+async function perform(req: Request) {
   let body: ScenarioRequest;
   try {
     body = (await req.json()) as ScenarioRequest;

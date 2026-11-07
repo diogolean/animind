@@ -1,7 +1,12 @@
+import { guardedGeneration } from "@/lib/accounts/generation";
 import { coreFetch, coreMode, json } from "@/lib/core";
 
 /** Same-origin proxy for core art and media (PNG layers, voice.wav, preview.mp4). */
-export async function GET(req: Request, { params }: { params: Promise<{ path: string[] }> }) {
+export async function GET(req: Request, context: { params: Promise<{ path: string[] }> }) {
+  return guardedGeneration(req, "file", () => perform(req, context));
+}
+
+async function perform(req: Request, { params }: { params: Promise<{ path: string[] }> }) {
   const { path } = await params;
   if (coreMode() !== "core") return json({ error: "Arquivo não encontrado" }, 404);
   if (path.some((p) => p === ".." || p.includes("\\"))) return json({ error: "Caminho inválido" }, 400);

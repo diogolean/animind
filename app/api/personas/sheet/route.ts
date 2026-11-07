@@ -1,3 +1,4 @@
+import { guardedGeneration } from "@/lib/accounts/generation";
 import { coreMode, coreOff, json, proxyJson } from "@/lib/core";
 import { mockSheet } from "@/lib/quote-sheets";
 
@@ -6,6 +7,10 @@ import { mockSheet } from "@/lib/quote-sheets";
  * verify an on-screen quote. Core: GET /v1/personas/sheet. Mock: the bundled sheets of lib/quote-sheets.ts.
  */
 export async function GET(req: Request) {
+  return guardedGeneration(req, "persona_sheet", () => readSheet(req));
+}
+
+async function readSheet(req: Request) {
   const u = new URL(req.url);
   const name = u.searchParams.get("name")?.trim() ?? "";
   const lang = u.searchParams.get("lang") || "pt-BR";

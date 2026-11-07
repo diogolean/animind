@@ -130,7 +130,6 @@ export function MyCharacters() {
       ) : (
         <ul className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {characters.map((character) => {
-            const angles = cardAngles(character);
             return (
             <li key={character.id}>
               <Link
@@ -138,26 +137,13 @@ export function MyCharacters() {
                 data-testid="character-card"
                 className="block overflow-hidden rounded-[1.5rem] border border-white/10 bg-white/[0.03] transition hover:border-white/25"
               >
-                {angles ? (
-                  <div className="grid grid-cols-3 gap-px bg-black/40">
-                    {angles.map((angle) => (
-                      <figure key={angle.id} data-testid={angle.testId} className="bg-black/30">
-                        <div className="flex aspect-[9/16] items-center justify-center">
-                          <img src={angle.url} alt={angle.label} className="size-full object-contain" />
-                        </div>
-                        <figcaption className="truncate px-1 py-1.5 text-center text-[10px] text-muted-foreground">{angle.label}</figcaption>
-                      </figure>
-                    ))}
-                  </div>
-                ) : (
-                <div className="flex aspect-[4/5] items-center justify-center bg-black/30">
+                <div className="flex aspect-[9/16] items-center justify-center bg-black/30">
                   {character.views.front ? (
-                    <img src={character.views.front} alt="" className="size-full object-contain" />
+                    <img src={character.views.front} alt="" data-testid="card-view-front" className="size-full object-contain" />
                   ) : (
-                    <span className="text-xs text-muted-foreground">Sem vista frontal</span>
+                    <span className="px-3 text-center text-xs text-muted-foreground">Sem vista frontal</span>
                   )}
                 </div>
-                )}
                 <div className="flex items-center justify-between gap-3 px-4 py-3">
                   <div className="min-w-0">
                     <p className="truncate font-medium">{character.name}</p>
@@ -218,14 +204,3 @@ export function MyCharacters() {
   );
 }
 
-function cardAngles(character: LibraryCharacter) {
-  const left = character.views.three_quarter_left ?? character.views.three_quarter;
-  const right = character.views.three_quarter_right;
-  const front = character.views.front;
-  if (!front || !left || !right) return null;
-  return [
-    { id: "front", label: "Frente", url: front, testId: "card-view-front" },
-    { id: "left", label: "3/4 esquerda", url: left, testId: "card-view-three-quarter-left" },
-    { id: "right", label: "3/4 direita", url: right, testId: "card-view-three-quarter-right" },
-  ];
-}

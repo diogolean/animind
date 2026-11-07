@@ -114,7 +114,7 @@ Papéis: `user`, `admin`, `super_admin`. Cada personagem pertence a uma conta. U
 
 Os nomes de todas as variáveis estão em [`.env.example`](.env.example). O nome atual é `ANIMINDLY_*`. Se `ANIMINDLY_<NAME>` estiver vazio, o app ainda lê `ANIMIND_<NAME>`. Na Vercel, copie o valor para o nome novo e apague o antigo. Copie o exemplo para `.env.local` (ignorado pelo git) e preencha só o modo que for usar. Valor vazio é o mesmo que ausente. Quem paga cada serviço, e onde fica a chave, está em [`docs/ACCOUNTS.md`](docs/ACCOUNTS.md).
 
-A biblioteca guarda nome, referência da ficha, as vistas que a pasta trouxer (frente, 3/4 esquerda, 3/4 direita e perfil; o perfil é opcional), URL do `puppet.json`, URLs das camadas e o status (`draft`, `ready`, `archived`). A página do personagem mostra essas vistas e a ficha de emoções grande, com zoom. A ficha só guarda a URL `/api/library/assets/...`.
+A biblioteca guarda nome, referência da ficha, as vistas que a pasta trouxer (frente, 3/4 esquerda, 3/4 direita e perfil; o perfil é opcional), URL do `puppet.json`, URLs das camadas e o status (`draft`, `ready`, `archived`). O cartão da lista mostra só a vista frontal. A página do personagem compõe essa figura inteira; vista, emoção e olhos mudam a mesma prévia. A ficha de emoções grande continua abaixo, com zoom. A URL gravada é `/api/library/assets/...`.
 
 ### Dois Einsteins privados
 
@@ -123,6 +123,14 @@ Não há catálogo público. **Einstein realista** e **Einstein charge** são pa
 `GET /api/library` e `GET /api/library/:id` exigem sessão. Um visitante anônimo e outra conta não recebem esses personagens nem os arquivos em `/api/library/assets/...`. Um `super_admin` continua vendo todas as bibliotecas; uma conta nova criada pelo Google entra como `user`. `npm run seed` grava os dois pacotes na conta do `SEED_SUPERADMIN_EMAIL` já existente, sem escolher o primeiro cadastro. Sem esse e-mail e sem a base, os arquivos ficam no repositório e não entram em conta nenhuma.
 
 O histórico do git público ainda contém a cópia antiga que chegou a estar em `public/characters/einstein_approved/`. Tirar a pasta de `public/` impede o site de servi-la daqui para a frente; não apaga o que já foi clonado.
+
+### Geração e gastos
+
+Escrever a ideia na página inicial não chama provedor: o plano local é regra, sem modelo. Qualquer chamada ao núcleo (`/api/render`, `/api/plan` quando o núcleo responde, prévia, personagem, job, arquivo, cenário, persona, voz e tom) passa por `guardedGeneration` antes do `fetch`. Sem `ANIMINDLY_GENERATION=1`, sem os tetos `ANIMINDLY_SPEND_BUDGET_CENTS` e `ANIMINDLY_SPEND_USER_CENTS`, sem timeout, retries e taxa, e sem uma linha de preço para a operação, a chamada não sai. Este repositório não publica id de modelo nem tarifa oficial. Um super admin não fura o teto global. O painel `/admin/gastos` é só dele. `GET /api/health` continua sem medição.
+
+### Audiência
+
+`ANIMINDLY_GA_MEASUREMENT_ID` liga o gtag direto da GA4. Vazio desliga. O valor público do site é `G-M5DBWNFQVV` (conta 415352684, propriedade 563169403, stream 16293660277). Ele não está no código de propósito. O pedido de coleta só acontece depois do consentimento, e o texto da ideia não entra no evento. Não usar um contêiner GTM.
 
 ### Celular
 

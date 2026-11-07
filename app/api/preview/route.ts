@@ -1,10 +1,15 @@
 import type { CharacterPreviewRequest } from "@/lib/contract";
+import { guardedGeneration } from "@/lib/accounts/generation";
 import { coreFetch, coreMode, coreOff, json, rewriteFileUrls } from "@/lib/core";
 import { mockCreatePreview } from "@/lib/mock";
 
+export async function POST(req: Request) {
+  return guardedGeneration(req, "preview", () => perform(req));
+}
+
 const TYPES = ["stick", "illustrated"];
 
-export async function POST(req: Request) {
+async function perform(req: Request) {
   let body: CharacterPreviewRequest;
   try {
     body = (await req.json()) as CharacterPreviewRequest;

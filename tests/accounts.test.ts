@@ -190,6 +190,7 @@ describe("accounts and character library", { concurrency: false }, () => {
     const user = await verifyLogin(email, password);
     assert.equal(user?.name, "Diogo");
     assert.equal(user?.role, "super_admin");
+    assert.equal(user?.generationEnabled, true);
     assert.equal(JSON.stringify(user).includes("passwordHash"), false);
     assert.equal(await verifyLogin(email, `${password}x`), null);
 
@@ -651,7 +652,7 @@ describe("accounts and character library", { concurrency: false }, () => {
     const password = randomBytes(18).toString("base64url");
     await upsertPilotSuperAdmin(email, password);
     const before = JSON.parse(await readFile(path.join(dir, "accounts.json"), "utf8")) as {
-      users: { email: string; role: string; name: string; passwordHash: string }[];
+      users: { email: string; role: string; name: string; passwordHash: string; generationEnabled?: boolean }[];
     };
 
     const local = await startGoogle(new Request("http://localhost:3000/api/auth/google?next=/biblioteca"));
@@ -753,6 +754,7 @@ describe("accounts and character library", { concurrency: false }, () => {
       const newbie = JSON.parse(await readFile(path.join(dir, "accounts.json"), "utf8")) as typeof before;
       const row = newbie.users.find((user) => user.email === freshEmail);
       assert.equal(row?.role, "user");
+      assert.equal(row?.generationEnabled, false);
       assert.equal(row?.name, "Ada Lovelace");
       assert.equal(await verifyLogin(freshEmail, password), null);
       assert.equal(await verifyLogin(freshEmail, "not-a-real-password"), null);

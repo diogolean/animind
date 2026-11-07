@@ -24,10 +24,17 @@ export interface PublicUser {
   name: string;
   role: Role;
   createdAt: string;
+  /** Server still enforces this. The client uses it only to avoid calling generation. */
+  generationEnabled: boolean;
 }
 
-export interface UserRecord extends PublicUser {
+export interface UserRecord extends Omit<PublicUser, "generationEnabled"> {
   passwordHash: string;
+  /**
+   * Explicit opt-in. Missing on older rows: a super_admin is treated as enabled
+   * and every other role as disabled. New rows always store the boolean.
+   */
+  generationEnabled?: boolean;
 }
 
 export interface LibraryLayer {

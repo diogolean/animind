@@ -1,5 +1,6 @@
 import "server-only";
 import { productEnv } from "./product-env";
+import { spendFrame } from "./spend/context";
 
 /**
  * Server-side bridge to the Omni-Engine core (products/animind_core). Keys never leave the server.
@@ -24,7 +25,24 @@ export async function coreFetch(path: string, init?: RequestInit): Promise<Respo
   if (init?.body) headers.set("content-type", "application/json");
   const key = coreKey();
   if (key) headers.set("authorization", `Bearer ${key}`);
-  return fetch(`${base}/v1${path}`, { ...init, headers, cache: "no-store" });
+  const frame = spendFrame();
+  const attempts = (frame?.maxRetries ?? 0) + 1;
+  let lastError: unknown;
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    try {
+      return await fetch(`${base}/v1${path}`, {
+        ...init,
+        headers,
+        cache: "no-store",
+        signal: frame ? AbortSignal.timeout(frame.timeoutMs) : init?.signal,
+      });
+    } catch (error) {
+      lastError = error;
+      if (!frame || attempt === attempts - 1) throw error;
+      frame.noteRetry(attempt + 1);
+    }
+  }
+  throw lastError;
 }
 
 /** Core file URLs -> same-origin /api/files/* (keeps the canvas untainted for MediaRecorder). */
@@ -46,6 +64,8 @@ export async function proxyJson(path: string, init?: RequestInit): Promise<Respo
     }
     return new Response(text, { status: r.status, headers: { "content-type": "application/json" } });
   } catch (e) {
+    const name = (e as Error).name;
+    if (name === "TimeoutError" || name === "AbortError") return json({ error: "Tempo esgotado" }, 504);
     return json({ error: `Núcleo indisponível: ${(e as Error).message}` }, 502);
   }
 }

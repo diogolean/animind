@@ -7,6 +7,7 @@ import { hashPassword, verifyPassword } from "./password";
 import { newId } from "./paths";
 import { postgresRecords } from "./postgres-records";
 import type { AccountRecords } from "./records";
+import { userMayGenerate } from "./generation-policy";
 import { isLibraryStatus, isRole, type AssetKind, type LibraryAsset, type LibraryCharacter, type LibraryStatus, type LibraryViewName, type PublicUser, type Result, type Role, type UserRecord } from "./types";
 
 /** Pilot super admin created by scripts/seed-superadmin.ts. The name is not a secret. */
@@ -29,7 +30,14 @@ export function normalizeEmail(email: string): string | null {
 }
 
 export function toPublicUser(user: UserRecord): PublicUser {
-  return { id: user.id, email: user.email, name: user.name, role: user.role, createdAt: user.createdAt };
+  return {
+    id: user.id,
+    email: user.email,
+    name: user.name,
+    role: user.role,
+    createdAt: user.createdAt,
+    generationEnabled: userMayGenerate(user),
+  };
 }
 
 function withoutOwner(character: LibraryCharacter): LibraryCharacter {
@@ -75,9 +83,30 @@ export async function createAccount(
     return { ok: false, error: "A senha precisa ter entre 8 e 200 caracteres", status: 400 };
   }
   const passwordHash = await hashPassword(input.password);
-  const user: UserRecord = { id: newId("usr"), email, name, role: input.role, passwordHash, createdAt: new Date().toISOString() };
+  const user: UserRecord = {
+    id: newId("usr"),
+    email,
+    name,
+    role: input.role,
+    passwordHash,
+    createdAt: new Date().toISOString(),
+    generationEnabled: false,
+  };
   const inserted = await records().insertUser(user);
   if (!inserted) return { ok: false, error: "E-mail já cadastrado", status: 409 };
+  return { ok: true, value: toPublicUser(user) };
+}
+
+/** Persistent opt-in. Only a super_admin can change it. There is no quota or price. */
+export async function setGenerationAccess(actor: PublicUser, email: string, enabled: boolean): Promise<Result<PublicUser>> {
+  if (actor.role !== "super_admin") return { ok: false, error: "Sem permissão", status: 403 };
+  const normalized = normalizeEmail(email);
+  if (!normalized) return { ok: false, error: "E-mail inválido", status: 400 };
+  const store = records();
+  const user = await store.userByEmail(normalized);
+  if (!user) return { ok: false, error: "Usuário não encontrado", status: 404 };
+  user.generationEnabled = enabled;
+  await store.updateUser(user);
   return { ok: true, value: toPublicUser(user) };
 }
 
@@ -96,6 +125,7 @@ export async function upsertPilotSuperAdmin(email: string, password: string): Pr
     existing.name = PILOT_SUPERADMIN_NAME;
     existing.role = "super_admin";
     existing.passwordHash = passwordHash;
+    existing.generationEnabled = true;
     await store.updateUser(existing);
     return toPublicUser(existing);
   }
@@ -106,6 +136,7 @@ export async function upsertPilotSuperAdmin(email: string, password: string): Pr
     role: "super_admin",
     passwordHash,
     createdAt: new Date().toISOString(),
+    generationEnabled: true,
   };
   const inserted = await store.insertUser(user);
   if (!inserted) {
@@ -114,6 +145,7 @@ export async function upsertPilotSuperAdmin(email: string, password: string): Pr
     raced.name = PILOT_SUPERADMIN_NAME;
     raced.role = "super_admin";
     raced.passwordHash = passwordHash;
+    raced.generationEnabled = true;
     await store.updateUser(raced);
     return toPublicUser(raced);
   }
@@ -140,6 +172,7 @@ export async function accountForVerifiedGoogle(email: string, name: string): Pro
     role: "user",
     passwordHash: await hashPassword(randomBytes(32).toString("base64url")),
     createdAt: new Date().toISOString(),
+    generationEnabled: false,
   };
   const inserted = await store.insertUser(user);
   if (!inserted) {

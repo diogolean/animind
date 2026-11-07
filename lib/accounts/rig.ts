@@ -22,6 +22,7 @@ function asView(value: unknown): CharacterView | null {
   const view = value as { canvas?: { w?: unknown; h?: unknown }; layers?: unknown; visemes?: unknown; eyeRig?: unknown };
   if (!Array.isArray(view.layers)) return null;
   const layers = view.layers.map(asLayer).filter((layer): layer is Layer => layer !== null);
+  const expressions = asExpressions((view as { expressions?: unknown }).expressions);
   const visemes: CharacterView["visemes"] = {};
   if (view.visemes && typeof view.visemes === "object") {
     for (const [name, layer] of Object.entries(view.visemes)) {
@@ -36,7 +37,19 @@ function asView(value: unknown): CharacterView | null {
     },
     layers,
     visemes,
+    ...(expressions ? { expressions } : {}),
   };
+}
+
+function asExpressions(value: unknown): Record<string, Layer> | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
+  const expressions: Record<string, Layer> = {};
+  for (const [key, layer] of Object.entries(value)) {
+    if (!/^[a-z0-9_-]{1,40}$/i.test(key)) continue;
+    const parsed = asLayer(layer);
+    if (parsed) expressions[key] = parsed;
+  }
+  return Object.keys(expressions).length ? expressions : undefined;
 }
 
 function normalizedViewKey(key: string): string {

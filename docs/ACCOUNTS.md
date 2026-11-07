@@ -120,4 +120,8 @@ The Next.js app reads [`.env.example`](../.env.example). Image, script, and spee
 | --- | --- |
 | `ANIMINDLY_AUTH_SECRET` | Signs the session cookie and the Google state cookie. Generate it locally. At least 16 characters. |
 | `ANIMINDLY_DATA_DIR` | Optional override for `./.data` when hosted database and Blob variables are empty. |
+| `ANIMINDLY_GENERATION` | Must be exactly `1` or every paid call is denied. Empty is off. |
+| `ANIMINDLY_SPEND_BUDGET_CENTS`, `ANIMINDLY_SPEND_USER_CENTS`, `ANIMINDLY_SPEND_TIMEOUT_MS`, `ANIMINDLY_SPEND_MAX_RETRIES`, `ANIMINDLY_SPEND_RATE_PER_MIN` | Required together before a paid call. No default numbers in code. Cents are USD minor units from the price table, not a subscription. |
+| `ANIMINDLY_PRICE_TABLE_JSON` | Optional operator price table. Invalid JSON fails closed. Empty uses the unpublished table in the repo, which has no rows, so paid calls stay denied. |
+| `ANIMINDLY_GA_MEASUREMENT_ID` | Public GA4 measurement id. Empty disables the tag. Preview host only until collection is checked. Direct gtag, not GTM. |
 | `SEED_SUPERADMIN_PASSWORD` | Pilot password for email login. Local `.env.local` and Vercel env. Never git. |

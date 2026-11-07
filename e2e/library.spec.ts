@@ -63,9 +63,13 @@ test("super admin entra e vê o personagem importado", async ({ page }) => {
   await expect(page.getByTestId("my-characters")).toBeVisible();
   await expect(page.getByTestId("account-role")).toHaveAttribute("data-role", "super_admin");
   await expect(page.getByTestId("character-card").filter({ hasText: "Einstein" })).toBeVisible();
+  await expect(page.getByTestId("character-card").locator("img")).toHaveCount(1);
+  await expect(page.getByTestId("card-view-front")).toBeVisible();
   await page.getByTestId("character-card").filter({ hasText: "Einstein" }).click();
   await expect(page.getByTestId("view-front").locator("img")).toBeVisible();
-  await expect(page.getByTestId("view-three-quarter-left").locator("img")).toBeVisible();
+  await page.getByTestId("choose-view-three-quarter").click();
+  await expect(page.getByTestId("view-three-quarter").locator("img")).toBeVisible();
+  await page.getByTestId("choose-view-profile").click();
   await expect(page.getByTestId("view-profile").locator("img")).toBeVisible();
   await expect(page.getByTestId("emotion-sheet").locator("img")).toBeVisible();
   await expect(page.getByTestId("persona-ref")).toHaveText("wikiquote:Albert_Einstein");
