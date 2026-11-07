@@ -98,11 +98,11 @@ The Next.js app reads [`.env.example`](../.env.example). Image, script, and spee
 
 | | |
 | --- | --- |
-| What | Source repository. No GitHub Actions workflows in this repo. |
+| What | Source repository. `.github/workflows/ci.yml` runs `npm ci`, `npm run build`, and `npm test` against an empty Postgres 16 service container. It does not use a production database. |
 | Repo | [diogolean/animind](https://github.com/diogolean/animind) |
 | Account | diogolean |
 | Env vars | none |
-| Invoices | [GitHub billing for user diogolean](https://github.com/settings/billing). A public repo with no Actions does not add a usage line by itself. |
+| Invoices | [GitHub billing for user diogolean](https://github.com/settings/billing). The workflow uses the free GitHub-hosted runner and a throwaway Postgres service. |
 
 ## Omni-Engine core (not a vendor bill)
 
@@ -113,7 +113,21 @@ The Next.js app reads [`.env.example`](../.env.example). Image, script, and spee
 | Env vars (this app) | `ANIMINDLY_CORE_URL` (older `ANIMIND_CORE_URL`, then `CORE_URL`), `ANIMINDLY_CORE_KEY` (same value as the core's `CORE_API_KEY`; older `ANIMIND_CORE_KEY`, then `CORE_API_KEY`). Dev only: `ANIMINDLY_CORE_MOCK=1` when no core URL is set (`ANIMIND_CORE_MOCK` still works). |
 | Where the values live | This app's `.env.local`, and Vercel env if the preview should reach a running core. The core's own provider keys stay on the core. Never git. |
 | Invoices | None for the core process. Provider invoices are the rows above. |
-| Metering | `products/animind_core` is on branch `feat/animind-core-api`, not the default branch. This app only records provider, model, usage, and cost when that response includes them. A change there belongs in a separate draft PR on Omni-Engine. This repo does not write that repository. |
+| Metering | `products/animind_core` is on branch `feat/animind-core-api`, not the default branch. This app records provider, model, usage, and cost only from the response fields in the contract below. A missing or unknown cost stays null and is not stored as 0. The model is not inferred from this app's environment. The core change belongs in a later draft PR on Omni-Engine. This repo does not write that repository. |
+
+### Minimum core response contract
+
+`POST /v1/plan`, `POST /v1/render`, and `GET /v1/jobs/:id` need these fields when the core actually knows them. Omit a field when it is unknown. Do not send `0` for an unknown cost.
+
+| Field | What this app does with it |
+| --- | --- |
+| `provider` | Not read from the response yet. The ledger stores `core` or `none` from the local mode. The core should still send it so a later change can record the real process. |
+| `model` | Stored only when the response string matches `^[A-Za-z0-9._:-]{1,80}$`. Never copied from this app's env. |
+| `usage.inputTokens`, `usage.outputTokens`, `usage.cachedTokens`, `usage.thinkingTokens` | Stored as separate counts. Thinking tokens are not added into output tokens. |
+| `usage.imageCount`, `usage.audioSeconds`, `usage.videoSeconds` | Stored when present. |
+| `reportedMinor` | Integer USD cents. A missing or non-integer value stays null. It is not treated as zero. A reservation estimate is not this field. |
+
+The separate Omni-Engine draft, from `feat/animind-core-api`, is what has to start returning those fields. Nested catalog calls inside a paid render are still one reservation in this app.
 
 ## This app, no outside account
 

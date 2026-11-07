@@ -118,7 +118,28 @@ describe("private Einstein packs", () => {
     assert.equal(await assetFor(other.value, asset.id), null);
     assert.equal((await assetFor(owner, asset.id))?.id, asset.id);
 
-    const app = await startApp();
+    const app = await startApp({
+      // These numbers only open the gate so the test can reach the account check.
+      // They are not a product quota and they do not publish a price.
+      ANIMINDLY_GENERATION: "1",
+      ANIMINDLY_GENERATION_CONCURRENCY: "1",
+      ANIMINDLY_SPEND_BUDGET_CENTS: "1",
+      ANIMINDLY_SPEND_USER_CENTS: "1",
+      ANIMINDLY_SPEND_TIMEOUT_MS: "1000",
+      ANIMINDLY_SPEND_MAX_RETRIES: "0",
+      ANIMINDLY_SPEND_RATE_PER_MIN: "10",
+      ANIMINDLY_SPEND_MAX_INPUT_TOKENS: "100",
+      ANIMINDLY_SPEND_MAX_OUTPUT_TOKENS: "100",
+      ANIMINDLY_SPEND_MAX_TOTAL_TOKENS: "200",
+      ANIMINDLY_SPEND_MAX_IMAGES: "0",
+      ANIMINDLY_SPEND_MAX_AUDIO_SEC: "0",
+      ANIMINDLY_SPEND_MAX_VIDEO_SEC: "0",
+      ANIMINDLY_CORE_URL: "",
+      ANIMIND_CORE_URL: "",
+      CORE_URL: "",
+      ANIMINDLY_CORE_MOCK: "",
+      ANIMINDLY_PRICE_TABLE_JSON: "",
+    });
     try {
       const front = realista.views.front ?? "";
       assert.match(front, /^\/api\/library\/assets\//);
@@ -168,6 +189,45 @@ describe("private Einstein packs", () => {
       const media = await hit(app.base, front, ownerCookie);
       assert.equal(media.status, 200);
       assert.match(media.contentType, /^image\//);
+
+      const anonSpend = await hit(app.base, "/api/admin/spend");
+      const otherSpend = await hit(app.base, "/api/admin/spend", otherCookie);
+      const ownerSpend = await hit(app.base, "/api/admin/spend", ownerCookie);
+      assert.equal(anonSpend.status, 401);
+      assert.equal(otherSpend.status, 403);
+      assert.equal(ownerSpend.status, 200);
+      assert.equal(otherSpend.text.includes(owner.email), false);
+      assert.equal(ownerSpend.text.includes(owner.email), false);
+
+      const anonJob = await hit(app.base, "/api/jobs/job_missing");
+      const otherJob = await hit(app.base, "/api/jobs/job_missing", otherCookie);
+      const anonFile = await hit(app.base, "/api/files/missing/file.bin");
+      const otherFile = await hit(app.base, "/api/files/missing/file.bin", otherCookie);
+      assert.equal(anonJob.status, 401);
+      assert.equal(otherJob.status, 404);
+      assert.equal(anonFile.status, 401);
+      assert.equal(otherFile.status, 404);
+      for (const response of [anonJob, otherJob, anonFile, otherFile, anonSpend, otherSpend]) {
+        assert.equal(response.text.includes("Einstein realista"), false);
+        assert.equal(response.text.includes("Einstein charge"), false);
+      }
+
+      const idea = { prompt: "A short labeled fixture about gravity", language: "en-US" };
+      const anonPlan = await hit(app.base, "/api/plan", undefined, "POST", idea);
+      assert.equal(anonPlan.status, 200);
+      assert.equal(JSON.parse(anonPlan.text).source, "local");
+      const anonRender = await hit(app.base, "/api/render", undefined, "POST", idea);
+      const otherRender = await hit(app.base, "/api/render", otherCookie, "POST", idea);
+      const ownerRender = await hit(app.base, "/api/render", ownerCookie, "POST", idea);
+      assert.equal(anonRender.status, 401);
+      assert.equal(otherRender.status, 403);
+      assert.equal(JSON.parse(otherRender.text).code, "unapproved");
+      assert.equal(ownerRender.status, 403);
+      assert.equal(JSON.parse(ownerRender.text).code, "price_unavailable");
+      const ledger = await readFile(path.join(dir, "spend.json"), "utf8").catch(() => "");
+      assert.equal(ledger.includes("\"status\":\"reserved\""), false);
+      assert.equal(ledger.includes("\"status\":\"succeeded\""), false);
+      assert.equal(anonPlan.text.includes(owner.email), false);
     } finally {
       await app.stop();
     }
@@ -215,11 +275,11 @@ async function freePort(): Promise<number> {
   });
 }
 
-async function startApp(): Promise<{ base: string; stop: () => Promise<void> }> {
+async function startApp(extra: Record<string, string> = {}): Promise<{ base: string; stop: () => Promise<void> }> {
   const port = await freePort();
   const child: ChildProcess = spawn(process.execPath, [path.join(root, "node_modules", "next", "dist", "bin", "next"), "start", "-p", String(port), "-H", "127.0.0.1"], {
     cwd: root,
-    env: { ...process.env, ANIMINDLY_COOKIE_SECURE: "0" },
+    env: { ...process.env, ANIMINDLY_COOKIE_SECURE: "0", ...extra },
     stdio: ["ignore", "pipe", "pipe"],
   });
   let log = "";
