@@ -2,6 +2,7 @@
 
 import { Plus, Trash2 } from "lucide-react";
 import type { CreationPlanCharacter } from "@/lib/contract";
+import { useI18n } from "@/components/locale";
 
 interface CharacterListEditorProps {
   value: CreationPlanCharacter[];
@@ -10,6 +11,7 @@ interface CharacterListEditorProps {
 }
 
 export function CharacterListEditor({ value, onChange, testIdPrefix = "character" }: CharacterListEditorProps) {
+  const { t } = useI18n();
   const update = (index: number, patch: Partial<CreationPlanCharacter>) =>
     onChange(value.map((character, itemIndex) => itemIndex === index ? { ...character, ...patch } : character));
 
@@ -22,8 +24,8 @@ export function CharacterListEditor({ value, onChange, testIdPrefix = "character
             value={character.name}
             onChange={(event) => update(index, { name: event.target.value })}
             maxLength={60}
-            aria-label={`Nome do personagem ${index + 1}`}
-            placeholder="Nome"
+            aria-label={`${t("characterNameAria")} ${index + 1}`}
+            placeholder={t("characterName")}
             className="h-11 rounded-xl border bg-transparent px-3 outline-none focus:border-foreground/30"
           />
           <input
@@ -31,13 +33,13 @@ export function CharacterListEditor({ value, onChange, testIdPrefix = "character
             value={character.prompt}
             onChange={(event) => update(index, { prompt: event.target.value })}
             maxLength={600}
-            aria-label={`Descrição do personagem ${index + 1}`}
-            placeholder="Aparência, roupa, idade e personalidade"
+            aria-label={`${t("characterLookAria")} ${index + 1}`}
+            placeholder={t("characterLook")}
             className="h-11 rounded-xl border bg-transparent px-3 outline-none focus:border-foreground/30"
           />
           <button
             type="button"
-            aria-label={`Remover personagem ${index + 1}`}
+            aria-label={`${t("removeCharacter")} ${index + 1}`}
             disabled={value.length === 1}
             onClick={() => onChange(value.filter((_, itemIndex) => itemIndex !== index))}
             className="grid size-11 place-items-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-20"
@@ -53,7 +55,7 @@ export function CharacterListEditor({ value, onChange, testIdPrefix = "character
           onClick={() => onChange([...value, { name: "", prompt: "" }])}
           className="flex h-10 items-center gap-2 rounded-full border px-4 text-sm text-muted-foreground hover:text-foreground"
         >
-          <Plus className="size-4" />Adicionar personagem
+          <Plus className="size-4" />{t("addCharacter")}
         </button>
       ) : null}
     </div>

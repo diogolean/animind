@@ -35,6 +35,7 @@ import { loadDraft, saveDraft } from "@/lib/draft";
 import { track } from "@/lib/analytics-client";
 import type { PublicUser } from "@/lib/accounts/types";
 import { useI18n } from "@/components/locale";
+import { translate, type Locale, type MessageKey } from "@/lib/i18n";
 import { CharacterListEditor } from "@/components/flow/character-list-editor";
 import { CharacterVoicesEditor } from "@/components/flow/character-voices-editor";
 import { ChoiceCard } from "@/components/flow/choice-card";
@@ -44,17 +45,30 @@ import { ProgressivePreview } from "@/components/flow/progressive-preview";
 import { Player } from "@/components/player";
 import { Transcript } from "@/components/transcript";
 
-const MODE_OPTIONS: { id: CreationMode; label: string; description: string }[] = [
-  { id: "monologue", label: "Monólogo", description: "Uma pessoa fala para a câmera." },
-  { id: "dialogue", label: "Diálogo", description: "Personagens constroem uma conversa." },
-  { id: "debate", label: "Debate", description: "Ideias em confronto, com réplicas." },
-];
-const OBJECTIVES: { id: Objective; label: string }[] = [
-  { id: "ensinar", label: "Ensinar" },
-  { id: "debater", label: "Debater" },
-  { id: "entreter", label: "Entreter" },
-  { id: "convencer", label: "Convencer" },
-];
+const MODE_IDS: CreationMode[] = ["monologue", "dialogue", "debate"];
+const MODE_COPY: Record<CreationMode, { label: MessageKey; body: MessageKey }> = {
+  monologue: { label: "monologue", body: "monologueBody" },
+  dialogue: { label: "dialogue", body: "dialogueBody" },
+  debate: { label: "debateMode", body: "debateBody" },
+};
+const OBJECTIVE_IDS: Objective[] = ["ensinar", "debater", "entreter", "convencer"];
+const OBJECTIVE_COPY: Record<Objective, MessageKey> = {
+  ensinar: "teach",
+  debater: "debateObjective",
+  entreter: "entertain",
+  convencer: "persuade",
+};
+const TONE_COPY: Record<Tone, MessageKey> = {
+  humor: "toneHumor",
+  terror: "toneHorror",
+  educacional: "toneEducational",
+  sabio: "toneWise",
+  serio: "toneSerious",
+};
+
+function toneLabel(locale: Locale, tone: ToneOption): string {
+  return tone.id in TONE_COPY ? translate(locale, TONE_COPY[tone.id as Tone]) : tone.label;
+}
 const SCENARIO_PROMPTS = {
   studio: { label: "Estúdio", prompt: "estúdio minimalista" },
   classroom: { label: "Sala de aula", prompt: "sala de aula com lousa" },
@@ -439,7 +453,7 @@ export function CreationStudio() {
                 className={cn("relative h-11 w-16 rounded-full transition-colors", automatic ? "bg-[var(--accent-brand)]" : "bg-white/10")}
               >
                 <span className={cn("absolute top-2 left-2 size-7 rounded-full bg-white shadow transition-transform", automatic ? "translate-x-5" : "translate-x-0")} />
-                <span className="sr-only">{automatic ? "Desligar automático" : "Ligar automático"}</span>
+                <span className="sr-only">{automatic ? t("automaticOff") : t("automaticOn")}</span>
               </button>
               <span className="text-sm font-medium">{t("automatic")}</span>
             </div>
@@ -447,7 +461,7 @@ export function CreationStudio() {
               <button
                 type="button"
                 data-testid="details-toggle"
-                aria-label="Mais ajustes"
+                aria-label={t("moreSettings")}
                 aria-expanded={detailsOpen}
                 onClick={() => setDetailsOpen((current) => !current)}
                 className={cn("grid size-11 place-items-center rounded-full text-muted-foreground transition hover:bg-white/8 hover:text-white", detailsOpen && "bg-white/8 text-white")}
@@ -468,7 +482,7 @@ export function CreationStudio() {
                   if (!viewer.generationEnabled) {
                     track("create_attempt", { result: "unapproved" });
                     track("access_denied", { reason: "unapproved" });
-                    toast.error("Esta conta ainda não pode gerar");
+                    toast.error(t("generationDenied"));
                     return;
                   }
                   track("create_attempt", { result: "started" });
@@ -551,8 +565,8 @@ export function CreationStudio() {
                           className="mt-4 overflow-hidden rounded-2xl border border-white/10 bg-white/[0.025] p-4"
                         >
                           <div className="mb-4 flex items-center justify-between">
-                            <p className="text-sm font-medium">Editar {editing === "characters" ? "elenco" : editing}</p>
-                            <button type="button" aria-label="Fechar editor" onClick={() => setEditing(null)} className="grid size-8 place-items-center rounded-full hover:bg-white/10"><X className="size-4" /></button>
+                            <p className="text-sm font-medium">{t("edit")}</p>
+                            <button type="button" aria-label={t("closeEditor")} onClick={() => setEditing(null)} className="grid size-8 place-items-center rounded-full hover:bg-white/10"><X className="size-4" /></button>
                           </div>
                           <PlanEditor field={editing} plan={plan} tones={tones} voices={voiceCatalog} onChange={updatePlan} />
                         </motion.div>
@@ -625,6 +639,7 @@ function PlanEditor({
   voices: VoiceCatalog;
   onChange: (patch: Partial<CreationPlan>) => void;
 }) {
+  const { locale, t } = useI18n();
   if (field === "language")
     return (
       <LanguageCombobox
@@ -654,7 +669,7 @@ function PlanEditor({
   if (field === "mode")
     return (
       <select data-testid="plan-mode" value={plan.mode} onChange={(event) => onChange({ mode: event.target.value as CreationMode })} className="h-11 w-full rounded-xl border bg-background px-3">
-        {MODE_OPTIONS.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
+        {MODE_IDS.map((id) => <option key={id} value={id}>{t(MODE_COPY[id].label)}</option>)}
       </select>
     );
   if (field === "topic")
@@ -662,13 +677,13 @@ function PlanEditor({
   if (field === "tone")
     return (
       <select data-testid="plan-tone" value={plan.tone} onChange={(event) => onChange({ tone: event.target.value as Tone })} className="h-11 w-full rounded-xl border bg-background px-3">
-        {tones.map((item) => <option key={item.id} value={item.id}>{item.label}{item.fallback ? " · fallback" : ""}</option>)}
+        {tones.map((item) => <option key={item.id} value={item.id}>{toneLabel(locale, item)}{item.fallback ? " · fallback" : ""}</option>)}
       </select>
     );
   if (field === "objective")
     return (
       <select data-testid="plan-objective" value={plan.objective} onChange={(event) => onChange({ objective: event.target.value as Objective })} className="h-11 w-full rounded-xl border bg-background px-3">
-        {OBJECTIVES.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
+        {OBJECTIVE_IDS.map((id) => <option key={id} value={id}>{t(OBJECTIVE_COPY[id])}</option>)}
       </select>
     );
   if (field === "style")
@@ -732,7 +747,7 @@ interface ManualControlsProps {
 }
 
 function ManualControls(props: ManualControlsProps) {
-  const { t } = useI18n();
+  const { locale, t } = useI18n();
   return (
     <>
       <section className="max-w-xs">
@@ -748,19 +763,19 @@ function ManualControls(props: ManualControlsProps) {
         />
       </section>
       <section>
-        <Label>Modo</Label>
+        <Label>{t("mode")}</Label>
         <div className="grid gap-3 sm:grid-cols-3">
-          {MODE_OPTIONS.map((item) => <ChoiceCard key={item.id} data-testid={`manual-mode-${item.id}`} active={props.mode === item.id} onClick={() => props.onMode(item.id)} title={item.label} description={item.description} />)}
+          {MODE_IDS.map((id) => <ChoiceCard key={id} data-testid={`manual-mode-${id}`} active={props.mode === id} onClick={() => props.onMode(id)} title={t(MODE_COPY[id].label)} description={t(MODE_COPY[id].body)} />)}
         </div>
       </section>
       <section>
-        <Label>Personagens</Label>
+        <Label>{t("cast")}</Label>
         <CharacterListEditor value={props.characters} onChange={props.onCharacters} testIdPrefix="manual-character" />
       </section>
       <section>
         <div className="mb-2 flex items-center justify-between gap-3">
-          <Label>Vozes</Label>
-          {props.voices.source === "fallback" ? <span className="text-xs text-amber-500">Catálogo provisório</span> : null}
+          <Label>{t("voices")}</Label>
+          {props.voices.source === "fallback" ? <span className="text-xs text-amber-500">{t("provisionalCatalog")}</span> : null}
         </div>
         <CharacterVoicesEditor
           characters={props.characters}
@@ -772,14 +787,14 @@ function ManualControls(props: ManualControlsProps) {
       </section>
       <section className="grid gap-6 sm:grid-cols-2">
         <div>
-          <Label>Tipo</Label>
+          <Label>{t("type")}</Label>
           <div className="grid gap-2">
-            <ChoiceCard data-testid="manual-type-stick" active={props.characterType === "stick"} onClick={() => props.onCharacterType("stick")} title="Stick figure" description="Leve e expressivo." />
-            <ChoiceCard data-testid="manual-type-illustrated" active={props.characterType === "illustrated"} onClick={() => props.onCharacterType("illustrated")} title="Ilustrado Aiwake" description="Personagem complexo." />
+            <ChoiceCard data-testid="manual-type-stick" active={props.characterType === "stick"} onClick={() => props.onCharacterType("stick")} title={t("stick")} description={t("stickBody")} />
+            <ChoiceCard data-testid="manual-type-illustrated" active={props.characterType === "illustrated"} onClick={() => props.onCharacterType("illustrated")} title={t("illustrated")} description={t("illustratedBody")} />
           </div>
         </div>
         <div>
-          <Label>Estilo</Label>
+          <Label>{t("style")}</Label>
           <div className="flex flex-wrap gap-2">
             {ART_STYLES.map((item) => <button key={item.id} type="button" data-testid={`manual-art-${item.id}`} onClick={() => props.onArtStyle(item.id)} className={cn("rounded-full border px-3 py-2 text-sm", props.artStyle === item.id ? "border-[var(--accent-brand)] bg-[var(--accent-brand)] text-white" : "text-muted-foreground")}>{item.label}</button>)}
           </div>
@@ -787,36 +802,36 @@ function ManualControls(props: ManualControlsProps) {
       </section>
       <section className="grid gap-5 sm:grid-cols-3">
         <label className="sm:col-span-3">
-          <Label>Tema</Label>
-          <input data-testid="manual-topic" value={props.topic} onChange={(event) => props.onTopic(event.target.value)} placeholder="Sobre o que a animação fala?" className="h-11 w-full rounded-xl border bg-transparent px-3" />
+          <Label>{t("topic")}</Label>
+          <input data-testid="manual-topic" value={props.topic} onChange={(event) => props.onTopic(event.target.value)} placeholder={t("topicPlaceholder")} className="h-11 w-full rounded-xl border bg-transparent px-3" />
         </label>
         <label>
-          <Label>Tom</Label>
+          <Label>{t("tone")}</Label>
           <select data-testid="manual-tone" value={props.tone} onChange={(event) => props.onTone(event.target.value as Tone)} className="h-11 w-full rounded-xl border bg-background px-3">
-            {props.tones.map((item) => <option key={item.id} value={item.id}>{item.label}{item.fallback ? " · fallback" : ""}</option>)}
+            {props.tones.map((item) => <option key={item.id} value={item.id}>{toneLabel(locale, item)}{item.fallback ? " · fallback" : ""}</option>)}
           </select>
-          {props.tones.find((item) => item.id === props.tone)?.fallback ? <span className="mt-1 block text-xs text-amber-500">Fallback do núcleo: {props.tones.find((item) => item.id === props.tone)?.coreId}</span> : null}
+          {props.tones.find((item) => item.id === props.tone)?.fallback ? <span className="mt-1 block text-xs text-amber-500">{t("coreFallback")}: {props.tones.find((item) => item.id === props.tone)?.coreId}</span> : null}
         </label>
         <label>
-          <Label>Objetivo</Label>
+          <Label>{t("objective")}</Label>
           <select data-testid="manual-objective" value={props.objective} onChange={(event) => props.onObjective(event.target.value as Objective)} className="h-11 w-full rounded-xl border bg-background px-3">
-            {OBJECTIVES.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
+            {OBJECTIVE_IDS.map((id) => <option key={id} value={id}>{t(OBJECTIVE_COPY[id])}</option>)}
           </select>
         </label>
         <div>
-          <Label>Duração</Label>
+          <Label>{t("duration")}</Label>
           <div className="flex gap-1">
             {([30, 60, 90] as const).map((seconds) => <button key={seconds} type="button" data-testid={`manual-duration-${seconds}`} onClick={() => props.onDuration(seconds)} className={cn("h-11 flex-1 rounded-xl border text-sm", props.duration === seconds && "border-[var(--accent-brand)] bg-[var(--accent-brand)] text-white")}>{seconds}s</button>)}
           </div>
         </div>
       </section>
       <section>
-        <Label>Cenário</Label>
+        <Label>{t("scene")}</Label>
         <div className="grid gap-3 sm:grid-cols-2">
-          <ChoiceCard data-testid="manual-scenario-auto" active={props.scenarioMode === "auto"} onClick={() => props.onScenarioMode("auto")} title="Automático por época" description="Usa personagens e tema." />
-          <ChoiceCard data-testid="manual-scenario-prompt" active={props.scenarioMode === "prompt"} onClick={() => props.onScenarioMode("prompt")} title="Descrever cenário" description="Controle local, luz e atmosfera." />
+          <ChoiceCard data-testid="manual-scenario-auto" active={props.scenarioMode === "auto"} onClick={() => props.onScenarioMode("auto")} title={t("sceneAuto")} description={t("sceneAutoBody")} />
+          <ChoiceCard data-testid="manual-scenario-prompt" active={props.scenarioMode === "prompt"} onClick={() => props.onScenarioMode("prompt")} title={t("scenePrompt")} description={t("scenePromptBody")} />
         </div>
-        {props.scenarioMode === "prompt" ? <textarea data-testid="manual-scenario-description" value={props.scenarioPrompt} onChange={(event) => props.onScenarioPrompt(event.target.value)} rows={3} placeholder="Ex.: nave retrofuturista com Saturno na janela" className="mt-3 w-full resize-none rounded-xl border bg-transparent p-3" /> : null}
+        {props.scenarioMode === "prompt" ? <textarea data-testid="manual-scenario-description" value={props.scenarioPrompt} onChange={(event) => props.onScenarioPrompt(event.target.value)} rows={3} placeholder={t("scenePlaceholder")} className="mt-3 w-full resize-none rounded-xl border bg-transparent p-3" /> : null}
       </section>
     </>
   );

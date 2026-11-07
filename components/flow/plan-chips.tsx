@@ -5,6 +5,8 @@ import type { CreationPlan, ToneOption, VoiceCatalog } from "@/lib/contract";
 import { ART_STYLES } from "@/lib/contract";
 import { languageLabel } from "@/components/flow/language-combobox";
 import { useI18n } from "@/components/locale";
+import { translate, type MessageKey } from "@/lib/i18n";
+import type { Tone } from "@/lib/contract";
 
 export type PlanField = "language" | "mode" | "characters" | "topic" | "tone" | "objective" | "style" | "scenario" | "duration" | `voice-${number}`;
 
@@ -16,6 +18,13 @@ const OBJECTIVES = {
   en: { ensinar: "Teach", debater: "Debate", entreter: "Entertain", convencer: "Persuade" },
   "pt-BR": { ensinar: "Ensinar", debater: "Debater", entreter: "Entreter", convencer: "Convencer" },
 } as const;
+const TONE_COPY: Partial<Record<Tone, MessageKey>> = {
+  humor: "toneHumor",
+  terror: "toneHorror",
+  educacional: "toneEducational",
+  sabio: "toneWise",
+  serio: "toneSerious",
+};
 
 export function PlanChips({ plan, tones, voices, onEdit }: { plan: CreationPlan; tones: ToneOption[]; voices: VoiceCatalog; onEdit: (field: PlanField) => void }) {
   const { locale, t } = useI18n();
@@ -33,7 +42,11 @@ export function PlanChips({ plan, tones, voices, onEdit }: { plan: CreationPlan;
       };
     }),
     { field: "topic", label: t("topic"), value: plan.topic },
-    { field: "tone", label: t("tone"), value: tones.find((tone) => tone.id === plan.tone)?.label ?? plan.tone },
+    { field: "tone", label: t("tone"), value: (() => {
+      const tone = tones.find((item) => item.id === plan.tone);
+      const key = tone ? TONE_COPY[tone.id as Tone] : undefined;
+      return key ? translate(locale, key) : tone?.label ?? plan.tone;
+    })() },
     { field: "objective", label: t("objective"), value: OBJECTIVES[locale][plan.objective] },
     { field: "style", label: t("style"), value: ART_STYLES.find((style) => style.id === plan.artStyle)?.label ?? plan.artStyle },
     { field: "scenario", label: t("scene"), value: plan.scenarioLabel },
@@ -47,7 +60,7 @@ export function PlanChips({ plan, tones, voices, onEdit }: { plan: CreationPlan;
           type="button"
           data-testid={`plan-chip-${chip.field}`}
           onClick={() => onEdit(chip.field)}
-          title={`Editar ${chip.label.toLowerCase()}`}
+          title={`${t("edit")} ${chip.label}`}
           className="group flex max-w-full items-center gap-2 rounded-full border border-white/10 bg-white/[0.035] px-3 py-2 text-left text-sm transition hover:border-white/25 hover:bg-white/[0.07]"
         >
           <span className="text-xs text-muted-foreground">{chip.label}</span>

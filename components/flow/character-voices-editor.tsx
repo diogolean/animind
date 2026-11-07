@@ -3,6 +3,7 @@
 import { Volume2 } from "lucide-react";
 import { cn } from "cn";
 import type { CreationPlanCharacter, LanguageCode, VoiceCatalog, VoiceGender } from "@/lib/contract";
+import { useI18n } from "@/components/locale";
 
 interface CharacterVoicesEditorProps {
   characters: CreationPlanCharacter[];
@@ -21,6 +22,7 @@ export function CharacterVoicesEditor({
   onlyIndex,
   testIdPrefix = "voice",
 }: CharacterVoicesEditorProps) {
+  const { t } = useI18n();
   const update = (index: number, patch: Partial<CreationPlanCharacter>) =>
     onChange(characters.map((character, itemIndex) => itemIndex === index ? { ...character, ...patch } : character));
 
@@ -49,7 +51,7 @@ export function CharacterVoicesEditor({
         return (
           <div key={index} className="rounded-2xl border border-white/10 p-4">
             <div className="flex flex-wrap items-center justify-between gap-3">
-              <p className="font-medium">{character.name || `Personagem ${index + 1}`}</p>
+              <p className="font-medium">{character.name || `${t("characterNumber")} ${index + 1}`}</p>
               <div className="flex rounded-full bg-white/[0.05] p-1">
                 {(["male", "female"] as const).map((option: VoiceGender) => (
                   <button
@@ -59,7 +61,7 @@ export function CharacterVoicesEditor({
                     onClick={() => update(index, { gender: option, voiceId: undefined })}
                     className={cn("rounded-full px-3 py-1 text-xs transition", gender === option ? "bg-white text-black" : "text-muted-foreground hover:text-white")}
                   >
-                    {option === "male" ? "Masc." : "Fem."}
+                    {option === "male" ? t("maleShort") : t("femaleShort")}
                   </button>
                 ))}
               </div>
@@ -71,17 +73,17 @@ export function CharacterVoicesEditor({
                 onChange={(event) => update(index, { voiceId: event.target.value === "auto" ? undefined : event.target.value })}
                 className="h-10 min-w-0 flex-1 rounded-xl border bg-background px-3 text-sm"
               >
-                <option value="auto">Automática · {gender === "male" ? "masculina" : "feminina"}</option>
+                <option value="auto">{t("automaticVoice")} · {gender === "male" ? t("maleVoice") : t("femaleVoice")}</option>
                 {voices.map((voice) => <option key={voice.id} value={voice.id}>{voice.label}</option>)}
               </select>
               <button
                 type="button"
                 data-testid={`${testIdPrefix}-preview-${index}`}
                 onClick={() => preview(character)}
-                title="Ouvir prévia"
+                title={t("hearPreview")}
                 className="flex h-10 items-center gap-2 rounded-xl border px-3 text-sm text-muted-foreground hover:text-white"
               >
-                <Volume2 className="size-4" /><span className="hidden sm:inline">Prévia</span>
+                <Volume2 className="size-4" /><span className="hidden sm:inline">{t("preview")}</span>
               </button>
             </div>
           </div>
