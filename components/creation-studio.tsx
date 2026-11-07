@@ -409,10 +409,10 @@ export function CreationStudio() {
       <section className="mx-auto max-w-3xl">
         {libraryCharacter ? (
           <p data-testid="library-character" className="mb-4 text-sm text-muted-foreground">
-            Usando <span className="text-foreground">{libraryCharacter.name}</span> da sua biblioteca
-            {libraryIntent === "debate" ? " neste debate." : " neste vídeo."}
+            {t("using")} <span className="text-foreground">{libraryCharacter.name}</span> {t("fromYourLibrary")}
+            {libraryIntent === "debate" ? ` ${t("inThisDebate")}` : ` ${t("inThisVideo")}`}
             {libraryCharacter.views.front && libraryCharacter.views.three_quarter_left && libraryCharacter.views.three_quarter_right
-              ? " Frente, 3/4 esquerda e 3/4 direita: no debate a câmera da esquerda usa o 3/4 esquerdo e a da direita usa o 3/4 direito."
+              ? ` ${t("cameraViews")}`
               : ""}
           </p>
         ) : null}
