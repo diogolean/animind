@@ -3,20 +3,39 @@ import { StoreConfigError } from "@/lib/accounts/config";
 import { isUser, requireUser } from "@/lib/accounts/http";
 import { keyFromAssetUrl, readObject } from "@/lib/accounts/object-store";
 import { puppetToRig } from "@/lib/accounts/rig";
-import { characterFor, deleteCharacterFor, updateCharacterStatus } from "@/lib/accounts/store";
-import { isLibraryStatus } from "@/lib/accounts/types";
-import { approvedEinsteinRig, approvedLibraryCharacter, isApprovedCharacterId } from "@/lib/approved/einstein";
+import { assetsFor, characterFor, deleteCharacterFor, updateCharacterStatus } from "@/lib/accounts/store";
+import { isLibraryStatus, type LibraryAsset, type LibraryCharacter, type LibraryDemo } from "@/lib/accounts/types";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+function ownedDemos(character: LibraryCharacter, assets: LibraryAsset[]): LibraryDemo[] {
+  const demos = [...(character.demos ?? [])];
+  const seen = new Set(demos.map((demo) => demo.url).filter((url): url is string => Boolean(url)));
+  for (const asset of assets) {
+    if (asset.characterId !== character.id || !asset.url || seen.has(asset.url)) continue;
+    if (asset.kind !== "video" && asset.kind !== "audio" && asset.kind !== "script" && asset.kind !== "image") continue;
+    if (asset.url === character.emotionSheetUrl) continue;
+    if (Object.values(character.views).includes(asset.url)) continue;
+    seen.add(asset.url);
+    demos.push({
+      id: asset.id,
+      label: asset.name,
+      kind: asset.kind,
+      url: asset.url,
+      ...(asset.text ? { text: asset.text } : {}),
+    });
+  }
+  return demos;
+}
+
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  if (isApprovedCharacterId(id)) return json({ character: approvedLibraryCharacter(), rig: approvedEinsteinRig() });
   const actor = await requireUser();
   if (!isUser(actor)) return actor;
   const character = await characterFor(actor, id);
   if (!character) return json({ error: "Personagem não encontrado" }, 404);
+  const demos = ownedDemos(character, await assetsFor(actor));
   const key = keyFromAssetUrl(character.puppetUrl);
   let bytes: Buffer | null = null;
   try {
@@ -33,12 +52,11 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
       rig = null;
     }
   }
-  return json({ character, rig });
+  return json({ character: { ...character, ...(demos.length ? { demos } : {}) }, rig });
 }
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  if (isApprovedCharacterId(id)) return json({ error: "Este personagem do catálogo não pode ser alterado." }, 403);
   const actor = await requireUser();
   if (!isUser(actor)) return actor;
   let body: { status?: unknown };
@@ -55,7 +73,6 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 
 export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  if (isApprovedCharacterId(id)) return json({ error: "Este personagem do catálogo não pode ser apagado." }, 403);
   const actor = await requireUser();
   if (!isUser(actor)) return actor;
   const removed = await deleteCharacterFor(actor, id);

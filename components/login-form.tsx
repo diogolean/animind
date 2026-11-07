@@ -46,7 +46,7 @@ export function LoginForm() {
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-md flex-1 flex-col justify-center px-5 py-16">
+    <div className="mx-auto flex w-full max-w-md flex-1 flex-col justify-center px-5 py-8 landscape:py-4 sm:py-16">
       <form onSubmit={submit} className="rounded-[2rem] border border-white/10 bg-white/[0.03] p-6 shadow-2xl shadow-black/20 sm:p-8">
         <h1 className="text-2xl font-medium tracking-tight">Entrar</h1>
         <p className="mt-2 text-sm text-muted-foreground">A biblioteca de personagens fica na sua conta.</p>
@@ -61,7 +61,7 @@ export function LoginForm() {
           required
           value={email}
           onChange={(event) => setEmail(event.target.value)}
-          className="mt-2 w-full rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm outline-none focus:border-white/30"
+          className="mt-2 min-h-11 w-full rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-base outline-none focus:border-white/30"
         />
         <label className="mt-5 block text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground" htmlFor="login-password">
           Senha
@@ -74,7 +74,7 @@ export function LoginForm() {
           required
           value={password}
           onChange={(event) => setPassword(event.target.value)}
-          className="mt-2 w-full rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm outline-none focus:border-white/30"
+          className="mt-2 min-h-11 w-full rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-base outline-none focus:border-white/30"
         />
         {error ? (
           <p data-testid="login-error" className="mt-4 text-sm text-red-400">
@@ -85,7 +85,7 @@ export function LoginForm() {
           type="submit"
           data-testid="login-submit"
           disabled={pending}
-          className="mt-6 flex h-11 w-full items-center justify-center gap-2 rounded-full bg-white text-sm font-medium text-black disabled:opacity-50"
+          className="mt-6 flex min-h-11 w-full items-center justify-center gap-2 rounded-full bg-white text-base font-medium text-black disabled:opacity-50"
         >
           {pending ? <Loader2 className="size-4 animate-spin" /> : null}
           Entrar
@@ -98,7 +98,7 @@ export function LoginForm() {
         <a
           data-testid="login-google"
           href={`/api/auth/google?next=${encodeURIComponent(nextPath(params.get("next")))}`}
-          className="mt-5 flex h-11 w-full items-center justify-center rounded-full border border-white/15 text-sm font-medium hover:bg-white/5"
+          className="mt-5 flex min-h-11 w-full items-center justify-center rounded-full border border-white/15 text-base font-medium hover:bg-white/5"
         >
           Entrar com Google
         </a>

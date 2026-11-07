@@ -1,7 +1,15 @@
+import { existsSync, statSync } from "node:fs";
+import path from "node:path";
 import { databaseUrl, usesBlob } from "../lib/accounts/config";
 import { loadLocalEnv } from "../lib/accounts/env-file";
+import { productEnv } from "../lib/product-env";
 import { upsertPilotSuperAdmin } from "../lib/accounts/store";
 import { characterPackagePath, importOwnedCharacter } from "./import-character";
+
+const PRIVATE_PACKS = [
+  { dir: "private/characters/einstein-realista", name: "Einstein realista" },
+  { dir: "private/characters/einstein-charge", name: "Einstein charge" },
+];
 
 /**
  * Creates the pilot super admin (Diogo).
@@ -32,6 +40,14 @@ async function main() {
     if (zip) {
       const character = await importOwnedCharacter({ email: user.email, zip });
       console.log(`character ${character.name} id=${character.id}`);
+    }
+    if (productEnv("SKIP_CHARACTER_IMPORT") !== "1") {
+      for (const pack of PRIVATE_PACKS) {
+        const dir = path.join(process.cwd(), pack.dir);
+        if (!existsSync(dir) || !statSync(dir).isDirectory()) continue;
+        const character = await importOwnedCharacter({ email: user.email, dir, name: pack.name });
+        console.log(`character ${character.name} id=${character.id} owner=${user.id}`);
+      }
     }
   } catch (error) {
     console.error((error as Error).message);

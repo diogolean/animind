@@ -369,7 +369,7 @@ export function CreationStudio() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-5xl flex-1 px-5 pt-[12vh] pb-16 sm:px-8 sm:pt-[16vh]">
+    <div className="mx-auto w-full min-w-0 max-w-5xl flex-1 px-5 pt-8 pb-16 landscape:pt-4 sm:px-8 sm:pt-[16vh]">
       <section className="mx-auto max-w-3xl">
         {libraryCharacter ? (
           <p data-testid="library-character" className="mb-4 text-sm text-muted-foreground">
@@ -394,8 +394,8 @@ export function CreationStudio() {
             placeholder="Descreva sua criação&#10;Uma conversa entre Jesus e o diabo debatendo temas bíblicos"
             className="min-h-52 w-full resize-none bg-transparent p-4 text-xl leading-relaxed tracking-tight outline-none placeholder:text-muted-foreground/40 sm:p-6 sm:text-2xl"
           />
-          <div className="flex items-center justify-between gap-4 border-t border-white/8 px-4 pt-3 pb-1 sm:px-6">
-            <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-white/8 px-3 pt-3 pb-1 sm:px-6">
+            <div className="flex min-h-11 items-center gap-3">
               <button
                 type="button"
                 role="switch"
@@ -413,21 +413,21 @@ export function CreationStudio() {
                     requestPlan(prompt);
                   }
                 }}
-                className={cn("relative h-7 w-12 rounded-full transition-colors", automatic ? "bg-[var(--accent-brand)]" : "bg-white/10")}
+                className={cn("relative h-11 w-16 rounded-full transition-colors", automatic ? "bg-[var(--accent-brand)]" : "bg-white/10")}
               >
-                <span className={cn("absolute top-1 left-1 size-5 rounded-full bg-white shadow transition-transform", automatic ? "translate-x-5" : "translate-x-0")} />
+                <span className={cn("absolute top-2 left-2 size-7 rounded-full bg-white shadow transition-transform", automatic ? "translate-x-5" : "translate-x-0")} />
                 <span className="sr-only">{automatic ? "Desligar automático" : "Ligar automático"}</span>
               </button>
               <span className="text-sm font-medium">Automático</span>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="ml-auto flex items-center gap-2">
               <button
                 type="button"
                 data-testid="details-toggle"
                 aria-label="Mais ajustes"
                 aria-expanded={detailsOpen}
                 onClick={() => setDetailsOpen((current) => !current)}
-                className={cn("grid size-10 place-items-center rounded-full text-muted-foreground transition hover:bg-white/8 hover:text-white", detailsOpen && "bg-white/8 text-white")}
+                className={cn("grid size-11 place-items-center rounded-full text-muted-foreground transition hover:bg-white/8 hover:text-white", detailsOpen && "bg-white/8 text-white")}
               >
                 <Ellipsis className="size-5" />
               </button>
@@ -436,7 +436,7 @@ export function CreationStudio() {
                 data-testid="generate"
                 disabled={!valid || rendering || planning}
                 onClick={generate}
-                className="flex h-10 items-center gap-2 rounded-full bg-white px-5 text-sm font-medium text-black transition hover:bg-white/90 disabled:cursor-not-allowed disabled:opacity-25"
+                className="inline-flex min-h-11 items-center gap-2 rounded-full bg-white px-5 text-sm font-medium text-black transition hover:bg-white/90 disabled:cursor-not-allowed disabled:opacity-25"
               >
                 {rendering || planning ? <Loader2 className="size-4 animate-spin" /> : <Sparkles className="size-4" />}
                 {planning ? "Entendendo" : rendering ? "Criando" : result ? "Criar novamente" : "Criar"}

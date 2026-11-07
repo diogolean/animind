@@ -1,10 +1,16 @@
 import { json } from "@/lib/core";
-import { approvedLibraryCharacter } from "@/lib/approved/einstein";
+import { isUser, requireUser } from "@/lib/accounts/http";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-/** Public catalog. No account, Neon, or Blob required. */
-export function GET() {
-  return json({ characters: [approvedLibraryCharacter()] });
+/**
+ * There is no public character catalog.
+ * Private packs stay in the owner's library. A future explicit demo opt-in can
+ * use another flag; this route must not promote anyone's characters.
+ */
+export async function GET() {
+  const actor = await requireUser();
+  if (!isUser(actor)) return actor;
+  return json({ characters: [] });
 }

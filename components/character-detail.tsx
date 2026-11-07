@@ -123,20 +123,20 @@ export function CharacterDetail() {
     (view) => view.id !== "three_quarter" || !character.views.three_quarter_left,
   );
   const viewColumns = availableViews.length >= 3 ? "sm:grid-cols-3" : availableViews.length === 2 ? "sm:grid-cols-2" : "";
-  const viewCard = availableViews.length > 1 ? "w-[min(78vw,20rem)] shrink-0 snap-center sm:w-auto sm:shrink" : "w-full";
+  const viewCard = availableViews.length > 1 ? "w-[min(17.5rem,calc(100vw-4.5rem))] shrink-0 snap-center sm:w-auto sm:shrink" : "w-full";
   return (
-    <div data-testid="character-detail" className="mx-auto w-full max-w-5xl flex-1 px-5 py-10 sm:px-8">
-      <Link href="/characters" className="text-sm text-muted-foreground hover:text-foreground">
+    <div data-testid="character-detail" className="mx-auto w-full min-w-0 max-w-5xl flex-1 px-5 py-6 landscape:py-4 sm:px-8 sm:py-10">
+      <Link href="/characters" className="inline-flex min-h-11 items-center text-sm text-muted-foreground hover:text-foreground">
         Meus personagens
       </Link>
-      <div className="mt-4 flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-medium tracking-tight">{character.name}</h1>
-          <p className="mt-2 text-sm text-muted-foreground">
+      <div className="mt-2 flex flex-wrap items-end justify-between gap-4">
+        <div className="min-w-0">
+          <h1 className="break-words text-3xl font-medium tracking-tight">{character.name}</h1>
+          <p className="mt-2 break-words text-sm text-muted-foreground">
             Ficha: {character.personaSheetRef ? <span data-testid="persona-ref">{character.personaSheetRef}</span> : "sem referência"}
           </p>
           {character.owner ? (
-            <p data-testid="character-owner" className="mt-1 text-sm text-muted-foreground">
+            <p data-testid="character-owner" className="mt-1 break-words text-sm text-muted-foreground">
               Conta: {character.owner.name} · {character.owner.email}
             </p>
           ) : null}
@@ -157,7 +157,7 @@ export function CharacterDetail() {
             value={character.status}
             disabled={pending}
             onChange={(event) => changeStatus(event.target.value as LibraryStatus)}
-            className="rounded-full border border-white/10 bg-black/30 px-3 py-2 text-sm"
+            className="min-h-11 rounded-full border border-white/10 bg-black/30 px-3 text-base"
           >
             {(Object.keys(STATUS_LABEL) as LibraryStatus[]).map((status) => (
               <option key={status} value={status}>
@@ -170,21 +170,17 @@ export function CharacterDetail() {
         </div>
       </div>
 
-      <div className={`mt-8 flex snap-x snap-mandatory gap-4 overflow-x-auto pb-1 sm:grid sm:overflow-visible ${viewColumns}`}>
+      <div data-testid="view-strip" className={`mt-6 flex w-full min-w-0 snap-x snap-mandatory gap-4 overflow-x-auto overscroll-x-contain pb-1 max-sm:-mx-5 max-sm:px-5 max-sm:scroll-px-5 sm:grid sm:overflow-visible ${viewColumns}`}>
         {availableViews.map((view) => (
           <figure key={view.id} data-testid={view.testId} className={`${viewCard} overflow-hidden rounded-[1.5rem] border border-white/10 bg-black/30`}>
-            <div className="flex aspect-[3/4] items-center justify-center bg-black sm:aspect-[9/16]">
+            <div className="flex aspect-[3/4] items-center justify-center bg-black max-sm:landscape:aspect-square sm:aspect-[9/16]">
               <img src={character.views[view.id]} alt={view.label} className="size-full object-contain" />
             </div>
             <figcaption className="px-4 py-3 text-sm">{view.label}</figcaption>
           </figure>
         ))}
       </div>
-      {character.catalog ? (
-        <p className="mt-3 text-sm text-muted-foreground">
-          Frente, 3/4 esquerda e 3/4 direita do pacote aprovado. As bocas A–H e X de cada vista entram no debate: a câmera da esquerda usa o 3/4 esquerdo e a da direita usa o 3/4 direito.
-        </p>
-      ) : null}
+      <PackPieces character={character} />
 
       {rig?.views.front.layers.length ? (
         <section className="mt-8">
@@ -199,13 +195,13 @@ export function CharacterDetail() {
       {mouthLayers(character).length ? (
         <section className="mt-8">
           <h2 className="text-sm font-medium">Bocas</h2>
-          <ul className="mt-3 grid grid-cols-3 gap-3 sm:grid-cols-5 lg:grid-cols-9">
+          <ul className="mt-3 grid grid-cols-3 gap-2 min-[400px]:gap-3 sm:grid-cols-5 lg:grid-cols-9">
             {mouthLayers(character).map((layer) => (
               <li key={layer.name} data-testid={`mouth-${layer.name}`} className="overflow-hidden rounded-2xl border border-white/10 bg-[#f2c9a0]">
                 <div className="flex aspect-square items-center justify-center p-2">
                   <img src={layer.url} alt={`Boca ${layer.name}`} className="max-h-full max-w-full object-contain" />
                 </div>
-                <p className="border-t border-white/10 px-2 py-1.5 text-center text-xs">{layer.name}</p>
+                <p className="break-words border-t border-white/10 px-2 py-1.5 text-center text-xs">{layer.name}</p>
               </li>
             ))}
           </ul>
@@ -216,7 +212,7 @@ export function CharacterDetail() {
         <h2 className="text-sm font-medium">Ficha de emoções</h2>
         <div data-testid="emotion-sheet" className="mt-3 overflow-hidden rounded-[1.5rem] border border-white/10 bg-black/30">
           {character.emotionSheetUrl ? (
-            <button type="button" data-testid="emotion-sheet-zoom" onClick={() => setSheetOpen(true)} className="block w-full cursor-zoom-in text-left">
+            <button type="button" data-testid="emotion-sheet-zoom" onClick={() => setSheetOpen(true)} className="block min-h-11 w-full cursor-zoom-in text-left">
               <img src={character.emotionSheetUrl} alt="Ficha de emoções" className="w-full" />
               <span className="block px-4 py-3 text-sm text-muted-foreground">Toque para ver em tamanho real</span>
             </button>
@@ -231,11 +227,11 @@ export function CharacterDetail() {
           aria-modal="true"
           aria-label="Ficha de emoções em tamanho real"
           data-testid="emotion-sheet-lightbox"
-          className="fixed inset-0 z-50 overflow-auto overscroll-contain bg-black/95 px-3 pt-[max(0.75rem,env(safe-area-inset-top))] pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:p-8"
+          className="fixed inset-0 z-50 overflow-auto overscroll-contain bg-black/95 px-[max(0.75rem,env(safe-area-inset-left))] pt-[max(0.75rem,env(safe-area-inset-top))] pr-[max(0.75rem,env(safe-area-inset-right))] pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:p-8"
           onClick={() => setSheetOpen(false)}
         >
           <div className="sticky top-0 z-10 mb-3 flex justify-end">
-            <button type="button" onClick={() => setSheetOpen(false)} className="rounded-full border border-white/20 bg-black/80 px-4 py-2 text-sm">
+            <button type="button" onClick={() => setSheetOpen(false)} className="inline-flex min-h-11 items-center rounded-full border border-white/20 bg-black/80 px-4 text-sm">
               Fechar
             </button>
           </div>
@@ -249,19 +245,18 @@ export function CharacterDetail() {
         </div>
       ) : null}
 
-      {character.demos?.length ? <Demos demos={character.demos} /> : null}
       {character.layers.length && !character.catalog ? (
         <p className="mt-4 text-xs text-muted-foreground">{character.layers.length} camadas no armazenamento de objetos.</p>
       ) : null}
       {error ? <p className="mt-4 text-sm text-red-400">{error}</p> : null}
 
-      <div className="mt-8 flex flex-wrap gap-3">
+      <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
         {ready ? (
           <>
-            <Link href={`/?library=${encodeURIComponent(character.id)}&intent=video`} data-testid="use-video" className="rounded-full bg-white px-5 py-2.5 text-sm font-medium text-black">
+            <Link href={`/?library=${encodeURIComponent(character.id)}&intent=video`} data-testid="use-video" className="inline-flex min-h-11 items-center justify-center rounded-full bg-white px-5 text-sm font-medium text-black">
               Novo vídeo
             </Link>
-            <Link href={`/?library=${encodeURIComponent(character.id)}&intent=debate`} data-testid="use-debate" className="rounded-full border border-white/15 px-5 py-2.5 text-sm font-medium">
+            <Link href={`/?library=${encodeURIComponent(character.id)}&intent=debate`} data-testid="use-debate" className="inline-flex min-h-11 items-center justify-center rounded-full border border-white/15 px-5 text-sm font-medium">
               Debate
             </Link>
           </>
@@ -269,12 +264,59 @@ export function CharacterDetail() {
           <p className="text-sm text-muted-foreground">Marque o personagem como pronto para usá-lo num vídeo ou debate.</p>
         )}
         {character.catalog ? null : (
-          <button type="button" data-testid="delete-character" disabled={pending} onClick={remove} className="rounded-full px-4 py-2.5 text-sm text-red-400">
+          <button type="button" data-testid="delete-character" disabled={pending} onClick={remove} className="inline-flex min-h-11 items-center justify-center rounded-full px-4 text-sm text-red-400">
             Apagar
           </button>
         )}
       </div>
+      {character.demos?.length ? <Demos demos={character.demos} /> : null}
     </div>
+  );
+}
+
+function viewFolder(url: string): string {
+  const match = url.match(/layers\/([^/]+)\//);
+  if (match?.[1] === "three-quarter") return "3/4 esquerda";
+  if (match?.[1] === "three-quarter-right") return "3/4 direita";
+  if (match?.[1] === "front") return "frente";
+  return match?.[1] ?? "";
+}
+
+function PackPieces({ character }: { character: LibraryCharacter }) {
+  const eyes = character.layers.filter((layer) => layer.name === "eyes" || layer.name.startsWith("eye") || layer.name === "iris");
+  const brows = character.layers.filter((layer) => layer.name.includes("brow"));
+  const expressions = character.layers.filter((layer) => layer.url.includes("/expressions/"));
+  if (!eyes.length && !brows.length && !expressions.length) return null;
+  return (
+    <div className="mt-8 space-y-8">
+      {eyes.length ? <PieceGrid title="Olhos" testId="pack-eyes" pieces={eyes} /> : null}
+      {brows.length ? <PieceGrid title="Sobrancelhas" testId="pack-brows" pieces={brows} /> : null}
+      {expressions.length ? <PieceGrid title="Expressões" testId="pack-expressions" pieces={expressions} /> : null}
+    </div>
+  );
+}
+
+function PieceGrid({ title, testId, pieces }: { title: string; testId: string; pieces: LibraryCharacter["layers"] }) {
+  return (
+    <section data-testid={testId}>
+      <h2 className="text-sm font-medium">{title}</h2>
+      <ul className="mt-3 grid grid-cols-2 gap-2 min-[400px]:grid-cols-3 min-[400px]:gap-3 sm:grid-cols-5">
+        {pieces.map((piece) => {
+          const folder = viewFolder(piece.url);
+          return (
+            <li key={piece.url} className="overflow-hidden rounded-2xl border border-white/10 bg-black/40">
+              <div className="flex aspect-square items-center justify-center p-2">
+                <img src={piece.url} alt="" className="max-h-full max-w-full object-contain" />
+              </div>
+              <p className="break-words border-t border-white/10 px-2 py-1.5 text-center text-xs">
+                {piece.name}
+                {folder ? ` · ${folder}` : ""}
+              </p>
+            </li>
+          );
+        })}
+      </ul>
+    </section>
   );
 }
 
@@ -334,7 +376,7 @@ function Demos({ demos }: { demos: LibraryDemo[] }) {
           <li key={demo.id} data-testid={demo.id} className="overflow-hidden rounded-[1.5rem] border border-white/10 bg-black/30">
             <p className="px-4 pt-4 text-sm">{demo.label}</p>
             <div className="p-4">
-              {demo.kind === "video" && demo.url ? <video src={demo.url} controls muted playsInline preload="metadata" className="w-full rounded-xl" /> : null}
+              {demo.kind === "video" && demo.url ? <video src={demo.url} controls muted playsInline preload="metadata" className="max-w-full w-full rounded-xl" /> : null}
               {demo.kind === "audio" && demo.url ? <audio src={demo.url} controls preload="metadata" className="w-full" /> : null}
               {demo.kind === "image" && demo.url ? <img src={demo.url} alt={demo.label} className="w-full rounded-xl" /> : null}
               {demo.kind === "script" && demo.text ? <p className="text-sm leading-relaxed text-muted-foreground">{demo.text}</p> : null}

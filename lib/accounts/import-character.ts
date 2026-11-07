@@ -1,13 +1,13 @@
 import { deleteObjectPrefix, keyFromAssetUrl, putObject } from "./object-store";
 import { newId, normalizeRel } from "./paths";
 import { findOwnedCharacter, writeImportedCharacter } from "./store";
-import type { LibraryCharacter, LibraryStatus, LibraryViewName } from "./types";
+import type { LibraryCharacter, LibraryDemo, LibraryStatus, LibraryViewName } from "./types";
 import { isLibraryStatus } from "./types";
 
 const MAX_FILE = 8 * 1024 * 1024;
 const MAX_TOTAL = 64 * 1024 * 1024;
 const MAX_FILES = 400;
-const ALLOWED = new Set(["png", "webp", "jpg", "jpeg", "json", "txt", "md"]);
+const ALLOWED = new Set(["png", "webp", "jpg", "jpeg", "json", "txt", "md", "mp4", "mp3"]);
 
 const VIEW_BASENAMES: Record<string, LibraryViewName> = {
   front: "front",
@@ -161,6 +161,33 @@ function pickView(files: ImportFile[], urls: Map<string, string>, view: LibraryV
   return matches[0] ? urls.get(matches[0].path) : undefined;
 }
 
+function collectDemos(files: ImportFile[], urls: Map<string, string>): LibraryDemo[] {
+  const demos: LibraryDemo[] = [];
+  for (const file of files) {
+    const lower = file.path.toLowerCase();
+    const kind: LibraryDemo["kind"] | null = lower.endsWith(".mp4")
+      ? "video"
+      : lower.endsWith(".mp3")
+        ? "audio"
+        : lower.endsWith(".txt") && lower.includes("dialog")
+          ? "script"
+          : lower.endsWith("emotion-sheet-en.jpg")
+            ? "image"
+            : null;
+    if (!kind) continue;
+    const url = urls.get(file.path);
+    if (!url) continue;
+    demos.push({
+      id: file.path,
+      label: file.path.split("/").pop() ?? file.path,
+      kind,
+      url,
+      ...(kind === "script" ? { text: file.bytes.toString("utf8").slice(0, 4000) } : {}),
+    });
+  }
+  return demos;
+}
+
 function pickEmotion(files: ImportFile[], urls: Map<string, string>): string | null {
   const matches = files.filter((file) => isImage(file.path) && EMOTION_BASENAMES.has(basenameKey(file.path)));
   matches.sort((a, b) => a.path.length - b.path.length);
@@ -289,8 +316,10 @@ export async function importCharacterPackage(options: {
   const gallery = new Set(Object.values(views));
   if (emotionSheetUrl) gallery.add(emotionSheetUrl);
   collectImageRefs(puppet, referenced);
+  const demos = collectDemos(files, urls);
+  const demoPaths = new Set(demos.map((demo) => demo.id));
   const layers = files
-    .filter((file) => isImage(file.path) && (referenced.has(file.path) || /(^|\/)layers\//.test(file.path)))
+    .filter((file) => isImage(file.path) && !demoPaths.has(file.path) && (referenced.has(file.path) || /(^|\/)layers\//.test(file.path)))
     .map((file) => ({ name: basenameKey(file.path), url: urls.get(file.path)! }))
     .filter((layer) => layer.url && !gallery.has(layer.url));
 
@@ -303,6 +332,7 @@ export async function importCharacterPackage(options: {
     puppetUrl,
     layers,
     emotionSheetUrl,
+    ...(demos.length ? { demos } : {}),
     status: (options.status as LibraryStatus) || "ready",
     createdAt: previous?.createdAt ?? now,
     updatedAt: now,

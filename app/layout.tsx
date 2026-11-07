@@ -38,11 +38,11 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="pt-BR" suppressHydrationWarning className={`${geist.variable} h-full antialiased`}>
-      <body className="flex min-h-full flex-col">
+      <body className="flex min-h-dvh flex-col">
         <ThemeProvider attribute="class" defaultTheme="dark" enableSystem={false}>
           <SiteHeader />
           <main className="flex flex-1 flex-col">{children}</main>
-          <footer className="py-6 text-center text-xs text-muted-foreground/70">Paródia • Gerado por IA em todo vídeo</footer>
+          <footer className="px-4 py-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] text-center text-xs text-muted-foreground/70">Paródia • Gerado por IA em todo vídeo</footer>
           <Toaster position="top-center" />
           <SwRegister />
         </ThemeProvider>

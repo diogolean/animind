@@ -361,6 +361,19 @@ export async function saveCharacterAssets(character: LibraryCharacter): Promise<
       projectId: character.id,
     });
   }
+  for (const demo of character.demos ?? []) {
+    if (!demo.url && !demo.text) continue;
+    const kind = demo.kind === "image" ? "image" : demo.kind;
+    await saveAsset(character.ownerId, {
+      kind,
+      name: demo.label,
+      url: demo.url ?? null,
+      text: demo.url ? null : (demo.text ?? null),
+      mime: demo.kind === "video" ? "video/mp4" : demo.kind === "audio" ? "audio/mpeg" : demo.kind === "script" ? "text/plain" : "image/jpeg",
+      characterId: character.id,
+      projectId: character.id,
+    });
+  }
 }
 
 export async function resolveOwner(actor: PublicUser, ownerEmail?: string): Promise<Result<PublicUser>> {

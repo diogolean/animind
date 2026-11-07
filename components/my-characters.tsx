@@ -8,27 +8,18 @@ import { STATUS_LABEL } from "@/lib/accounts/labels";
 import type { LibraryCharacter, PublicUser } from "@/lib/accounts/types";
 
 async function readLibrary(): Promise<{ characters: LibraryCharacter[]; viewer: PublicUser | null; error: string; notice: string }> {
-  const [approvedResponse, libraryResponse] = await Promise.all([
-    fetch("/api/library/approved", { cache: "no-store" }),
-    fetch("/api/library", { cache: "no-store" }),
-  ]);
-  const approved = (await approvedResponse.json().catch(() => ({}))) as { characters?: LibraryCharacter[] };
-  const catalog = approved.characters ?? [];
-  if (libraryResponse.status === 401 || libraryResponse.status === 503) {
-    return {
-      characters: catalog,
-      viewer: null,
-      error: catalog.length ? "" : libraryResponse.status === 401 ? "Entre para ver os seus personagens." : "A biblioteca da conta não está disponível neste deploy.",
-      notice: libraryResponse.status === 503 && catalog.length ? "A biblioteca da conta não está disponível neste deploy. O catálogo aprovado continua aqui." : "",
-    };
+  const libraryResponse = await fetch("/api/library", { cache: "no-store" });
+  if (libraryResponse.status === 401) {
+    return { characters: [], viewer: null, error: "", notice: "" };
+  }
+  if (libraryResponse.status === 503) {
+    return { characters: [], viewer: null, error: "A biblioteca da conta não está disponível neste deploy.", notice: "" };
   }
   const data = (await libraryResponse.json().catch(() => ({}))) as { error?: string; characters?: LibraryCharacter[]; viewer?: PublicUser };
   if (!libraryResponse.ok) {
-    return { characters: catalog, viewer: null, error: data.error ?? "Não foi possível carregar a biblioteca", notice: "" };
+    return { characters: [], viewer: null, error: data.error ?? "Não foi possível carregar a biblioteca", notice: "" };
   }
-  const mine = data.characters ?? [];
-  const extra = catalog.filter((character) => !mine.some((item) => item.id === character.id));
-  return { characters: [...mine, ...extra], viewer: data.viewer ?? null, error: "", notice: "" };
+  return { characters: data.characters ?? [], viewer: data.viewer ?? null, error: "", notice: "" };
 }
 
 export function MyCharacters() {
@@ -102,16 +93,16 @@ export function MyCharacters() {
   }
 
   return (
-    <div data-testid="my-characters" className="mx-auto w-full max-w-5xl flex-1 px-5 py-10 sm:px-8">
+    <div data-testid="my-characters" className="mx-auto w-full min-w-0 max-w-5xl flex-1 px-5 py-6 landscape:py-4 sm:px-8 sm:py-10">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <h1 className="text-3xl font-medium tracking-tight">Meus personagens</h1>
           <p className="mt-2 max-w-xl text-sm text-muted-foreground">
             {viewer?.role === "super_admin"
-              ? "Você vê e gerencia a biblioteca de todo mundo. O Einstein aprovado fica no catálogo."
+              ? "Você vê e gerencia a biblioteca de todo mundo. Os personagens continuam privados para as outras contas."
               : viewer
-                ? "Personagens desta conta, mais o catálogo aprovado. Importe uma pasta com puppet.json e as camadas PNG."
-                : "O Einstein aprovado está no catálogo. Entre para ver e importar os personagens da sua conta."}
+                ? "Só os personagens desta conta. Importe uma pasta com puppet.json e as camadas PNG."
+                : "Entre para ver os personagens da sua conta."}
           </p>
           {viewer ? null : (
             <Link href="/login?next=/characters" className="mt-3 inline-block text-sm underline">
@@ -132,7 +123,7 @@ export function MyCharacters() {
         <p className="mt-10 flex items-center gap-2 text-sm text-muted-foreground">
           <Loader2 className="size-4 animate-spin" /> Carregando
         </p>
-      ) : characters.length === 0 ? (
+      ) : !viewer ? null : characters.length === 0 ? (
         <p data-testid="characters-empty" className="mt-10 text-sm text-muted-foreground">
           Nenhum personagem ainda.
         </p>
@@ -154,7 +145,7 @@ export function MyCharacters() {
                         <div className="flex aspect-[9/16] items-center justify-center">
                           <img src={angle.url} alt={angle.label} className="size-full object-contain" />
                         </div>
-                        <figcaption className="px-1 py-1.5 text-center text-[10px] text-muted-foreground">{angle.label}</figcaption>
+                        <figcaption className="truncate px-1 py-1.5 text-center text-[10px] text-muted-foreground">{angle.label}</figcaption>
                       </figure>
                     ))}
                   </div>
@@ -196,8 +187,8 @@ export function MyCharacters() {
         <h2 className="text-sm font-medium">Importar pasta</h2>
         <p className="mt-1 text-sm text-muted-foreground">puppet.json, as vistas que a pasta tiver (frente e 3/4; perfil se houver), ficha de emoções e PNGs em layers/&lt;vista&gt;/.</p>
         <div className="mt-4 grid gap-3 sm:grid-cols-2">
-          <input name="name" placeholder="Nome (opcional)" className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm outline-none" />
-          <input name="persona" placeholder="Ref. da ficha (opcional)" className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm outline-none" />
+          <input name="name" placeholder="Nome (opcional)" className="min-h-11 w-full min-w-0 rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-base outline-none" />
+          <input name="persona" placeholder="Ref. da ficha (opcional)" className="min-h-11 w-full min-w-0 rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-base outline-none" />
         </div>
         <input
           ref={folderRef}
@@ -206,13 +197,13 @@ export function MyCharacters() {
           type="file"
           multiple
           required
-          className="mt-3 block w-full max-w-full text-sm text-muted-foreground file:mr-3 file:rounded-full file:border-0 file:bg-white file:px-4 file:py-2 file:text-sm file:font-medium file:text-black"
+          className="mt-3 block w-full max-w-full text-base text-muted-foreground file:mr-3 file:inline-flex file:min-h-11 file:items-center file:rounded-full file:border-0 file:bg-white file:px-4 file:text-sm file:font-medium file:text-black"
         />
         <button
           type="submit"
           data-testid="import-submit"
           disabled={importing}
-          className="mt-4 flex h-10 items-center gap-2 rounded-full bg-white px-5 text-sm font-medium text-black disabled:opacity-50"
+          className="mt-4 inline-flex min-h-11 items-center gap-2 rounded-full bg-white px-5 text-sm font-medium text-black disabled:opacity-50"
         >
           {importing ? <Loader2 className="size-4 animate-spin" /> : null}
           Importar

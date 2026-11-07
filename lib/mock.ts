@@ -10,10 +10,12 @@ import {
   type PersonaSheet,
   type QuoteRef,
   type ViewName,
+  type CharacterView,
+  type Layer,
+  type Viseme,
 } from "./contract";
 import { mockSheet, type QuoteSheet } from "./quote-sheets";
 import { checkFidelity } from "./script-qa";
-import { applyApprovedCharacters } from "./approved/einstein";
 import { portraitById, portraitImageUrl } from "./catalog";
 
 const hash = (s: string) => {
@@ -180,11 +182,31 @@ function personas(r: RenderRequest): PersonaSheet[] {
 interface MockJobState { r: RenderRequest; c: number }
 const RENDER_MS = 7000;
 
+function keepUrl(url: string): string {
+  if (!url || url.startsWith("data:") || url.length > 500) return "";
+  return url;
+}
+
+function keepLayer(layer: Layer): Layer {
+  return { ...layer, url: keepUrl(layer.url) };
+}
+
+/** Drop uploaded data URLs. Object paths stay so a private rig still draws after the job id round-trip. */
+function keepViews(views: Character["views"]): Character["views"] {
+  const one = (view: CharacterView): CharacterView => {
+    const visemes: CharacterView["visemes"] = {};
+    for (const [name, layer] of Object.entries(view.visemes)) {
+      if (layer) visemes[name as Viseme] = keepLayer(layer);
+    }
+    return { ...view, layers: view.layers.map(keepLayer), visemes };
+  };
+  return { front: one(views.front), left: one(views.left), right: one(views.right) };
+}
+
 export function mockCreateJob(req: RenderRequest): RenderJob {
-  // Strip heavy fields (uploaded data URLs) from the stateless id.
   const lite: RenderRequest = {
     ...req,
-    characters: req.characters.map((c) => ({ ...c, views: emptyViews(), photo: c.photo && { ...c.photo, url: "" } })),
+    characters: req.characters.map((c) => ({ ...c, views: keepViews(c.views), photo: c.photo && { ...c.photo, url: keepUrl(c.photo.url) } })),
   };
   return { id: `mock_${b64({ r: lite, c: Date.now() } satisfies MockJobState)}`, status: "queued", progress: 0 };
 }
@@ -193,7 +215,7 @@ export function mockGetJob(id: string): RenderJob {
   const { r, c } = unb64<MockJobState>(id.replace(/^mock_/, ""));
   const p = Math.min(1, (Date.now() - c) / RENDER_MS);
   if (p < 1) return { id, status: p < 0.15 ? "queued" : "running", progress: Math.round(p * 100) / 100 };
-  const characters = applyApprovedCharacters(r.characters);
+  const characters = r.characters;
   const lines = script({ ...r, characters });
   return {
     id,

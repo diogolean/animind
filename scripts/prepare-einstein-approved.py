@@ -126,6 +126,10 @@ def save_png(image: Image.Image, path: Path) -> None:
 
 
 def main() -> None:
+    raise SystemExit(
+        "Este script republicava a frente antiga em public/. "
+        "Os dois pacotes privados estão em private/characters/ e não devem voltar para o catálogo público."
+    )
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--pack", required=True, type=Path)
     parser.add_argument("--en-contact", required=True, type=Path)

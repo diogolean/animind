@@ -17,7 +17,7 @@ import { readZip } from "../lib/accounts/zip-package";
  * Optional: --name, --persona, --status ready|draft|archived
  * Importing the same owner and display name again replaces that character.
  */
-const ALLOWED = new Set(["png", "webp", "jpg", "jpeg", "json", "txt", "md"]);
+const ALLOWED = new Set(["png", "webp", "jpg", "jpeg", "json", "txt", "md", "mp4", "mp3"]);
 const MAX_FILE = 8 * 1024 * 1024;
 
 function arg(name: string): string | undefined {

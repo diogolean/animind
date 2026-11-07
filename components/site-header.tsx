@@ -62,30 +62,30 @@ export function SiteHeader() {
   }
 
   return (
-    <header className="mx-auto flex w-full max-w-5xl flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3 pt-[max(0.75rem,env(safe-area-inset-top))] sm:px-6">
-      <Link href="/" className="flex items-center gap-2 text-sm font-medium tracking-tight">
+    <header className="mx-auto flex w-full max-w-5xl flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2 pt-[max(0.5rem,env(safe-area-inset-top))] sm:px-6">
+      <Link href="/" className="inline-flex min-h-11 items-center gap-2 text-sm font-medium tracking-tight">
         <span className="size-2 rounded-full bg-[var(--accent-brand)]" />
         animindly
       </Link>
       <nav className="ml-auto flex max-w-full flex-wrap items-center justify-end gap-x-3 gap-y-1">
-      <Link href="/characters" data-testid="my-characters-link" className="text-sm text-muted-foreground hover:text-foreground">
+      <Link href="/characters" data-testid="my-characters-link" className="inline-flex min-h-11 items-center text-sm text-muted-foreground hover:text-foreground">
         Meus personagens
       </Link>
       {user ? (
         <>
-          <Link href="/biblioteca" data-testid="biblioteca-link" className="text-sm text-muted-foreground hover:text-foreground">
+          <Link href="/biblioteca" data-testid="biblioteca-link" className="inline-flex min-h-11 items-center text-sm text-muted-foreground hover:text-foreground">
             Biblioteca
           </Link>
           <span className="hidden text-sm text-muted-foreground sm:inline">{user.name}</span>
-          <span data-testid="account-role" data-role={user.role} className="rounded-full border border-white/10 px-2 py-0.5 text-[10px] uppercase tracking-wide text-muted-foreground">
+          <span data-testid="account-role" data-role={user.role} className="rounded-full border border-white/10 px-2 py-1 text-[10px] uppercase tracking-wide text-muted-foreground">
             {ROLE_LABEL[user.role]}
           </span>
-          <button type="button" data-testid="logout" onClick={logout} className="text-sm text-muted-foreground hover:text-foreground">
+          <button type="button" data-testid="logout" onClick={logout} className="inline-flex min-h-11 items-center text-sm text-muted-foreground hover:text-foreground">
             Sair
           </button>
         </>
       ) : (
-        <Link href="/login" data-testid="login-link" className="text-sm text-muted-foreground hover:text-foreground">
+        <Link href="/login" data-testid="login-link" className="inline-flex min-h-11 items-center text-sm text-muted-foreground hover:text-foreground">
           Entrar
         </Link>
       )}

@@ -199,8 +199,12 @@ describe("accounts and character library", { concurrency: false }, () => {
       ANIMINDLY_SKIP_CHARACTER_IMPORT: "1",
     });
     assert.equal(again.code, 0, again.stderr);
-    const accounts = JSON.parse(await readFile(path.join(dir, "accounts.json"), "utf8")) as { users: { email: string }[] };
+    const accounts = JSON.parse(await readFile(path.join(dir, "accounts.json"), "utf8")) as {
+      users: { email: string }[];
+      characters?: { id: string }[];
+    };
     assert.equal(accounts.users.length, 1);
+    assert.equal(accounts.characters?.length ?? 0, 0);
   });
 
   it("imports the character zip during seed and replaces that character on the next seed", async () => {
@@ -289,15 +293,20 @@ describe("accounts and character library", { concurrency: false }, () => {
     assert.equal(again.code, 0, again.stderr);
     assert.match(again.stdout, new RegExp(`character Albert Einstein id=${id}`));
     const stored = JSON.parse(await readFile(path.join(dir, "accounts.json"), "utf8")) as {
-      characters: { id: string; views: Record<string, string>; emotionSheetUrl: string | null }[];
+      characters: { id: string; name: string; ownerId: string; views: Record<string, string>; emotionSheetUrl: string | null }[];
       assets: { characterId: string; kind: string }[];
     };
-    assert.equal(stored.characters.length, 1);
-    assert.equal(stored.characters[0]?.id, id);
-    assert.ok(stored.characters[0]?.views.front?.endsWith("/views/front.png"));
-    assert.ok(stored.characters[0]?.views.three_quarter_left?.endsWith("/views/three-quarter-left.png"));
-    assert.ok(stored.characters[0]?.views.three_quarter_right?.endsWith("/views/three-quarter-right.png"));
-    assert.ok(stored.characters[0]?.emotionSheetUrl?.endsWith("/emotion-sheet.png"));
+    assert.equal(stored.characters.length, 3);
+    const zipCharacter = stored.characters.find((character) => character.id === id);
+    assert.ok(zipCharacter);
+    assert.ok(zipCharacter.views.front?.endsWith("/views/front.png"));
+    assert.ok(zipCharacter.views.three_quarter_left?.endsWith("/views/three-quarter-left.png"));
+    assert.ok(zipCharacter.views.three_quarter_right?.endsWith("/views/three-quarter-right.png"));
+    assert.ok(zipCharacter.emotionSheetUrl?.endsWith("/emotion-sheet.png"));
+    const names = stored.characters.map((character) => character.name).sort();
+    assert.deepEqual(names, ["Albert Einstein", "Einstein charge", "Einstein realista"]);
+    const ownerIds = new Set(stored.characters.map((character) => character.ownerId));
+    assert.equal(ownerIds.size, 1);
     const kinds = stored.assets.filter((item) => item.characterId === id).map((item) => item.kind);
     assert.equal(kinds.filter((kind) => kind === "view").length, 3);
     assert.equal(kinds.filter((kind) => kind === "emotion_sheet").length, 1);

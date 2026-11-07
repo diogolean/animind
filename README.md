@@ -116,13 +116,17 @@ Os nomes de todas as variáveis estão em [`.env.example`](.env.example). O nome
 
 A biblioteca guarda nome, referência da ficha, as vistas que a pasta trouxer (frente, 3/4 esquerda, 3/4 direita e perfil; o perfil é opcional), URL do `puppet.json`, URLs das camadas e o status (`draft`, `ready`, `archived`). A página do personagem mostra essas vistas e a ficha de emoções grande, com zoom. A ficha só guarda a URL `/api/library/assets/...`.
 
-### Einstein aprovado (catálogo)
+### Dois Einsteins privados
 
-O personagem aprovado (sem nova geração no Gemini) aparece em **Meus personagens** mesmo sem conta, Neon ou Blob. A ficha e o cartão mostram a frente, o 3/4 esquerdo e o 3/4 direito, as bocas Rhubarb A–H e X, a ficha de emoções, a prévia muda e os demos em português e inglês (vídeo, voz `voice_en.mp3` e o texto em inglês). **Novo vídeo** e **Debate** abrem o estúdio com esse rig: a câmera da esquerda usa `layers/three-quarter/` e a da direita usa `layers/three-quarter-right/`. O mock de dev devolve essas vistas no fim do job; sem `ANIMINDLY_CORE_URL` e sem `ANIMINDLY_CORE_MOCK=1`, `POST /api/render` continua respondendo 503.
+Não há catálogo público. **Einstein realista** e **Einstein charge** são pacotes separados em `private/characters/` (o Next não serve essa pasta). O realista traz frente, 3/4 esquerda e 3/4 direita, camadas, bocas e a ficha de emoções dele. A charge traz a frente, as bocas Rhubarb, a ficha e os demos em português e inglês. Um pacote não preenche as vistas que faltam no outro.
 
-Os arquivos ficam em `public/characters/einstein_approved/` (`views/front.png`, `views/three-quarter.png`, `views/three-quarter-right.png`, `layers/{front,three-quarter,three-quarter-right}/`, bocas, `puppet.json`, voz, demos). Não há `BLOB_READ_WRITE_TOKEN` neste fluxo: o catálogo não lê Blob. A biblioteca privada da conta continua usando, quando existirem, `DATABASE_URL` ou `POSTGRES_URL`, `BLOB_STORE_ID`, `BLOB_READ_WRITE_TOKEN` e `ANIMINDLY_BLOB_ACCESS` (`private` só se a loja for privada). `npm run import-character -- --dir public/characters/einstein_approved --email "$SEED_SUPERADMIN_EMAIL"` copia o mesmo pacote para a conta (disco ou Blob). Rodar de novo substitui pelo nome.
+`GET /api/library` e `GET /api/library/:id` exigem sessão. Um visitante anônimo e outra conta não recebem esses personagens nem os arquivos em `/api/library/assets/...`. Um `super_admin` continua vendo todas as bibliotecas; uma conta nova criada pelo Google entra como `user`. `npm run seed` grava os dois pacotes na conta do `SEED_SUPERADMIN_EMAIL` já existente, sem escolher o primeiro cadastro. Sem esse e-mail e sem a base, os arquivos ficam no repositório e não entram em conta nenhuma.
 
-As três vistas e as camadas vêm do zip aprovado. Os demos em português e inglês, a voz e os recortes Rhubarb de `mouths/` continuam no pacote. A fábrica de um clique (fundo azul, recorte e todas as vistas) fica para outro passo. `scripts/prepare-einstein-approved.py` só regrava a frente antiga a partir do pacote p82; não use esse script para atualizar as três vistas.
+O histórico do git público ainda contém a cópia antiga que chegou a estar em `public/characters/einstein_approved/`. Tirar a pasta de `public/` impede o site de servi-la daqui para a frente; não apaga o que já foi clonado.
+
+### Celular
+
+A interface atual é o cliente móvel: o mesmo site, com `viewport-fit=cover`, área segura e alvos de toque nos controles da biblioteca, do login e da ficha. Não há projeto nativo nem loja neste repositório. Uma versão de app futura usaria as mesmas rotas autenticadas (`/api/auth/me`, `/api/library`, `/api/library/:id`, `/api/library/assets/...`); o dono continua decidido no servidor.
 
 ### Modo local (`npm run dev`, inclusive no Windows)
 
