@@ -222,6 +222,7 @@ export function presentCoreSheet(payload: unknown): {
   const quotes = (Array.isArray(body.quotes) ? body.quotes : []).slice(0, 8).flatMap((item) => {
     if (!item || typeof item !== "object") return [];
     const quote = item as { id?: unknown; text?: unknown; source?: unknown; url?: unknown; verification?: unknown };
+    if (quote.verification === "not_found") return [];
     const text = typeof quote.text === "string" ? quote.text.trim() : "";
     const source = typeof quote.source === "string" ? quote.source.trim() : "";
     const url = typeof quote.url === "string" ? quote.url.trim() : "";
@@ -271,6 +272,9 @@ function debateLine(item: unknown): CoreDebateLine | null {
     return { speaker, name, kind: row.kind, text: null, source: null, url: null, verification: null };
   }
   const quote = row.quote && typeof row.quote === "object" ? row.quote as { source?: unknown; url?: unknown; verification?: unknown; text?: unknown } : null;
+  if (quote?.verification === "not_found") {
+    return { speaker, name, kind: row.kind, text: null, source: null, url: null, verification: null };
+  }
   const source = quote && typeof quote.source === "string" ? quote.source.trim() : "";
   const url = quote && typeof quote.url === "string" ? quote.url.trim() : "";
   const safeSource = source && source.length <= 160 && !SHEET_LEAK.test(source) ? source : null;

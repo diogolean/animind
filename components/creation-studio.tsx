@@ -37,7 +37,7 @@ import type { PublicUser } from "@/lib/accounts/types";
 import { useI18n } from "@/components/locale";
 import { apiErrorMessage, fill } from "@/lib/i18n";
 import { artStyleLabel, scenarioDisplay, scenarioPresetId, translate, type Locale, type MessageKey } from "@/lib/i18n";
-import { fixturePersona } from "@/lib/persona-sheet";
+import { fixturePersona, sheetForScreen, type ScreenSheet } from "@/lib/persona-sheet";
 import { AvatarRequest } from "@/components/avatar-request";
 import { CharacterListEditor } from "@/components/flow/character-list-editor";
 import { CharacterVoicesEditor } from "@/components/flow/character-voices-editor";
@@ -102,6 +102,7 @@ export function CreationStudio() {
   const [prompt, setPrompt] = useState("");
   const [automatic, setAutomatic] = useState(true);
   const [plan, setPlan] = useState<CreationPlan | null>(null);
+  const [personaSheets, setPersonaSheets] = useState<{ key: string; sheets: ScreenSheet[] }>({ key: "", sheets: [] });
   const [planning, setPlanning] = useState(false);
   const [editing, setEditing] = useState<PlanField | null>(null);
   const [detailsOpen, setDetailsOpen] = useState(false);
@@ -166,6 +167,35 @@ export function CreationStudio() {
       .then(setVoiceCatalog)
       .catch(() => setVoiceCatalog(fallbackVoiceCatalog(currentLanguage)));
   }, [currentLanguage]);
+
+  const sheetNames = plan?.characters.map((character) => character.name.trim()).filter(Boolean).slice(0, 2).join("\n") ?? "";
+  const sheetLanguage = plan?.language ?? "";
+  const sheetKey = `${sheetLanguage}\n${sheetNames}`;
+  const shownSheets = personaSheets.key === sheetKey ? personaSheets.sheets : [];
+  useEffect(() => {
+    if (!sheetNames) return;
+    const controller = new AbortController();
+    const key = `${sheetLanguage}\n${sheetNames}`;
+    const local = (plan?.personaSheets ?? []).flatMap((sheet) => {
+      const visible = sheetForScreen(sheet);
+      return visible ? [visible] : [];
+    });
+    void Promise.all(sheetNames.split("\n").map(async (name) => {
+      const response = await fetch(`/api/personas/sheet?${new URLSearchParams({ name, lang: sheetLanguage || "en-US" })}`, {
+        signal: controller.signal,
+        cache: "no-store",
+      });
+      if (!response.ok) return null;
+      return sheetForScreen(await response.json());
+    })).then((rows) => {
+      if (controller.signal.aborted) return;
+      const fetched = rows.filter((row): row is ScreenSheet => Boolean(row));
+      setPersonaSheets({ key, sheets: fetched.length ? fetched : local });
+    }).catch(() => {
+      if (!controller.signal.aborted) setPersonaSheets({ key, sheets: local });
+    });
+    return () => controller.abort();
+  }, [sheetNames, sheetLanguage, plan]);
 
   useEffect(() => {
     if (!libraryId) {
@@ -551,26 +581,33 @@ export function CreationStudio() {
             {t("corePlan")}
           </p>
         ) : null}
-        {plan?.personaSheets?.length ? (
+        {shownSheets.length ? (
           <div data-testid="persona-sheets" className="mt-4 space-y-3">
-            <p className="text-xs text-muted-foreground">{t("fixtureSheetBody")}</p>
-            {plan.personaSheets.map((sheet) => (
-              <article key={sheet.name} data-testid="persona-sheet" className="rounded-2xl border border-white/10 p-4">
-                <div className="flex flex-wrap items-center gap-2">
-                  <h3 className="text-sm font-medium">{sheet.name}</h3>
-                  <span className="rounded-full border border-amber-400/40 px-2 py-0.5 text-[10px] uppercase tracking-wide text-amber-300">{t("fixtureSheet")}</span>
-                </div>
-                {sheet.wikiquote ? <a href={sheet.wikiquote} className="mt-2 block break-all text-xs underline" target="_blank" rel="noreferrer">{sheet.wikiquote}</a> : null}
-                <ul className="mt-3 space-y-3">
-                  {sheet.quotes.map((quote) => (
-                    <li key={quote.id}>
-                      <p className="text-sm">{quote.text}</p>
-                      <a href={quote.url} className="text-xs text-muted-foreground underline" target="_blank" rel="noreferrer">{quote.label}</a>
-                    </li>
-                  ))}
-                </ul>
-              </article>
-            ))}
+            {shownSheets.map((sheet) => {
+              const copy = sheet.source === "core"
+                ? { title: "coreVerifiedSheet" as const, body: "coreVerifiedSheetBody" as const }
+                : sheet.source === "core-fixture"
+                  ? { title: "coreFixtureSheet" as const, body: "coreFixtureSheetBody" as const }
+                  : { title: "fixtureSheet" as const, body: "fixtureSheetBody" as const };
+              return (
+                <article key={`${sheet.source}-${sheet.name}`} data-testid="persona-sheet" data-source={sheet.source} className="rounded-2xl border border-white/10 p-4">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h3 className="text-sm font-medium">{sheet.name}</h3>
+                    <span className="rounded-full border border-amber-400/40 px-2 py-0.5 text-[10px] uppercase tracking-wide text-amber-300">{t(copy.title)}</span>
+                  </div>
+                  <p className="mt-2 text-xs text-muted-foreground">{t(copy.body)}</p>
+                  <ul className="mt-3 space-y-3">
+                    {sheet.quotes.map((quote) => (
+                      <li key={quote.id} data-testid="persona-quote">
+                        <p className="text-sm">{quote.text}</p>
+                        <p data-testid="persona-quote-source" className="text-xs text-muted-foreground">{quote.source}</p>
+                        <a data-testid="persona-quote-url" href={quote.url} className="break-all text-xs text-muted-foreground underline" target="_blank" rel="noreferrer">{quote.url}</a>
+                      </li>
+                    ))}
+                  </ul>
+                </article>
+              );
+            })}
           </div>
         ) : null}
         {loginOpen ? (

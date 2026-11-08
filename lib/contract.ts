@@ -238,6 +238,8 @@ export interface PlanPersonaQuote {
   label: string;
   url: string;
   wikisource?: string;
+  /** Present on a bundled quote that passed the wiki-url check. A not_found quote is never stored here. */
+  verification?: "verified";
 }
 
 /**
