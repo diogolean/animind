@@ -2,7 +2,9 @@ import type { RenderRequest } from "@/lib/contract";
 import { guardedGeneration } from "@/lib/accounts/generation";
 import { noteNestedProviderRead } from "@/lib/spend/nested-read";
 import { coreFetch, coreMode, coreOff, json, proxyJson } from "@/lib/core";
+import { opaqueUserId } from "@/lib/accounts/opaque-user";
 import { mockCreateJob } from "@/lib/mock";
+import { spendFrame } from "@/lib/spend/context";
 import { coreToneId, normalizeToneCatalog } from "@/lib/tones";
 
 export async function POST(req: Request) {
@@ -49,5 +51,7 @@ async function perform(req: Request) {
     };
     return proxyJson("/render", { method: "POST", body: JSON.stringify(coreBody) });
   }
-  return json(mockCreateJob(adaptedBody), 202);
+  const userId = opaqueUserId(spendFrame()?.userId);
+  if (!userId) return json({ error: "Entre para continuar" }, 401);
+  return json(await mockCreateJob(adaptedBody, userId), 202);
 }

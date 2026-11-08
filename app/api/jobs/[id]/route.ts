@@ -14,14 +14,11 @@ async function perform(actor: PublicUser, { params }: { params: Promise<{ id: st
   const key = jobKey(id);
   if (!key || !(await ownsResource(actor.id, "job", key))) return json({ error: "Job não encontrado" }, 404);
   if (key.startsWith("mock_")) {
-    try {
-      const job = mockGetJob(key);
-      const text = JSON.stringify(job);
-      await rememberOwned(actor.id, text);
-      return new Response(text, { headers: { "content-type": "application/json" } });
-    } catch {
-      return json({ error: "Job não encontrado" }, 404);
-    }
+    const job = await mockGetJob(key, actor.id);
+    if (!job) return json({ error: "Job não encontrado" }, 404);
+    const text = JSON.stringify(job);
+    await rememberOwned(actor.id, text);
+    return new Response(text, { headers: { "content-type": "application/json" } });
   }
   if (coreMode() !== "core") return json({ error: "Job não encontrado" }, 404);
   const response = await proxyJson(`/jobs/${encodeURIComponent(key)}`, { headers: coreUserHeader(actor.id) });

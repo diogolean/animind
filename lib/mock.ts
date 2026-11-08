@@ -17,6 +17,7 @@ import {
 import { mockSheet, type QuoteSheet } from "./quote-sheets";
 import { checkFidelity } from "./script-qa";
 import { portraitById, portraitImageUrl } from "./catalog";
+import { loadMockJob, newMockJobId, saveMockJob } from "./mock-jobs";
 
 const hash = (s: string) => {
   let h = 2166136261;
@@ -31,11 +32,8 @@ const emptyViews = (): Character["views"] => {
 };
 
 /* Self-contained mock of the Omni-Engine core, used when CORE_URL is unset.
- * Characters are procedural SVG cut-outs; jobs are stateless (state is encoded
- * in the job id) so this works on serverless without storage. */
-
-const b64 = (o: unknown) => Buffer.from(JSON.stringify(o)).toString("base64url");
-const unb64 = <T,>(s: string): T => JSON.parse(Buffer.from(s, "base64url").toString("utf8")) as T;
+ * Characters are procedural SVG cut-outs. A job id is an opaque token; the
+ * request stays in the server store with the account that created it. */
 
 const titleCase = (s: string) =>
   s.trim().replace(/\s+/g, " ").slice(0, 40).replace(/(^|\s)\p{L}/gu, (m) => m.toUpperCase());
@@ -179,7 +177,6 @@ function personas(r: RenderRequest): PersonaSheet[] {
   });
 }
 
-interface MockJobState { r: RenderRequest; c: number }
 const RENDER_MS = 7000;
 
 function keepUrl(url: string): string {
@@ -203,16 +200,21 @@ function keepViews(views: Character["views"]): Character["views"] {
   return { front: one(views.front), left: one(views.left), right: one(views.right) };
 }
 
-export function mockCreateJob(req: RenderRequest): RenderJob {
+export async function mockCreateJob(req: RenderRequest, userId: string): Promise<RenderJob> {
   const lite: RenderRequest = {
     ...req,
     characters: req.characters.map((c) => ({ ...c, views: keepViews(c.views), photo: c.photo && { ...c.photo, url: keepUrl(c.photo.url) } })),
   };
-  return { id: `mock_${b64({ r: lite, c: Date.now() } satisfies MockJobState)}`, status: "queued", progress: 0 };
+  const id = newMockJobId();
+  await saveMockJob({ id, userId, createdAt: Date.now(), request: lite });
+  return { id, status: "queued", progress: 0 };
 }
 
-export function mockGetJob(id: string): RenderJob {
-  const { r, c } = unb64<MockJobState>(id.replace(/^mock_/, ""));
+export async function mockGetJob(id: string, userId: string): Promise<RenderJob | null> {
+  const stored = await loadMockJob(id);
+  if (!stored || stored.userId !== userId) return null;
+  const r = stored.request as RenderRequest;
+  const c = stored.createdAt;
   const p = Math.min(1, (Date.now() - c) / RENDER_MS);
   if (p < 1) return { id, status: p < 0.15 ? "queued" : "running", progress: Math.round(p * 100) / 100 };
   const characters = r.characters;
