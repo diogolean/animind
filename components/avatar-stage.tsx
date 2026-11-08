@@ -44,6 +44,7 @@ export function AvatarStage({
   onPlate?: (plate: { width: number; height: number; kind: PlateKind }) => void;
 }) {
   const [failed, setFailed] = useState(false);
+  const [plateKind, setPlateKind] = useState<PlateKind | "pending">("pending");
   const [frame, setFrame] = useState<StageFrame>(() => stageFrame(view, framing));
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const previousRef = useRef<HTMLCanvasElement | null>(null);
@@ -61,6 +62,7 @@ export function AvatarStage({
       .then((result) => {
         if (cancel) return;
         setFrame(result.frame);
+        setPlateKind(result.plate.kind);
         onCapabilityRef.current?.(result.capability, result.reason);
         onSceneryRef.current?.(result.scenery);
         onPlateRef.current?.(result.plate);
@@ -114,6 +116,8 @@ export function AvatarStage({
       data-testid="avatar-canvas"
       data-emotion={emotion}
       data-viseme={viseme ?? "X"}
+      data-template={framing === "close" ? "face" : "body"}
+      data-plate={plateKind}
       className="mx-auto block w-full bg-black motion-reduce:transition-none"
       style={{ aspectRatio: `${frame.w} / ${frame.h}` }}
     />

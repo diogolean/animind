@@ -108,7 +108,7 @@ export function CharacterDetail() {
 
   const ready = character.status === "ready";
   return (
-    <div data-testid="character-detail" className="flex w-full min-w-0 flex-1 flex-col px-3 py-4 sm:px-5 sm:py-6">
+    <div data-testid="character-detail" className="mx-auto w-full min-w-0 max-w-5xl flex-1 px-5 py-6 landscape:py-4 sm:px-8 sm:py-10">
       <Link href="/characters" className="inline-flex min-h-11 items-center text-sm text-muted-foreground hover:text-foreground">
         {t("characters")}
       </Link>

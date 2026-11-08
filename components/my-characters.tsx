@@ -3,9 +3,11 @@
 /* eslint-disable @next/next/no-img-element */
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { AvatarStage } from "@/components/avatar-stage";
 import { useI18n } from "@/components/locale";
 import { apiErrorMessage, fill, statusLabel, type MessageKey } from "@/lib/i18n";
-import { sceneryPreference } from "@/lib/avatar-source";
+import { sceneryPreference, type PlateKind } from "@/lib/avatar-source";
+import type { CharacterView } from "@/lib/contract";
 import { pairPlates, replaceSharedScenery, sceneryChoice, sharedBackground } from "@/lib/library-pair";
 import { Loader2 } from "lucide-react";
 import type { LibraryCharacter, PublicUser } from "@/lib/accounts/types";
@@ -106,7 +108,7 @@ export function MyCharacters() {
   const pairNote: MessageKey = pair.reason === "needs-original" ? "sharedPairOriginal" : pair.mode === "on" ? "sharedPairOn" : "sharedPairOff";
 
   return (
-    <div data-testid="my-characters" className="flex w-full min-w-0 flex-1 flex-col px-3 py-4 sm:px-5 sm:py-6">
+    <div data-testid="my-characters" className="mx-auto flex w-full min-w-0 max-w-5xl flex-1 flex-col px-5 py-6 landscape:py-4 sm:px-8 sm:py-10">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <h1 className="text-3xl font-medium tracking-tight">{t("charactersTitle")}</h1>
@@ -142,7 +144,7 @@ export function MyCharacters() {
         </p>
       ) : (
         <>
-        <div data-testid="shared-scenery" data-mode={pair.mode} data-reason={pair.reason} className="mt-6 flex flex-wrap items-center gap-3">
+        <div data-testid="shared-scenery" data-mode={pair.mode} data-reason={pair.reason} data-baked={pair.reason === "needs-original" ? "true" : "false"} className="mt-6 flex flex-wrap items-center gap-3">
           <button
             type="button"
             role="switch"
@@ -188,22 +190,16 @@ export function MyCharacters() {
           </select>
           <p data-testid="shared-scenery-note" className="max-w-xl text-sm leading-relaxed text-white/80">{t(pairNote)}</p>
         </div>
-        <ul data-testid="character-pair" data-fit="contain" className="mt-4 grid min-h-0 flex-1 grid-cols-1 gap-3 md:grid-cols-2">
+        <ul data-testid="character-pair" data-fit="contain" data-template="face" className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {characters.map((character) => {
             return (
-            <li key={character.id} className="flex min-h-[70dvh] md:min-h-[calc(100dvh-14rem)]">
+            <li key={character.id} className="min-w-0">
               <Link
                 href={`/characters/${character.id}`}
                 data-testid="character-card"
-                className="flex w-full flex-1 flex-col overflow-hidden rounded-[1.5rem] border border-white/10 bg-black transition hover:border-white/25"
+                className="flex w-full flex-col overflow-hidden rounded-[1.5rem] border border-white/10 bg-black transition hover:border-white/25"
               >
-                <div data-ground="black" data-fit="contain" className="flex min-h-0 flex-1 items-center justify-center bg-black">
-                  {character.views.front ? (
-                    <img src={character.views.front} alt="" data-testid="card-view-front" className="max-h-full max-w-full object-contain" />
-                  ) : (
-                    <span className="px-3 text-center text-xs text-muted-foreground">{t("noFrontView")}</span>
-                  )}
-                </div>
+                <CharacterFace character={character} emptyLabel={t("noFrontView")} />
                 <div className="flex items-center justify-between gap-3 px-4 py-3">
                   <div className="min-w-0">
                     <p className="truncate font-medium">{character.name}</p>
@@ -261,6 +257,50 @@ export function MyCharacters() {
           </p>
         ) : null}
       </form> : null}
+    </div>
+  );
+}
+
+function CharacterFace({ character, emptyLabel }: { character: LibraryCharacter; emptyLabel: string }) {
+  const [view, setView] = useState<CharacterView | null>(null);
+  const [kind, setKind] = useState<PlateKind | "pending" | "source">("pending");
+
+  useEffect(() => {
+    let cancel = false;
+    fetch(`/api/library/${character.id}`, { cache: "no-store" })
+      .then((response) => (response.ok ? response.json() : null))
+      .then((data: { rig?: { views?: { front?: CharacterView } } } | null) => {
+        if (cancel) return;
+        const front = data?.rig?.views?.front;
+        if (front && front.layers.length > 0) {
+          setView(front);
+          return;
+        }
+        setKind("source");
+      })
+      .catch(() => {
+        if (!cancel) setKind("source");
+      });
+    return () => {
+      cancel = true;
+    };
+  }, [character.id]);
+
+  if (!view) {
+    return (
+      <div data-template="face" data-ground="black" data-plate={kind === "source" ? "source" : "pending"} className="flex aspect-[4/5] items-center justify-center bg-black">
+        {kind === "source" && character.views.front ? (
+          <img src={character.views.front} alt="" data-testid="card-view-front" className="max-h-full max-w-full object-contain" />
+        ) : kind === "source" ? (
+          <span className="px-3 text-center text-xs text-muted-foreground">{emptyLabel}</span>
+        ) : null}
+      </div>
+    );
+  }
+
+  return (
+    <div data-testid="card-stage" data-template="face" data-ground={kind === "baked" ? "baked" : "black"} data-plate={kind} className="aspect-[4/5] bg-black">
+      <AvatarStage view={view} emotion="neutral" lids="open" gaze="center" framing="close" scenery={false} onPlate={(plate) => setKind(plate.kind)} />
     </div>
   );
 }

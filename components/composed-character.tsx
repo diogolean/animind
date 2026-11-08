@@ -69,7 +69,7 @@ export function ComposedCharacter({ character, rig }: { character: LibraryCharac
   const [eyes, setEyes] = useState<"open" | "half" | "closed">("open");
   const [gaze, setGaze] = useState<GazeDirection>("center");
   const [eyeCapability, setEyeCapability] = useState<EyeCapability | "pending">("pending");
-  const [framing, setFraming] = useState<Framing>(rigView && hasFullBody(rigView) ? "body" : "close");
+  const [framing, setFraming] = useState<Framing>("close");
   const [sceneryOn, setSceneryOn] = useState(false);
   const [sceneryId, setSceneryId] = useState<string | null>(null);
   const [sceneryState, setSceneryState] = useState<SceneryState | "pending">("pending");
@@ -132,8 +132,7 @@ export function ComposedCharacter({ character, rig }: { character: LibraryCharac
 
   function chooseSlot(id: ControllerSlotId) {
     const slot = slots.find((item) => item.id === id);
-    if (!slot?.present || !slot.rig) return;
-    const next = rig?.views[slot.rig];
+    if (!slot?.present || !slot.rig || slot.id === slotId) return;
     setHolding(false);
     setSlotId(id);
     setMap(initialMap());
@@ -141,9 +140,7 @@ export function ComposedCharacter({ character, rig }: { character: LibraryCharac
     setGaze("center");
     setEyes("open");
     setEyeCapability("pending");
-    setSceneryState("pending");
-    setPlate(null);
-    setFraming(next && hasFullBody(next) ? "body" : "close");
+    setFraming("close");
   }
 
   const flatUrl = active?.id === "three_quarter_left"
@@ -156,7 +153,7 @@ export function ComposedCharacter({ character, rig }: { character: LibraryCharac
       <h2 className="text-sm font-medium">{t("controller")}</h2>
       <div className="mt-3 overflow-hidden rounded-[1.5rem] border border-white/10 bg-black">
         {selected && hasRig && rigView ? (
-          <figure data-testid={selected.testId} data-framing={framing} data-ground="black" data-fit="contain" data-emotion={emotion} data-pinned={map.pinned ?? ""} className="mx-auto w-full bg-black">
+          <figure data-testid={selected.testId} data-framing={framing} data-template={framing === "close" ? "face" : "body"} data-ground={plate?.kind === "baked" || sceneryState === "needs-original" ? "baked" : "black"} data-fit="contain" data-emotion={emotion} data-pinned={map.pinned ?? ""} className="mx-auto w-full max-w-md bg-black">
             <AvatarStage
               view={rigView}
               emotion={emotion}
@@ -172,7 +169,7 @@ export function ComposedCharacter({ character, rig }: { character: LibraryCharac
             />
           </figure>
         ) : selected && flatUrl ? (
-          <figure data-testid={selected.testId} data-ground="black" data-fit="contain" className="mx-auto flex max-h-[70dvh] w-full items-center justify-center bg-black">
+          <figure data-testid={selected.testId} data-template="face" data-ground="black" data-fit="contain" className="mx-auto flex max-h-[70dvh] w-full max-w-md items-center justify-center bg-black">
             <img src={flatUrl} alt="" className="max-h-[70dvh] w-full bg-black object-contain" />
           </figure>
         ) : (
@@ -508,7 +505,7 @@ function SheetRow({
       <h4 className="text-xs uppercase tracking-wide text-white/50">{title}</h4>
       <ul className={`mt-2 ${SHEET_GRID}`}>
         {group.states.map((state) => (
-          <li key={state.id} data-testid={`sheet-${viewId}-${group.category}-${state.id}`} className={`${SHEET_CELL} overflow-hidden rounded-2xl bg-black`}>
+          <li key={state.id} data-testid={`sheet-${viewId}-${group.category}-${state.id}`} data-template="face" className={`${SHEET_CELL} overflow-hidden rounded-2xl bg-black`}>
             <div className="bg-black">
               <AvatarStage view={view} emotion={state.emotion} lids={state.lids} gaze={state.gaze} framing="close" scenery={false} />
             </div>

@@ -9,7 +9,7 @@ import { visemeSitsOnMouth } from "../lib/mouth-place";
 import { decodePngRgba, type Raster } from "../lib/png-rgba";
 import { sceneryMatte } from "../lib/scenery";
 import { SHEET_CELL, SHEET_GRID, sheetGroups } from "../lib/sheet";
-import { closeFrame, fullBodyFrame, hasFullBody } from "../lib/stage-frame";
+import { closeFrame, FACE_TEMPLATE, fullBodyFrame, hasFullBody } from "../lib/stage-frame";
 
 describe("stage template", () => {
   it("keeps a full body only when the asset already has one, and a close crop on the head", async () => {
@@ -27,13 +27,29 @@ describe("stage template", () => {
     const plate = await png("private/characters/einstein-charge/layers/front/body.png");
     const eyes = recoverPaintedEyes(plate);
     assert.ok(eyes);
-    assert.equal(hasFullBody(charge.views.front), true);
+    assert.equal(hasFullBody(charge.views.front), false);
     const face = closeFrame(charge.views.front, eyes.sockets);
-    assert.ok(face.w < charge.views.front.canvas.w && face.h < charge.views.front.canvas.h);
+    assert.ok(face.h > charge.views.front.canvas.h * 0.7, "the face window keeps the hair and the chin");
     for (const box of eyes.sockets) {
       assert.ok(box.x >= face.x && box.x + box.w <= face.x + face.w);
       assert.ok(box.y >= face.y && box.y + box.h <= face.y + face.h);
     }
+    assert.ok(face.y <= 150 && face.x <= 58, "hair stays inside the charge frame");
+    assert.ok(face.y + face.h >= 540 && face.x + face.w >= 442, "chin and side hair stay inside the charge frame");
+    const left = realista.views["three-quarter"];
+    const right = realista.views["three-quarter-right"];
+    assert.ok(left && right);
+    const fronts = [close, closeFrame(left), closeFrame(right), face];
+    const aspects = fronts.map((frame) => frame.w / frame.h);
+    for (const aspect of aspects) assert.ok(Math.abs(aspect - FACE_TEMPLATE.aspect) < 0.03, String(aspect));
+    const eyeLine = (frame: { y: number; h: number }, eyeY: number) => (eyeY - frame.y) / frame.h;
+    const lines = [
+      eyeLine(close, 643),
+      eyeLine(closeFrame(left), 645),
+      eyeLine(closeFrame(right), 645),
+      eyeLine(face, (eyes.sockets[0].y + eyes.sockets[1].y + eyes.sockets[1].h) / 2),
+    ];
+    for (const line of lines) assert.ok(Math.abs(line - FACE_TEMPLATE.eyeLine) < 0.04, String(line));
     assert.equal(charge.views.left.layers[0]?.url, charge.views.front.layers[0]?.url);
     assert.equal(charge.views.right.layers[0]?.url, charge.views.front.layers[0]?.url);
   });
@@ -53,7 +69,8 @@ describe("stage template", () => {
     assert.equal(SHEET_GRID.includes("flex-wrap"), true);
     assert.equal(SHEET_GRID.includes("auto-fill"), false);
     assert.equal(SHEET_CELL.includes("calc(50%"), true);
-    assert.equal(SHEET_CELL.includes("lg:w-[calc(20%"), true);
+    assert.equal(SHEET_CELL.includes("lg:w-[calc(25%"), true);
+    assert.equal(SHEET_CELL.includes("lg:w-[calc(20%"), false);
   });
 
   it("mattes a flat background and refuses the charge room", async () => {
@@ -93,8 +110,8 @@ describe("stage template", () => {
   });
 });
 
-async function puppet(relative: string): Promise<{ views: Record<"front" | "left" | "right", CharacterView> }> {
-  const json = JSON.parse(await readFile(path.join(process.cwd(), relative), "utf8")) as { views: Record<"front" | "left" | "right", CharacterView> };
+async function puppet(relative: string): Promise<{ views: Record<string, CharacterView> }> {
+  const json = JSON.parse(await readFile(path.join(process.cwd(), relative), "utf8")) as { views: Record<string, CharacterView> };
   return json;
 }
 

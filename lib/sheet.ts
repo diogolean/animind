@@ -48,4 +48,4 @@ export function sheetGroups(view: CharacterView, capability: EyeCapability | "pe
 }
 
 export const SHEET_GRID = "flex flex-wrap gap-2";
-export const SHEET_CELL = "w-[calc(50%-0.25rem)] min-w-0 sm:w-[calc(33.333%-0.375rem)] lg:w-[calc(20%-0.4rem)]";
+export const SHEET_CELL = "w-[calc(50%-0.25rem)] min-w-0 sm:w-[calc(33.333%-0.375rem)] lg:w-[calc(25%-0.375rem)]";

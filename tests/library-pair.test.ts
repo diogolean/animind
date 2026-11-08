@@ -25,13 +25,24 @@ describe("shared background", () => {
     ];
     const pair = sharedBackground(plates, null, true);
     assert.equal(pair.mode, "off");
-    assert.equal(pair.reason, "needs-scenery");
+    assert.equal(pair.reason, "needs-original");
     assert.equal(pair.sceneryId, null);
+    const transparent = sharedBackground(
+      [
+        { id: "realista", transparent: true, sceneryIds: [] },
+        { id: "other", transparent: true, sceneryIds: [] },
+      ],
+      null,
+      true,
+    );
+    assert.equal(transparent.reason, "needs-scenery");
     const saved = pairPlates([
-      { id: "realista", layers: [{ name: "head", url: "head.png" }] },
+      { id: "realista", layers: [{ name: "head", url: "head.png" }, { name: "torso", url: "torso.png" }] },
       { id: "charge", layers: [{ name: "body", url: "body.png" }] },
     ]);
-    assert.equal(sharedBackground(saved, "room", true).mode, "off");
+    assert.equal(saved[0]?.transparent, true);
+    assert.equal(saved[1]?.transparent, false);
+    assert.equal(sharedBackground(saved, "room", true).reason, "needs-original");
   });
 
   it("turns both on only together and replaces the same layer without touching the plates", () => {
@@ -102,24 +113,32 @@ describe("library pair layout", () => {
     const viewer = readFileSync(new URL("../components/composed-character.tsx", import.meta.url), "utf8");
     const stage = readFileSync(new URL("../components/avatar-stage.tsx", import.meta.url), "utf8");
     assert.match(page, /data-testid="character-pair"/);
-    assert.match(page, /md:grid-cols-2/);
-    assert.equal(page.includes("lg:grid-cols-3"), false);
-    assert.equal(page.includes("max-w-5xl"), false);
+    assert.match(page, /sm:grid-cols-2/);
+    assert.match(page, /lg:grid-cols-3/);
+    assert.match(page, /max-w-5xl/);
+    assert.equal(page.includes("min-h-[70dvh]"), false);
     assert.equal(page.includes("object-cover"), false);
     assert.equal(page.includes("mix-blend"), false);
     assert.equal(page.includes("mask-image"), false);
     assert.equal(page.includes("sceneryMatte"), false);
     assert.match(page, /object-contain/);
-    assert.match(page, /data-ground="black"/);
+    assert.match(page, /data-template="face"/);
+    assert.match(page, /framing="close"/);
     assert.match(page, /data-testid="shared-scenery"/);
     assert.match(page, /data-testid="replace-scenery"/);
-    assert.equal(/<figure[^>]*max-w-md/.test(viewer), false);
+    assert.match(viewer, /<figure[^>]*max-w-md/);
     assert.match(viewer, /data-fit="contain"/);
+    assert.match(viewer, /data-template=\{framing === "close" \? "face" : "body"\}/);
+    assert.match(viewer, /useState<Framing>\("close"\)/);
     assert.match(viewer, /data-testid="puppet-controller"/);
     assert.match(viewer, /data-testid="emotion-sheet"/);
     assert.match(stage, /sceneryId/);
+    assert.match(stage, /data-template=\{framing === "close" \? "face" : "body"\}/);
     assert.equal(translate("en", "sharedPairOff").includes("Both stay off"), true);
     assert.equal(translate("pt-BR", "sharedPairOff").includes("Os dois ficam sem fundo"), true);
+    assert.equal(translate("pt-BR", "sharedPairOriginal").includes("sem fundo"), false);
+    assert.equal(translate("pt-BR", "sharedPairOriginal").includes("sala pintada"), true);
+    assert.equal(translate("en", "sceneryNeedsOriginal").includes("painted room"), true);
     const ignore = readFileSync(new URL("../.gitignore", import.meta.url), "utf8");
     assert.match(ignore, /einstein-charge-approved/);
   });
