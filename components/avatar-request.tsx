@@ -4,8 +4,9 @@ import { useEffect, useRef, useState } from "react";
 import { Check } from "lucide-react";
 import type { AvatarAttempt, AvatarIntent, AvatarPlan, AvatarProgressStage } from "@/lib/contract";
 import { addAvatarParticipant, avatarIssues, inferAvatarPlan, pinAvatarParticipant, toggleAvatarParticipant, type AvatarIssue } from "@/lib/avatar-plan";
-import { avatarJobFeedback, avatarRunning } from "@/lib/avatar-progress";
-import { requestAvatarBatch } from "@/lib/api";
+import { avatarReconnect, rememberedAvatarPoll, rememberAvatarPoll } from "@/lib/avatar-core";
+import { avatarJobFeedback, avatarRunning, emptyAvatarProgress, foldAvatarEvents, type AvatarProgressView } from "@/lib/avatar-progress";
+import { readAvatarAttempt, requestAvatarBatch } from "@/lib/api";
 import { useI18n } from "@/components/locale";
 import { artStyleLabel, fill, type MessageKey } from "@/lib/i18n";
 import { track } from "@/lib/analytics-client";
@@ -51,9 +52,13 @@ export function AvatarRequest({
   const [nameDraft, setNameDraft] = useState("");
   const [checking, setChecking] = useState(false);
   const [attempt, setAttempt] = useState<AvatarAttempt | null>(null);
+  const [view, setView] = useState<AvatarProgressView>(emptyAvatarProgress());
+  const [pollNonce, setPollNonce] = useState(0);
   const [tracked, setTracked] = useState(`${prompt}\n${pinnedName ?? ""}`);
   const ticket = useRef(0);
   const abortRef = useRef<AbortController | null>(null);
+  const pollRef = useRef<AbortController | null>(null);
+  const baseline = useRef<string | undefined>(undefined);
   const trackKey = `${prompt}\n${pinnedName ?? ""}`;
   if (trackKey !== tracked) {
     setTracked(trackKey);
@@ -76,6 +81,44 @@ export function AvatarRequest({
     }, ANALYSIS_MS);
     return () => clearTimeout(handle);
   }, [prompt, pinnedName]);
+
+  useEffect(() => {
+    if (baseline.current === undefined) {
+      baseline.current = prompt;
+      return;
+    }
+    const previous = baseline.current;
+    baseline.current = prompt;
+    if (previous === "" && prompt !== "") return;
+    if (previous === prompt) return;
+    pollRef.current?.abort();
+  }, [prompt]);
+
+  useEffect(() => {
+    if (!viewer) return;
+    const spec = avatarReconnect(rememberedAvatarPoll(window.sessionStorage));
+    if (!spec) return;
+    const controller = new AbortController();
+    pollRef.current = controller;
+    let timer = 0;
+    const pull = () => {
+      void readAvatarAttempt(spec.path, controller.signal).then((data) => {
+        if (controller.signal.aborted) return;
+        if (!data) return;
+        setAttempt(data);
+        setView((current) => foldAvatarEvents(current, data, false));
+        const terminal = data.jobs.every((job) => job.stage === "fail" || job.stage === "ready" || job.disposition === "cancelled");
+        if (!terminal) timer = window.setTimeout(pull, 2000);
+      }).catch(() => {
+        if (!controller.signal.aborted) timer = window.setTimeout(pull, 2000);
+      });
+    };
+    pull();
+    return () => {
+      controller.abort();
+      if (timer) window.clearTimeout(timer);
+    };
+  }, [viewer, pollNonce]);
 
   const shown = plan ? applyEdits(plan, added, picked) : null;
   const issues = shown ? avatarIssues(shown) : [];
@@ -122,7 +165,10 @@ export function AvatarRequest({
         selectedIds: shown.selectedIds,
       }, controller.signal);
       if (current !== ticket.current || controller.signal.aborted) return;
+      rememberAvatarPoll(window.sessionStorage, data.requestId);
       setAttempt(data);
+      setView(foldAvatarEvents(emptyAvatarProgress(), data, false));
+      setPollNonce((currentNonce) => currentNonce + 1);
     } catch (error) {
       if (controller.signal.aborted || current !== ticket.current) return;
       const code = error && typeof error === "object" && "code" in error ? String((error as { code?: unknown }).code ?? "") : "";
@@ -209,13 +255,16 @@ export function AvatarRequest({
         </div>
       ) : null}
       {attempt ? (
-        <ul data-testid="avatar-jobs" className="mt-3 max-w-xl space-y-1 text-sm text-white/90">
-          {attempt.outcome === "partial" ? <li>{t("avatarPartial")}</li> : null}
+        <ul data-testid="avatar-progress" role="status" className="mt-3 max-w-xl space-y-1 text-sm text-white/90">
+          {attempt.outcome === "partial" ? (
+            <li data-testid="avatar-partial">{attempt.jobs.some((job) => job.disposition === "reused") ? t("avatarPartial") : t("avatarPartialKept")}</li>
+          ) : null}
           {attempt.jobs.map((job) => {
-            const feedback = avatarJobFeedback(job);
+            const stage = view.stages[job.index] ?? job.stage;
+            const feedback = avatarJobFeedback({ ...job, stage });
             return <li key={job.id} data-testid={`avatar-job-${job.index}`}>{fill(t(feedback.key), feedback.values)}</li>;
           })}
-          {attempt.jobs.some((job) => job.disposition === "blocked") ? <li>{t("avatarProviderOff")}</li> : null}
+          {attempt.outcome !== "partial" && attempt.jobs.some((job) => job.disposition === "blocked") ? <li>{t("avatarProviderOff")}</li> : null}
         </ul>
       ) : null}
     </section>

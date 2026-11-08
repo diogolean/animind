@@ -56,6 +56,21 @@ export function abortAvatarProgress(view: AvatarProgressView): AvatarProgressVie
   return { ...view, aborted: true };
 }
 
+/** Applies core or fixture events in order. An aborted view and a stale request stay unchanged. */
+export function foldAvatarEvents(
+  view: AvatarProgressView,
+  attempt: { requestId: string; events?: { index: number; stage: AvatarProgressStage; fixture: boolean }[] } | null,
+  aborted: boolean,
+): AvatarProgressView {
+  if (aborted) return abortAvatarProgress(view);
+  if (!attempt) return view;
+  const base = view.requestId && view.requestId !== attempt.requestId ? emptyAvatarProgress() : view;
+  return (attempt.events ?? []).reduce(
+    (current, event) => applyAvatarEvent(current, { ...event, requestId: attempt.requestId }),
+    base,
+  );
+}
+
 export function avatarRunning(stages: Partial<Record<number, AvatarProgressStage>>, source: "automatic" | "manual"): boolean {
   if (source !== "automatic") return false;
   return Object.values(stages).some((stage) => stage && AVATAR_RUNNING_STAGES.includes(stage));

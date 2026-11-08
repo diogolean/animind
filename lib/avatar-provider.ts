@@ -1,8 +1,8 @@
 /**
- * The factory copy under products/aiwake/animator/factory exposes
- * generate_character_image, create_puppet, and generate_view.
- * It does not expose generate_avatar. This app does not call the others.
- * Paid avatar calls are not authorized.
+ * The factory exposes generate_character_image, create_puppet, and generate_view.
+ * It does not expose generate_avatar. The core draft's HTTP facade records a
+ * job without spending. This app proxies that facade and does not call the
+ * factory functions. Paid avatar calls are not authorized.
  */
 export const AVATAR_PAID_CALLS_AUTHORIZED = false;
 

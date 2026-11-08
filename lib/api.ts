@@ -62,6 +62,14 @@ export async function requestAvatarBatch(body: {
   return data as AvatarAttempt;
 }
 
+/** Reloads one attempt. A 404 is an empty poll, not a new job. */
+export async function readAvatarAttempt(path: string, signal?: AbortSignal): Promise<AvatarAttempt | null> {
+  const response = await fetch(path, { method: "GET", signal, cache: "no-store" });
+  const data = await response.json().catch(() => null) as Partial<AvatarAttempt> | null;
+  if (!response.ok || !data || !Array.isArray(data.jobs)) return null;
+  return data as AvatarAttempt;
+}
+
 export const getTones = () => call<ToneCatalog>("/api/tones");
 
 export const getVoices = (language: LanguageCode) =>

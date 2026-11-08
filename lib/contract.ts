@@ -427,11 +427,12 @@ export interface RenderJob {
 
 /**
  * Avatar progress shared with the core writer.
- * The app shows a stage only when a real event arrives. It does not fill the
+ * The app shows a stage only when an event arrives. It does not fill the
  * gaps with a timer, and it does not treat an offline adapter as image generation.
- * `generate_avatar` is not a function in the factory copy this app can see
- * (`generate_character_image`, `create_puppet`, `generate_view` are). This app
- * does not call those functions.
+ * The factory still has no generate_avatar. The core draft exposes
+ * POST /v1/avatars and GET /v1/avatars/{id}. This app proxies those routes
+ * after a confirmed login. It does not call generate_character_image,
+ * create_puppet, or generate_view.
  */
 export const AVATAR_PROGRESS_STAGES = ["plan", "login", "queued", "image", "cutout", "rig", "qa", "save", "ready", "fail", "retry"] as const;
 export type AvatarProgressStage = (typeof AVATAR_PROGRESS_STAGES)[number];
@@ -461,13 +462,20 @@ export interface AvatarPlan {
   source: "local";
 }
 
+export interface AvatarEventRecord {
+  index: number;
+  stage: AvatarProgressStage;
+  fixture: boolean;
+}
+
 export interface AvatarJobState {
   id: string;
   index: number;
   name: string;
   stage: AvatarProgressStage;
   disposition: AvatarDisposition;
-  fixture: false;
+  /** True when the stage is a labeled fixture, not a live image. */
+  fixture: boolean;
   reusedCharacterId?: string;
   /** Empty until a real plate exists. An upscale is never stored here as native 4K. */
   actual: null;
@@ -483,12 +491,16 @@ export interface AvatarAttempt {
   requestId: string;
   ownerId: string;
   outcome: AvatarOutcome;
-  code: "avatar_provider_unavailable" | "reused" | "cancelled";
+  code: "avatar_provider_unavailable" | "reused" | "cancelled" | "generation_not_authorized";
+  /** Absent or unknown is not zero. */
   cost: "unknown";
-  fixture: false;
-  providerCalls: 0;
+  fixture: boolean;
+  providerCalls: number;
   providerFunction: null;
   jobs: AvatarJobState[];
+  events?: AvatarEventRecord[];
+  /** A failed or partial attempt does not clear the prompt. */
+  keepsDraft?: boolean;
 }
 
 export const PARODY_DISCLAIMER = "Paródia • Gerado por IA";

@@ -20,7 +20,7 @@ export type CoreMode = "core" | "mock" | "off";
 export const coreMode = (): CoreMode => (coreUrl() ? "core" : productEnv("CORE_MOCK") === "1" ? "mock" : "off");
 
 /** Paths whose result belongs to one account. Health and shared catalogs are not in this list. */
-const OWNER_SCOPED = /^\/(render|plan|characters|preview|scenarios|jobs\/|files\/|personas\/)/;
+const OWNER_SCOPED = /^\/(render|plan|characters|preview|scenarios|jobs\/|files\/|personas\/|avatars)/;
 
 export function coreUserHeader(userId: string | null | undefined): { "x-animind-user"?: string } {
   const id = opaqueUserId(userId);

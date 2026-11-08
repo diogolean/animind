@@ -27,6 +27,7 @@ const EN = {
   avatarReused: "{name} already has an avatar in this library. No new image was requested.",
   avatarBlocked: "{name} was blocked before any provider call.",
   avatarPartial: "One part was reused and another was not generated. Nothing was sent to a provider.",
+  avatarPartialKept: "One of the two avatars failed. The draft is still here.",
   avatarCancelled: "{name} was cancelled. No provider call was made.",
   avatarFixtureStage: "Fixture · {stage}",
   avatarNoVideo: "This button does not render a video.",
@@ -262,6 +263,7 @@ const PT: Record<keyof typeof EN, string> = {
   avatarReused: "{name} já tem um avatar nesta biblioteca. Nenhuma imagem nova foi pedida.",
   avatarBlocked: "{name} foi bloqueado antes de qualquer chamada ao provedor.",
   avatarPartial: "Uma parte foi reutilizada e a outra não foi gerada. Nada foi enviado a um provedor.",
+  avatarPartialKept: "Um dos dois avatares falhou. O rascunho continua aqui.",
   avatarCancelled: "{name} foi cancelado. Nenhuma chamada ao provedor foi feita.",
   avatarFixtureStage: "Simulado · {stage}",
   avatarNoVideo: "Este botão não renderiza um vídeo.",
@@ -495,6 +497,7 @@ const API_ERROR_KEYS: Partial<Record<string, MessageKey>> = {
   resolution_unavailable: "resolution4kOff",
   resolution_invalid: "requestFailed",
   avatar_provider_unavailable: "avatarProviderOff",
+  generation_not_authorized: "avatarProviderOff",
   avatar_incomplete: "avatarMissingSpeaker",
 };
 

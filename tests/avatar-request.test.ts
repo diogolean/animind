@@ -4,7 +4,8 @@ import { describe, it } from "node:test";
 import { addAvatarParticipant, avatarAttemptKey, avatarIssues, inferAvatarPlan, toggleAvatarParticipant } from "../lib/avatar-plan";
 import { avatarJobReady, cancelAvatarAttempt, decideAvatarRequest, memoryAvatarStore } from "../lib/avatar-batch";
 import { AVATAR_PAID_CALLS_AUTHORIZED } from "../lib/avatar-provider";
-import { abortAvatarProgress, applyAvatarEvent, avatarBatchShape, avatarJobFeedback, avatarRunning, costIsReportedZero, emptyAvatarProgress } from "../lib/avatar-progress";
+import { abortAvatarProgress, applyAvatarEvent, avatarBatchShape, avatarJobFeedback, avatarRunning, costIsReportedZero, emptyAvatarProgress, foldAvatarEvents } from "../lib/avatar-progress";
+import { avatarReconnect, avatarTransport, labelOfflineAttempt, mapCoreAvatar, mapCoreStage, presentCorePayload, promptForCore, rememberAvatarPoll, rememberedAvatarPoll, sanitizeAvatarError } from "../lib/avatar-core";
 import { fill, translate } from "../lib/i18n";
 
 describe("avatar plan", () => {
@@ -179,25 +180,187 @@ describe("avatar progress", () => {
   });
 });
 
+describe("avatar core contract", () => {
+  const blockedPayload = {
+    id: "abc123def456",
+    requestId: "abc123def456",
+    status: "blocked",
+    progress: 40,
+    story: "once upon a time",
+    liveImage: false,
+    charged: false,
+    providerCalls: 0,
+    costUsd: null,
+    tokens: null,
+    plan: { prompt: "Discurso de Ada sobre o mar", fixture: "plan", personas: ["Ada"] },
+    participants: [{ name: "Ada", status: "blocked", idempotency: "aaaaaaaaaaaaaaaa" }],
+    events: [
+      { stage: "plan", status: "ready", participant: null, requestId: "abc123def456" },
+      { stage: "queued", status: "ready", participant: null, requestId: "abc123def456" },
+      { stage: "fail", status: "fail", participant: null, requestId: "abc123def456", blockedBefore: "image generation", error: { code: "generation_not_authorized", recoverable: true } },
+      { stage: "image generation", status: "ready", participant: null, requestId: "abc123def456" },
+    ],
+  };
+
+  it("maps the core blocked payload without a percent, a path, or a provider call", () => {
+    assert.equal(mapCoreStage("QA"), "qa");
+    assert.equal(mapCoreStage("image generation"), null);
+    assert.equal(mapCoreStage("story"), null);
+    assert.equal(avatarTransport("core"), "core");
+    assert.equal(avatarTransport("off"), "fixture");
+    assert.equal(avatarTransport("mock"), "fixture");
+    const mapped = mapCoreAvatar(blockedPayload, "usr_a");
+    assert.ok(mapped);
+    assert.equal(mapped?.code, "generation_not_authorized");
+    assert.equal(mapped?.fixture, true);
+    assert.equal(mapped?.cost, "unknown");
+    assert.equal(costIsReportedZero(mapped?.cost), false);
+    assert.equal(mapped?.providerCalls, 0);
+    assert.equal(mapped?.providerFunction, null);
+    assert.equal(mapped?.keepsDraft, true);
+    assert.equal("progress" in (mapped ?? {}), false);
+    assert.deepEqual(mapped?.events?.map((event) => event.stage), ["plan", "queued", "fail"]);
+    const text = JSON.stringify(mapped);
+    assert.equal(text.includes("sobre o mar"), false);
+    assert.equal(text.includes("40"), false);
+    assert.equal(text.includes("image generation"), false);
+    assert.equal(text.includes("costUsd"), false);
+    assert.equal(text.includes("tokens"), false);
+    let view = foldAvatarEvents(emptyAvatarProgress(), mapped, false);
+    view = foldAvatarEvents(view, mapped, false);
+    assert.equal(view.stages[0], "fail");
+    view = foldAvatarEvents(view, { ...mapped!, events: [{ index: 0, stage: "queued", fixture: true }] }, false);
+    assert.equal(view.stages[0], "fail");
+    const aborted = foldAvatarEvents(view, mapped, true);
+    assert.equal(aborted.aborted, true);
+    const ignored = foldAvatarEvents(aborted, { ...mapped!, events: [{ index: 0, stage: "ready", fixture: true }] }, false);
+    assert.equal(ignored.stages[0], "fail");
+    assert.equal(sanitizeAvatarError({ code: "users/secret", recoverable: true }), null);
+    assert.deepEqual(sanitizeAvatarError({ code: "generation_not_authorized", recoverable: true }), { code: "generation_not_authorized", recoverable: true });
+  });
+
+  it("keeps a partial avatar and does not leak another account's poll", () => {
+    const partial = mapCoreAvatar({
+      id: "abc123def456",
+      requestId: "abc123def456",
+      status: "partial",
+      progress: null,
+      liveImage: false,
+      fixture: "plate",
+      providerCalls: 0,
+      charged: false,
+      participants: [
+        { name: "Ada", status: "ready", idempotency: "aaaaaaaaaaaaaaaa" },
+        { name: "Bento", status: "rejected", idempotency: "bbbbbbbbbbbbbbbb" },
+      ],
+      events: [
+        { stage: "plan", status: "ready", participant: null, requestId: "abc123def456" },
+        { stage: "queued", status: "ready", participant: null, requestId: "abc123def456" },
+        { stage: "cutout", status: "ready", participant: "aaaaaaaaaaaaaaaa", requestId: "abc123def456" },
+        { stage: "QA", status: "ready", participant: "aaaaaaaaaaaaaaaa", requestId: "abc123def456" },
+        { stage: "save", status: "ready", participant: "aaaaaaaaaaaaaaaa", requestId: "abc123def456" },
+        { stage: "ready", status: "ready", participant: "aaaaaaaaaaaaaaaa", requestId: "abc123def456" },
+        { stage: "cutout", status: "ready", participant: "bbbbbbbbbbbbbbbb", requestId: "abc123def456" },
+        { stage: "QA", status: "fail", participant: "bbbbbbbbbbbbbbbb", requestId: "abc123def456", error: { code: "qa_rejected", recoverable: true } },
+        { stage: "save", status: "ready", participant: "bbbbbbbbbbbbbbbb", requestId: "abc123def456" },
+        { stage: "fail", status: "fail", participant: "bbbbbbbbbbbbbbbb", requestId: "abc123def456" },
+      ],
+    }, "usr_a");
+    assert.equal(partial?.outcome, "partial");
+    assert.equal(partial?.keepsDraft, true);
+    assert.equal(partial?.jobs[0]?.stage, "ready");
+    assert.equal(partial?.jobs[1]?.stage, "fail");
+    const view = foldAvatarEvents(emptyAvatarProgress(), partial, false);
+    assert.equal(view.stages[0], "ready");
+    assert.equal(view.stages[1], "fail");
+    const hidden = presentCorePayload(404, { detail: "Ada users/owner/avatars/secret costUsd", prompt: "Discurso de Ada" }, "usr_b");
+    assert.equal(hidden.status, 404);
+    const hiddenText = JSON.stringify(hidden.body);
+    assert.equal(hiddenText.includes("Ada"), false);
+    assert.equal(hiddenText.includes("users/"), false);
+    assert.equal(hiddenText.includes("costUsd"), false);
+    assert.equal(hiddenText.includes("Discurso"), false);
+  });
+
+  it("reconnects with the same GET and labels an offline attempt as a fixture", () => {
+    const spec = avatarReconnect("abc123def456");
+    assert.deepEqual(spec, { method: "GET", path: "/api/avatars?requestId=abc123def456" });
+    assert.deepEqual(avatarReconnect("abc123def456"), spec);
+    assert.equal(avatarReconnect("ada@example.com"), null);
+    assert.equal(avatarReconnect("users/secret"), null);
+    const memory = new Map<string, string>();
+    const storage = {
+      getItem: (key: string) => memory.get(key) ?? null,
+      setItem: (key: string, value: string) => { memory.set(key, value); },
+    };
+    rememberAvatarPoll(storage, "abc123def456");
+    rememberAvatarPoll(storage, "abc123def456");
+    assert.equal(rememberedAvatarPoll(storage), "abc123def456");
+    assert.equal(memory.size, 1);
+    const store = memoryAvatarStore();
+    const made = decideAvatarRequest({
+      ownerId: "usr_a",
+      generationEnabled: true,
+      prompt: "A speech by Ada",
+      library: [],
+      store,
+      requestId: "req_offline",
+    });
+    if (!("jobs" in made.body)) return assert.fail("expected jobs");
+    const labeled = labelOfflineAttempt(made.body);
+    assert.equal(labeled.fixture, true);
+    assert.equal(labeled.jobs[0]?.stage, "fail");
+    assert.deepEqual(labeled.events?.map((event) => event.stage), ["plan", "fail"]);
+    assert.equal(labeled.providerCalls, 0);
+    assert.equal(labeled.providerFunction, null);
+    assert.equal(labeled.keepsDraft, true);
+    assert.equal(JSON.stringify(labeled).includes("image"), false);
+    const again = decideAvatarRequest({
+      ownerId: "usr_a",
+      generationEnabled: true,
+      prompt: "A speech by Ada",
+      library: [],
+      store,
+      requestId: "req_other",
+    });
+    assert.equal("requestId" in again.body && again.body.requestId, "req_offline");
+    assert.equal(promptForCore("A debate about truth", ["Ada", "Grace"]), "A debate about truth\nAda, Grace");
+    assert.equal(promptForCore("A speech by Ada", ["Ada"]), "A speech by Ada");
+  });
+});
+
 describe("avatar routes", () => {
   it("keeps the avatar confirmation off the provider and the download on the owner", () => {
     const route = readFileSync(new URL("../app/api/avatars/route.ts", import.meta.url), "utf8");
     const button = readFileSync(new URL("../components/avatar-request.tsx", import.meta.url), "utf8");
     const studio = readFileSync(new URL("../components/creation-studio.tsx", import.meta.url), "utf8");
     const files = readFileSync(new URL("../app/api/files/[...path]/route.ts", import.meta.url), "utf8");
+    const getPart = route.slice(route.indexOf("export async function GET"), route.indexOf("export async function POST"));
+    assert.equal(getPart.includes("decideAvatarRequest"), false);
+    assert.match(getPart, /proxyJson\(`\/avatars\//);
+    assert.match(route, /avatarTransport\(coreMode\(\)\) === "core"/);
     assert.equal(route.includes("coreFetch"), false);
     assert.equal(route.includes("guardedGeneration"), false);
     assert.equal(route.includes("startRender"), false);
+    assert.equal(route.includes("generate_character_image"), false);
     assert.equal(route.includes("premium"), false);
     assert.equal(button.includes("startRender"), false);
     assert.equal(button.includes("createCharacter"), false);
     assert.equal(button.includes("Loader2"), false);
-    assert.equal(button.includes("sessionStorage"), false);
+    assert.equal(button.includes("animindly-generate"), false);
+    assert.match(button, /sessionStorage/);
+    assert.match(button, /rememberedAvatarPoll/);
+    assert.match(button, /readAvatarAttempt/);
+    const poll = readFileSync(new URL("../lib/avatar-core.ts", import.meta.url), "utf8");
+    assert.match(poll, /animindly-avatar-poll/);
+    assert.equal(poll.includes("animindly-generate"), false);
     assert.equal(button.includes("opacity-25"), false);
     assert.match(button, /text-white/);
     assert.match(button, /waitingForSignIn/);
     assert.match(button, /setTimeout/);
-    assert.equal(button.includes("requestId"), false);
+    assert.equal(/\{[^}]*requestId/.test(button), false);
+    const core = readFileSync(new URL("../lib/core.ts", import.meta.url), "utf8");
+    assert.match(core, /avatars/);
     assert.equal(studio.includes("animindly-generate"), false);
     assert.match(studio, /AvatarRequest/);
     assert.match(studio, /setAwaitingSignIn\(true\)/);
