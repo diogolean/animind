@@ -556,6 +556,11 @@ export function translate(locale: Locale, key: MessageKey): string {
   return locale === "pt-BR" ? PT[key] : EN[key];
 }
 
+export function voiceChipValue(locale: Locale, gender: "male" | "female" | undefined, voiceLabel?: string): string {
+  const side = translate(locale, gender === "female" ? "femaleShort" : "maleShort");
+  return `${side} · ${voiceLabel ?? translate(locale, "automaticVoice")}`;
+}
+
 export function fill(template: string, values: Record<string, string | number>): string {
   return template.replace(/\{(\w+)\}/g, (_, name: string) => String(values[name] ?? ""));
 }

@@ -70,7 +70,7 @@ test("prompt automático em um clique", async ({ page }, info) => {
   await expect(page.getByTestId("plan-chip-characters")).toContainText("Jesus + Diabo");
   await expect(page.getByTestId("plan-chip-topic")).toContainText("temas bíblicos");
   await expect(page.getByTestId("plan-chip-language")).toContainText("Português BR");
-  await expect(page.getByTestId("plan-chip-voice-0")).toContainText("Masc. · Auto");
+  await expect(page.getByTestId("plan-chip-voice-0")).toContainText("Masc. · Automática");
   await snap(page, info, "automatico", "03-detalhes");
 
   await page.getByTestId("plan-chip-language").click();

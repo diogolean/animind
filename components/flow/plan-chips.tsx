@@ -4,7 +4,7 @@ import { Pencil } from "lucide-react";
 import type { CreationPlan, ToneOption, VoiceCatalog } from "@/lib/contract";
 import { languageLabel } from "@/components/flow/language-combobox";
 import { useI18n } from "@/components/locale";
-import { artStyleLabel, scenarioDisplay, translate, type MessageKey } from "@/lib/i18n";
+import { artStyleLabel, scenarioDisplay, translate, voiceChipValue, type MessageKey } from "@/lib/i18n";
 import type { Tone } from "@/lib/contract";
 
 export type PlanField = "language" | "mode" | "characters" | "topic" | "tone" | "objective" | "style" | "scenario" | "duration" | `voice-${number}`;
@@ -37,7 +37,7 @@ export function PlanChips({ plan, tones, voices, onEdit }: { plan: CreationPlan;
       return {
         field: `voice-${index}` as const,
         label: character.name,
-        value: `${gender === "male" ? (locale === "en" ? "Male" : "Masc.") : locale === "en" ? "Female" : "Fem."} · ${selected?.label ?? "Auto"}`,
+        value: voiceChipValue(locale, gender, selected?.label),
       };
     }),
     { field: "topic", label: t("topic"), value: plan.topic },
