@@ -15,12 +15,15 @@ const titleCase = (value: string) =>
 
 function inferMode(prompt: string): CreationMode {
   const text = fold(prompt);
-  if (/\b(debate|debatendo|debater|versus|confronto)\b/.test(text)) return "debate";
+  if (/\b(debate|debates|debatem|debatendo|debater|versus|confronto)\b/.test(text)) return "debate";
   if (/\b(conversa|conversando|dialogo|entrevista|entre)\b/.test(text)) return "dialogue";
   return "monologue";
 }
 
 function namedCharacters(prompt: string, mode: CreationMode): string[] {
+  const debatePair = prompt.match(/^(.+?)\s+(?:and|e)\s+(.+?)\s+(?:debate|debates|debatem|debatendo)\b/i);
+  if (debatePair) return [titleCase(debatePair[1]), titleCase(debatePair[2])].filter(Boolean);
+
   const between = prompt.match(
     /\b(?:entre|between)\s+(.+?)\s+(?:e|and)\s+(.+?)(?=\s+(?:debatendo|conversando|dialogando|discutindo|falando|debating|talking|speaking|sobre|about|que|numa?|em|on|in)\b|[,.!?]|$)/i,
   );
@@ -54,7 +57,7 @@ export function inferLanguage(prompt: string): LanguageCode {
   const text = fold(prompt);
   const portugueseSignals = text.match(/\b(uma|entre|e|o|a|sobre|debatendo|conversa|personagem|fala|temas|biblicos|morte|ensina|com)\b/g)?.length ?? 0;
   if (portugueseSignals >= 2 || /[ãõçâêô]/i.test(prompt)) return "pt-BR";
-  if (/\b(una|entre|sobre|habla|conversacion|personaje|debate|ensenar|con)\b/.test(text) || /[ñ¿¡]/.test(prompt)) return "es-ES";
+  if (/\b(una|entre|sobre|habla|conversacion|personaje|ensenar|con)\b/.test(text) || /[ñ¿¡]/.test(prompt)) return "es-ES";
   if (/\b(une|entre|avec|parle|conversation|personnage|enseigne|sur)\b/.test(text)) return "fr-FR";
   if (/\b(eine|zwischen|spricht|gesprach|figur|lehrt|uber|mit)\b/.test(text)) return "de-DE";
   if (/\b(una|tra|parla|conversazione|personaggio|insegna|sulla)\b/.test(text)) return "it-IT";

@@ -2,14 +2,24 @@ import assert from "node:assert/strict";
 import { spawn, type ChildProcess } from "node:child_process";
 import { createServer } from "node:http";
 import { randomBytes } from "node:crypto";
-import { mkdtemp } from "node:fs/promises";
+import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { describe, it } from "node:test";
+import pg from "pg";
 import { importCharacterPackage } from "../lib/accounts/import-character";
+import { deleteObjectPrefix } from "../lib/accounts/object-store";
 import { createAccount, upsertPilotSuperAdmin } from "../lib/accounts/store";
 import { listEntries } from "../lib/spend/ledger";
 import { isIsolatedPostgresHost } from "../lib/spend/sql";
+
+const testEmails = [
+  "iso-owner-%@example.com",
+  "iso-user-%@example.com",
+  "iso-admin-%@example.com",
+  "owned-owner-%@example.com",
+  "owned-user-%@example.com",
+];
 
 const root = process.cwd();
 const url = process.env.DATABASE_URL?.trim() || "";
@@ -32,8 +42,13 @@ describe("postgres account isolation", { skip: url ? false : "isolated DATABASE_
     process.env.ANIMINDLY_SKIP_ENV_FILE = "1";
     process.env.ANIMINDLY_AUTH_SECRET = randomBytes(24).toString("base64url");
     process.env.ANIMINDLY_SKIP_CHARACTER_IMPORT = "1";
+    delete process.env.BLOB_READ_WRITE_TOKEN;
+    delete process.env.BLOB_STORE_ID;
+    delete process.env.VERCEL;
     const password = randomBytes(18).toString("base64url");
     const owner = await upsertPilotSuperAdmin(`iso-owner-${randomBytes(3).toString("hex")}@example.com`, password);
+    const ids = [owner.id];
+    try {
     const user = await createAccount(owner, {
       email: `iso-user-${randomBytes(3).toString("hex")}@example.com`,
       name: "Visitor",
@@ -48,6 +63,7 @@ describe("postgres account isolation", { skip: url ? false : "isolated DATABASE_
     });
     assert.equal(user.ok && admin.ok, true);
     if (!user.ok || !admin.ok) return;
+    ids.push(user.value.id, admin.value.id);
     assert.equal(user.value.generationEnabled, false);
     assert.equal(admin.value.generationEnabled, false);
     assert.equal(owner.generationEnabled, true);
@@ -144,6 +160,10 @@ describe("postgres account isolation", { skip: url ? false : "isolated DATABASE_
     } finally {
       await app.stop();
     }
+    } finally {
+      await removeTestAccounts(ids);
+      await rm(dir, { recursive: true, force: true });
+    }
   });
 
   it("gives a job and its file only to the account that created them", { timeout: 180_000 }, async () => {
@@ -152,8 +172,13 @@ describe("postgres account isolation", { skip: url ? false : "isolated DATABASE_
     process.env.ANIMINDLY_SKIP_ENV_FILE = "1";
     process.env.ANIMINDLY_AUTH_SECRET = randomBytes(24).toString("base64url");
     process.env.ANIMINDLY_SKIP_CHARACTER_IMPORT = "1";
+    delete process.env.BLOB_READ_WRITE_TOKEN;
+    delete process.env.BLOB_STORE_ID;
+    delete process.env.VERCEL;
     const password = randomBytes(18).toString("base64url");
     const owner = await upsertPilotSuperAdmin(`owned-owner-${randomBytes(3).toString("hex")}@example.com`, password);
+    const ids = [owner.id];
+    try {
     const user = await createAccount(owner, {
       email: `owned-user-${randomBytes(3).toString("hex")}@example.com`,
       name: "Outra conta",
@@ -162,6 +187,7 @@ describe("postgres account isolation", { skip: url ? false : "isolated DATABASE_
     });
     assert.equal(user.ok, true);
     if (!user.ok) return;
+    ids.push(user.value.id);
     const jobId = `job_${randomBytes(6).toString("hex")}`;
     const filePath = `clips/FixtureSpeaker-${randomBytes(3).toString("hex")}.bin`;
     const seen: { path: string; user: string | null }[] = [];
@@ -279,8 +305,60 @@ describe("postgres account isolation", { skip: url ? false : "isolated DATABASE_
       await app.stop();
       await new Promise<void>((resolve) => core.close(() => resolve()));
     }
+    } finally {
+      await removeTestAccounts(ids);
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("leaves none of its accounts in postgres", async () => {
+    await removeTestAccounts([]);
   });
 });
+
+async function removeTestAccounts(ids: string[]): Promise<void> {
+  const client = new pg.Client({ connectionString: url });
+  await client.connect();
+  try {
+    const found = await client.query<{ id: string }>(
+      "SELECT id FROM animind_users WHERE id = ANY($1::text[]) OR email LIKE ANY($2::text[])",
+      [ids, testEmails],
+    );
+    const all = [...new Set([...ids, ...found.rows.map((row) => row.id)])];
+    if (all.length === 0) return;
+    const characters = await client.query<{ id: string }>(
+      "SELECT id FROM animind_characters WHERE owner_id = ANY($1::text[])",
+      [all],
+    );
+    for (const row of characters.rows) await deleteObjectPrefix(row.id);
+    const scopes = all.map((id) => `user:${id}`);
+    for (const statement of [
+      "DELETE FROM animind_assets WHERE owner_id = ANY($1::text[])",
+      "DELETE FROM animind_characters WHERE owner_id = ANY($1::text[])",
+      "DELETE FROM animind_owned WHERE user_id = ANY($1::text[])",
+      "DELETE FROM animind_mock_jobs WHERE user_id = ANY($1::text[])",
+      "DELETE FROM animind_spend_entries WHERE user_id = ANY($1::text[])",
+      "DELETE FROM animind_spend_replay WHERE user_id = ANY($1::text[])",
+      "DELETE FROM animind_spend_rates WHERE user_id = ANY($1::text[])",
+      "DELETE FROM animind_spend_holds WHERE scope = ANY($1::text[])",
+      "DELETE FROM animind_users WHERE id = ANY($1::text[])",
+    ]) {
+      const params = statement.includes("animind_spend_holds") ? [scopes] : [all];
+      try {
+        await client.query(statement, params);
+      } catch (error) {
+        if ((error as { code?: string }).code !== "42P01") throw error;
+      }
+    }
+    const left = await client.query(
+      "SELECT email FROM animind_users WHERE id = ANY($1::text[]) OR email LIKE ANY($2::text[])",
+      [all, testEmails],
+    );
+    assert.equal(left.rows.length, 0, left.rows.map((row) => row.email).join(","));
+  } finally {
+    await client.end();
+  }
+}
 
 async function hit(base: string, urlPath: string, cookie?: string, method = "GET", body?: unknown) {
   const response = await fetch(`${base}${urlPath}`, {

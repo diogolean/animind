@@ -19,8 +19,7 @@ import { isIsolatedPostgresHost } from "../lib/spend/sql";
 /**
  * Two accounts against the CI Postgres service (postgres:16 in ci.yml).
  * tests/privacy.test.ts and tests/accounts.test.ts delete DATABASE_URL and use the file store.
- * tests/isolation-postgres.test.ts uses this database, but it does not compare a foreign id
- * with a missing id, does not cover an expired cookie, and does not delete its rows.
+ * tests/isolation-postgres.test.ts uses this database for status checks and deletes its rows.
  * tests/spend-postgres.test.ts uses this database for the ledger limits, not for ownership.
  */
 
