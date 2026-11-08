@@ -25,6 +25,9 @@ import { findPrice, parsePriceTable, PUBLISHED_PRICE_TABLE } from "../lib/spend/
 import { spendTotals } from "../lib/spend/totals";
 import { runWithSpend } from "../lib/spend/context";
 import { noteNestedProviderRead } from "../lib/spend/nested-read";
+import { readProvider, readReportedMinor } from "../lib/spend/usage-report";
+import { opaqueUserId } from "../lib/accounts/opaque-user";
+import { resourcesInText } from "../lib/accounts/owned";
 
 const root = process.cwd();
 const secretPrompt = "NAO-CHAMAR-PROVEDOR-xyz";
@@ -229,6 +232,28 @@ describe("ledger", () => {
     assert.equal(totals.reads, 1);
     assert.equal(totals.reported.length, 0);
     assert.equal(totals.estimated.length, 0);
+  });
+
+  it("keeps a missing cost null and refuses an email as the opaque user", () => {
+    assert.equal(readReportedMinor(undefined), null);
+    assert.equal(readReportedMinor(null), null);
+    assert.equal(readReportedMinor("0"), null);
+    assert.equal(readReportedMinor(1.5), null);
+    assert.equal(readReportedMinor(-1), null);
+    assert.equal(readReportedMinor(0), 0);
+    assert.equal(readProvider("deepseek"), "deepseek");
+    assert.equal(readProvider("owner@example.com"), null);
+    assert.equal(opaqueUserId("usr_abc"), "usr_abc");
+    assert.equal(opaqueUserId("owner@example.com"), null);
+    const named = resourcesInText(JSON.stringify({
+      id: "chr_not_a_job",
+      name: "Fixture Speaker",
+      status: "ready",
+      videoUrl: "https://core.example/v1/files/clips/FixtureSpeaker.bin",
+      job: { id: "job_owned", status: "queued" },
+    }));
+    assert.deepEqual(named.jobs, ["job_owned"]);
+    assert.deepEqual(named.files, ["clips/FixtureSpeaker.bin"]);
   });
 });
 

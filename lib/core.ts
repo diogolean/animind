@@ -1,4 +1,5 @@
 import "server-only";
+import { opaqueUserId } from "./accounts/opaque-user";
 import { productEnv } from "./product-env";
 import { spendFrame } from "./spend/context";
 
@@ -18,6 +19,26 @@ const coreKey = () => productEnv("CORE_KEY") || process.env.CORE_API_KEY || "";
 export type CoreMode = "core" | "mock" | "off";
 export const coreMode = (): CoreMode => (coreUrl() ? "core" : productEnv("CORE_MOCK") === "1" ? "mock" : "off");
 
+/** Paths whose result belongs to one account. Health and shared catalogs are not in this list. */
+const OWNER_SCOPED = /^\/(render|plan|characters|preview|scenarios|jobs\/|files\/|personas\/)/;
+
+export function coreUserHeader(userId: string | null | undefined): { "x-animind-user"?: string } {
+  const id = opaqueUserId(userId);
+  return id ? { "x-animind-user": id } : {};
+}
+
+function withOwner(path: string, headers: Headers): void {
+  const pathOnly = path.split("?")[0] ?? path;
+  if (!OWNER_SCOPED.test(pathOnly)) {
+    headers.delete("x-animind-user");
+    return;
+  }
+  const explicit = headers.get("x-animind-user");
+  const id = opaqueUserId(explicit ?? spendFrame()?.userId);
+  if (id) headers.set("x-animind-user", id);
+  else headers.delete("x-animind-user");
+}
+
 export async function coreFetch(path: string, init?: RequestInit): Promise<Response> {
   const base = coreUrl();
   if (!base) throw new Error("ANIMINDLY_CORE_URL not set");
@@ -25,6 +46,7 @@ export async function coreFetch(path: string, init?: RequestInit): Promise<Respo
   if (init?.body) headers.set("content-type", "application/json");
   const key = coreKey();
   if (key) headers.set("authorization", `Bearer ${key}`);
+  withOwner(path, headers);
   const frame = spendFrame();
   const attempts = (frame?.maxRetries ?? 0) + 1;
   let lastError: unknown;

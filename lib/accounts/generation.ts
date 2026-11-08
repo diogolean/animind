@@ -19,7 +19,9 @@ import {
 import { providerForMode, quoteCall, readSpendLimits, requestOverCap, type SpendBlock, type SpendLimits } from "@/lib/spend/policy";
 import { generationSwitch, idempotencyKey, userMayGenerate } from "./generation-policy";
 import { currentUser, isUser, requireUser } from "./http";
+import { rememberOwned } from "./owned";
 import type { PublicUser } from "./types";
+import { readModel, readProvider, readReportedMinor, readToken } from "../spend/usage-report";
 
 export type GenerationTicket = {
   user: PublicUser;
@@ -181,33 +183,34 @@ export async function beginGeneration(req: Request, operation: SpendOperation, h
 function usageFrom(text: string): Partial<SpendEntry> {
   try {
     const body = JSON.parse(text) as {
-      usage?: { inputTokens?: unknown; outputTokens?: unknown; cachedTokens?: unknown; thinkingTokens?: unknown };
+      usage?: {
+        inputTokens?: unknown;
+        outputTokens?: unknown;
+        cachedTokens?: unknown;
+        thinkingTokens?: unknown;
+        imageCount?: unknown;
+        audioSeconds?: unknown;
+        videoSeconds?: unknown;
+      };
       model?: unknown;
+      provider?: unknown;
+      reportedMinor?: unknown;
       id?: unknown;
     };
-    const usage = body.usage as
-      | {
-          inputTokens?: unknown;
-          outputTokens?: unknown;
-          cachedTokens?: unknown;
-          thinkingTokens?: unknown;
-          imageCount?: unknown;
-          audioSeconds?: unknown;
-          videoSeconds?: unknown;
-        }
-      | undefined;
-    const numberOrNull = (value: unknown) => (typeof value === "number" && Number.isFinite(value) ? value : null);
-    const reported = (body as { reportedMinor?: unknown }).reportedMinor;
+    const usage = body.usage;
+    const provider = readProvider(body.provider);
+    const model = readModel(body.model);
     return {
-      inputTokens: numberOrNull(usage?.inputTokens),
-      outputTokens: numberOrNull(usage?.outputTokens),
-      cachedTokens: numberOrNull(usage?.cachedTokens),
-      thinkingTokens: numberOrNull(usage?.thinkingTokens),
-      imageCount: numberOrNull(usage?.imageCount),
-      audioSeconds: numberOrNull(usage?.audioSeconds),
-      videoSeconds: numberOrNull(usage?.videoSeconds),
-      reportedMinor: typeof reported === "number" && Number.isInteger(reported) && reported >= 0 ? reported : null,
-      model: typeof body.model === "string" && /^[A-Za-z0-9._:-]{1,80}$/.test(body.model) ? body.model : undefined,
+      inputTokens: readToken(usage?.inputTokens),
+      outputTokens: readToken(usage?.outputTokens),
+      cachedTokens: readToken(usage?.cachedTokens),
+      thinkingTokens: readToken(usage?.thinkingTokens),
+      imageCount: readToken(usage?.imageCount),
+      audioSeconds: readToken(usage?.audioSeconds),
+      videoSeconds: readToken(usage?.videoSeconds),
+      reportedMinor: readReportedMinor(body.reportedMinor),
+      ...(provider ? { provider } : {}),
+      ...(model ? { model } : {}),
       jobRef: jobRef(typeof body.id === "string" ? body.id : null),
     };
   } catch {
@@ -225,6 +228,13 @@ export async function finishGeneration(ticket: GenerationTicket, response: Respo
       if (usage[key] === undefined) delete usage[key];
     }
     const status = response.status;
+    if (status >= 200 && status < 300) {
+      try {
+        await rememberOwned(ticket.user.id, text);
+      } catch {
+        // A failed record leaves the id unbound, so a later read is 404. The provider response still settles.
+      }
+    }
     const waive = response.headers.get("x-animind-spend") === "waive";
     const over = usageOverCap(usage, ticket.limits);
     const next = waive ? "failed" : status === 504 || status === 202 ? "uncertain" : status >= 200 && status < 300 ? "succeeded" : "failed";
@@ -283,28 +293,35 @@ export async function guardedGeneration(req: Request, operation: SpendOperation,
  * Auth-only read. No reservation, no retry, no invented tokens.
  * A job payload can fill a missing usage report once.
  */
-export async function guardedRead(req: Request, operation: "job" | "file", perform: () => Promise<Response>): Promise<Response> {
+export async function guardedRead(req: Request, operation: "job" | "file", perform: (actor: PublicUser) => Promise<Response>): Promise<Response> {
   const actor = await requireUser();
   if (!isUser(actor)) return actor;
   const started = Date.now();
-  const response = await perform();
+  const response = await perform(actor);
   if (operation === "job") {
     try {
-      const body = JSON.parse(await response.clone().text()) as { id?: unknown; usage?: Record<string, unknown>; reportedMinor?: unknown; model?: unknown };
+      const body = JSON.parse(await response.clone().text()) as {
+        id?: unknown;
+        usage?: Record<string, unknown>;
+        reportedMinor?: unknown;
+        model?: unknown;
+        provider?: unknown;
+      };
       const ref = jobRef(typeof body.id === "string" ? body.id : null);
       if (ref) {
-        const numberOrNull = (value: unknown) => (typeof value === "number" && Number.isFinite(value) ? value : null);
-        const reported = body.reportedMinor;
+        const provider = readProvider(body.provider);
+        const model = readModel(body.model);
         await attachUsage(ref, {
-          inputTokens: numberOrNull(body.usage?.inputTokens),
-          outputTokens: numberOrNull(body.usage?.outputTokens),
-          cachedTokens: numberOrNull(body.usage?.cachedTokens),
-          thinkingTokens: numberOrNull(body.usage?.thinkingTokens),
-          imageCount: numberOrNull(body.usage?.imageCount),
-          audioSeconds: numberOrNull(body.usage?.audioSeconds),
-          videoSeconds: numberOrNull(body.usage?.videoSeconds),
-          reportedMinor: typeof reported === "number" && Number.isInteger(reported) && reported >= 0 ? reported : null,
-          model: typeof body.model === "string" && /^[A-Za-z0-9._:-]{1,80}$/.test(body.model) ? body.model : undefined,
+          inputTokens: readToken(body.usage?.inputTokens),
+          outputTokens: readToken(body.usage?.outputTokens),
+          cachedTokens: readToken(body.usage?.cachedTokens),
+          thinkingTokens: readToken(body.usage?.thinkingTokens),
+          imageCount: readToken(body.usage?.imageCount),
+          audioSeconds: readToken(body.usage?.audioSeconds),
+          videoSeconds: readToken(body.usage?.videoSeconds),
+          reportedMinor: readReportedMinor(body.reportedMinor),
+          ...(provider ? { provider } : {}),
+          ...(model ? { model } : {}),
         });
       }
     } catch {

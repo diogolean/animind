@@ -103,8 +103,16 @@ describe("postgres account isolation", { skip: url ? false : "isolated DATABASE_
       assert.deepEqual(JSON.parse(userLibrary.text).characters, []);
       assert.equal((await hit(app.base, `/api/library/${imported.id}`, userLogin.cookie)).status, 404);
       assert.equal((await hit(app.base, front, userLogin.cookie)).status, 404);
-      assert.equal((await hit(app.base, "/api/jobs/job_missing", userLogin.cookie)).status, 404);
-      assert.equal((await hit(app.base, "/api/files/missing/file.bin", userLogin.cookie)).status, 404);
+      const userJob = await hit(app.base, "/api/jobs/job_missing", userLogin.cookie);
+      const userFile = await hit(app.base, "/api/files/missing/file.bin", userLogin.cookie);
+      assert.equal(userJob.status, 404);
+      assert.equal(userFile.status, 404);
+      assert.equal(userJob.text.includes("Fixture Speaker"), false);
+      assert.equal(userJob.text.includes("job_missing"), false);
+      assert.equal(userFile.text.includes("missing/file.bin"), false);
+      const ownerMissing = await hit(app.base, "/api/jobs/job_missing", ownerLogin.cookie);
+      assert.equal(ownerMissing.status, 404);
+      assert.equal(ownerMissing.text.includes("Fixture Speaker"), false);
       assert.equal((await hit(app.base, "/api/admin/spend", userLogin.cookie)).status, 403);
       assert.equal((await hit(app.base, "/api/admin/users", userLogin.cookie)).status, 403);
       assert.equal((await hit(app.base, "/api/admin/spend", adminLogin.cookie)).status, 403);
@@ -137,6 +145,141 @@ describe("postgres account isolation", { skip: url ? false : "isolated DATABASE_
       await app.stop();
     }
   });
+
+  it("gives a job and its file only to the account that created them", { timeout: 180_000 }, async () => {
+    const dir = await mkdtemp(path.join(os.tmpdir(), "animind-iso-owned-"));
+    process.env.ANIMINDLY_DATA_DIR = dir;
+    process.env.ANIMINDLY_SKIP_ENV_FILE = "1";
+    process.env.ANIMINDLY_AUTH_SECRET = randomBytes(24).toString("base64url");
+    process.env.ANIMINDLY_SKIP_CHARACTER_IMPORT = "1";
+    const password = randomBytes(18).toString("base64url");
+    const owner = await upsertPilotSuperAdmin(`owned-owner-${randomBytes(3).toString("hex")}@example.com`, password);
+    const user = await createAccount(owner, {
+      email: `owned-user-${randomBytes(3).toString("hex")}@example.com`,
+      name: "Outra conta",
+      password,
+      role: "user",
+    });
+    assert.equal(user.ok, true);
+    if (!user.ok) return;
+    const jobId = `job_${randomBytes(6).toString("hex")}`;
+    const filePath = `clips/FixtureSpeaker-${randomBytes(3).toString("hex")}.bin`;
+    const seen: { path: string; user: string | null }[] = [];
+    const core = createServer((req, res) => {
+      const urlPath = req.url ?? "";
+      const header = req.headers["x-animind-user"];
+      seen.push({ path: urlPath, user: Array.isArray(header) ? header[0] ?? null : header ?? null });
+      req.resume();
+      const send = (status: number, body: unknown, type = "application/json") => {
+        const text = typeof body === "string" ? body : JSON.stringify(body);
+        res.writeHead(status, { "content-type": type });
+        res.end(text);
+      };
+      if (urlPath.startsWith("/v1/health")) return send(200, { ok: true });
+      if (urlPath.startsWith("/v1/tones")) return send(200, { tones: [] });
+      if (urlPath.startsWith("/v1/plan")) return send(200, { topic: "gravity", characters: [{ name: "Fixture Speaker" }] });
+      if (urlPath.startsWith("/v1/personas/sheet")) return send(200, { name: "Socrates", found: false, quotes: [] });
+      if (urlPath.startsWith("/v1/characters")) return send(201, { id: "chr_owned", name: "Fixture Speaker" });
+      if (urlPath.startsWith("/v1/render")) {
+        return send(202, {
+          id: jobId,
+          status: "queued",
+          provider: "deepseek",
+          model: "deepseek-flash",
+          usage: { inputTokens: 11, outputTokens: 4 },
+          videoUrl: `http://127.0.0.1/v1/files/${filePath}`,
+        });
+      }
+      if (urlPath.startsWith(`/v1/jobs/${jobId}`)) {
+        return send(200, { id: jobId, status: "done", characters: [{ name: "Fixture Speaker" }] });
+      }
+      if (urlPath.startsWith(`/v1/files/${filePath}`)) return send(200, "clip-bytes", "application/octet-stream");
+      return send(404, { error: "missing" });
+    });
+    const corePort = await new Promise<number>((resolve) => {
+      core.listen(0, "127.0.0.1", () => {
+        const address = core.address();
+        resolve(typeof address === "object" && address ? address.port : 0);
+      });
+    });
+    const app = await startApp(dir, {
+      ANIMINDLY_CORE_URL: `http://127.0.0.1:${corePort}`,
+      ANIMINDLY_PRICE_TABLE_JSON: ownerPriceTable(),
+      ANIMINDLY_SPEND_BUDGET_CENTS: "100",
+      ANIMINDLY_SPEND_USER_CENTS: "100",
+      ANIMINDLY_GENERATION_CONCURRENCY: "8",
+      ANIMINDLY_SPEND_RATE_PER_MIN: "100",
+    });
+    try {
+      const ownerLogin = await login(app.base, owner.email, password);
+      const userLogin = await login(app.base, user.value.email, password);
+      const plan = await hit(app.base, "/api/plan", ownerLogin.cookie, "POST", { prompt: "A short scene", language: "en-US" });
+      assert.equal(plan.status, 200, plan.text);
+      const sheet = await hit(app.base, "/api/personas/sheet?name=Socrates&lang=en", ownerLogin.cookie);
+      assert.equal(sheet.status, 200, sheet.text);
+      const character = await hit(app.base, "/api/characters", ownerLogin.cookie, "POST", {
+        name: "Fixture Speaker",
+        source: { kind: "prompt", prompt: "a speaker at a desk" },
+      });
+      assert.equal(character.status, 201, character.text);
+      const render = await hit(app.base, "/api/render", ownerLogin.cookie, "POST", {
+        characters: [{ id: "c1", name: "Fixture Speaker" }],
+        template: "solo",
+        scenario: "studio",
+        topic: "opaque owner lock",
+      });
+      assert.equal(render.status, 202, render.text);
+      const ownerCalls = seen.filter((call) => !call.path.startsWith("/v1/health") && !call.path.startsWith("/v1/tones"));
+      assert.ok(ownerCalls.length >= 4);
+      for (const call of ownerCalls) {
+        assert.equal(call.user, owner.id);
+        assert.equal(call.user.includes("@"), false);
+        assert.equal(call.user === owner.email, false);
+      }
+      for (const call of seen.filter((item) => item.path.startsWith("/v1/health") || item.path.startsWith("/v1/tones"))) {
+        assert.equal(call.user, null);
+      }
+      const ledger = (await listEntries()).entries.find((entry) => entry.userId === owner.id && entry.operation === "render" && entry.jobRef);
+      assert.ok(ledger);
+      assert.equal(ledger.provider, "deepseek");
+      assert.equal(ledger.model, "deepseek-flash");
+      assert.equal(ledger.inputTokens, 11);
+      assert.equal(ledger.outputTokens, 4);
+      assert.equal(ledger.reportedMinor, null);
+
+      const before = seen.length;
+      const anonJob = await hit(app.base, `/api/jobs/${jobId}`);
+      const anonFile = await hit(app.base, `/api/files/${filePath}`);
+      assert.equal(anonJob.status, 401);
+      assert.equal(anonFile.status, 401);
+      const otherJob = await hit(app.base, `/api/jobs/${jobId}`, userLogin.cookie);
+      const otherFile = await hit(app.base, `/api/files/${filePath}`, userLogin.cookie);
+      assert.equal(otherJob.status, 404);
+      assert.equal(otherFile.status, 404);
+      for (const response of [anonJob, anonFile, otherJob, otherFile]) {
+        assert.equal(response.text.includes("Fixture Speaker"), false);
+        assert.equal(response.text.includes(filePath), false);
+        assert.equal(response.text.includes(owner.email), false);
+      }
+      assert.equal(seen.length, before);
+
+      const ownJob = await hit(app.base, `/api/jobs/${jobId}`, ownerLogin.cookie);
+      assert.equal(ownJob.status, 200, ownJob.text);
+      assert.equal(ownJob.text.includes("Fixture Speaker"), true);
+      const ownFile = await hit(app.base, `/api/files/${filePath}`, ownerLogin.cookie);
+      assert.equal(ownFile.status, 200, ownFile.text);
+      assert.equal(ownFile.text, "clip-bytes");
+      const jobFetch = seen.filter((call) => call.path.startsWith(`/v1/jobs/${jobId}`));
+      const fileFetch = seen.filter((call) => call.path.startsWith(`/v1/files/${filePath}`));
+      assert.equal(jobFetch.length, 1);
+      assert.equal(fileFetch.length, 1);
+      assert.equal(jobFetch[0]?.user, owner.id);
+      assert.equal(fileFetch[0]?.user, owner.id);
+    } finally {
+      await app.stop();
+      await new Promise<void>((resolve) => core.close(() => resolve()));
+    }
+  });
 });
 
 async function hit(base: string, urlPath: string, cookie?: string, method = "GET", body?: unknown) {
@@ -164,7 +307,26 @@ async function login(base: string, email: string, password: string) {
   return { cookie: `animind_session=${match[1]}`, user: body.user, text };
 }
 
-async function startApp(dir: string): Promise<{ base: string; stop: () => Promise<void> }> {
+function ownerPriceTable(): string {
+  const entry = (operation: string) => ({
+    operation,
+    provider: "core",
+    model: "unspecified",
+    currency: "USD",
+    minor: 1,
+    unit: "call",
+    source: "fixture, not an official rate",
+    sourceDate: "2026-11-07",
+  });
+  return JSON.stringify({
+    version: "test-2026-11-07",
+    source: "fixture, not an official rate",
+    sourceDate: "2026-11-07",
+    entries: ["plan", "persona_sheet", "character", "render"].map(entry),
+  });
+}
+
+async function startApp(dir: string, extra: Record<string, string> = {}): Promise<{ base: string; stop: () => Promise<void> }> {
   const port = await new Promise<number>((resolve, reject) => {
     const server = createServer();
     server.on("error", reject);
@@ -199,6 +361,7 @@ async function startApp(dir: string): Promise<{ base: string; stop: () => Promis
       CORE_URL: "",
       ANIMINDLY_CORE_MOCK: "",
       ANIMINDLY_PRICE_TABLE_JSON: "",
+      ...extra,
     },
     stdio: ["ignore", "pipe", "pipe"],
   });

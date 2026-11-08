@@ -506,7 +506,7 @@ export async function insertEntry(entry: SpendEntry): Promise<void> {
   });
 }
 
-export async function settle(id: string, patch: Partial<Pick<SpendEntry, "status" | "block" | "latencyMs" | "inputTokens" | "outputTokens" | "cachedTokens" | "thinkingTokens" | "imageCount" | "audioSeconds" | "videoSeconds" | "reportedMinor" | "jobRef" | "model">>): Promise<void> {
+export async function settle(id: string, patch: Partial<Pick<SpendEntry, "status" | "block" | "latencyMs" | "inputTokens" | "outputTokens" | "cachedTokens" | "thinkingTokens" | "imageCount" | "audioSeconds" | "videoSeconds" | "reportedMinor" | "jobRef" | "model" | "provider">>): Promise<void> {
   if (usePostgres()) {
     const db = await ready();
     const rows = await db`SELECT estimated_minor, user_id, status FROM animind_spend_entries WHERE id = ${id} LIMIT 1`;
@@ -519,6 +519,10 @@ export async function settle(id: string, patch: Partial<Pick<SpendEntry, "status
         reported_minor = COALESCE(${patch.reportedMinor ?? null}, reported_minor),
         job_ref = COALESCE(${patch.jobRef ?? null}, job_ref),
         model = COALESCE(${patch.model ?? null}, model),
+        provider = CASE
+          WHEN CAST(${patch.provider ?? null} AS text) IS NOT NULL AND provider IN ('core', 'none', 'mock') THEN CAST(${patch.provider ?? null} AS text)
+          ELSE provider
+        END,
         updated_at = ${new Date().toISOString()}
         WHERE id = ${id}`;
       return;
@@ -550,6 +554,10 @@ export async function settle(id: string, patch: Partial<Pick<SpendEntry, "status
         reported_minor = ${patch.reportedMinor ?? null},
         job_ref = COALESCE(${patch.jobRef ?? null}, job_ref),
         model = COALESCE(${patch.model ?? null}, model),
+        provider = CASE
+          WHEN CAST(${patch.provider ?? null} AS text) IS NOT NULL AND provider IN ('core', 'none', 'mock') THEN CAST(${patch.provider ?? null} AS text)
+          ELSE provider
+        END,
         updated_at = ${new Date().toISOString()}
         WHERE id = ${id}`,
     ]);
@@ -599,8 +607,8 @@ export async function listEntries(): Promise<{ entries: SpendEntry[]; holds: Hol
 }
 
 /** Fill a missing usage report once. Does not add tokens that were already stored and does not treat null as zero. */
-export async function attachUsage(jobRefValue: string, patch: Partial<Pick<SpendEntry, "inputTokens" | "outputTokens" | "cachedTokens" | "thinkingTokens" | "imageCount" | "audioSeconds" | "videoSeconds" | "reportedMinor" | "model">>): Promise<boolean> {
-  const values = [patch.inputTokens, patch.outputTokens, patch.cachedTokens, patch.thinkingTokens, patch.imageCount, patch.audioSeconds, patch.videoSeconds, patch.reportedMinor, patch.model];
+export async function attachUsage(jobRefValue: string, patch: Partial<Pick<SpendEntry, "inputTokens" | "outputTokens" | "cachedTokens" | "thinkingTokens" | "imageCount" | "audioSeconds" | "videoSeconds" | "reportedMinor" | "model" | "provider">>): Promise<boolean> {
+  const values = [patch.inputTokens, patch.outputTokens, patch.cachedTokens, patch.thinkingTokens, patch.imageCount, patch.audioSeconds, patch.videoSeconds, patch.reportedMinor, patch.model, patch.provider];
   if (values.every((value) => value === null || value === undefined)) return false;
   if (usePostgres()) {
     const db = await ready();
@@ -613,7 +621,14 @@ export async function attachUsage(jobRefValue: string, patch: Partial<Pick<Spend
       audio_seconds = COALESCE(audio_seconds, ${patch.audioSeconds ?? null}),
       video_seconds = COALESCE(video_seconds, ${patch.videoSeconds ?? null}),
       reported_minor = COALESCE(reported_minor, ${patch.reportedMinor ?? null}),
-      model = COALESCE(model, ${patch.model ?? null}),
+      model = CASE
+        WHEN model IS NULL OR model IN ('unspecified', 'none', 'mock') THEN COALESCE(${patch.model ?? null}, model)
+        ELSE model
+      END,
+      provider = CASE
+        WHEN CAST(${patch.provider ?? null} AS text) IS NOT NULL AND provider IN ('core', 'none', 'mock') THEN CAST(${patch.provider ?? null} AS text)
+        ELSE provider
+      END,
       updated_at = ${new Date().toISOString()}
       WHERE id = (
         SELECT id FROM animind_spend_entries
@@ -629,7 +644,10 @@ export async function attachUsage(jobRefValue: string, patch: Partial<Pick<Spend
     const entry = [...db.entries].reverse().find((item) => item.jobRef === jobRefValue && (item.status === "uncertain" || item.status === "succeeded"));
     if (!entry) return false;
     if (entry.inputTokens !== null || entry.reportedMinor !== null) return false;
-    Object.assign(entry, patch, { updatedAt: new Date().toISOString() });
+    const next = { ...patch };
+    if (next.provider && !["core", "none", "mock"].includes(entry.provider)) delete next.provider;
+    if (next.model && entry.model && !["unspecified", "none", "mock"].includes(entry.model)) delete next.model;
+    Object.assign(entry, next, { updatedAt: new Date().toISOString() });
     await writeDb(db);
     return true;
   });

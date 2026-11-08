@@ -121,13 +121,17 @@ The Next.js app reads [`.env.example`](../.env.example). Image, script, and spee
 
 | Field | What this app does with it |
 | --- | --- |
-| `provider` | Not read from the response yet. The ledger stores `core` or `none` from the local mode. The core should still send it so a later change can record the real process. |
-| `model` | Stored only when the response string matches `^[A-Za-z0-9._:-]{1,80}$`. Never copied from this app's env. |
+| `provider` | Stored when the response string matches `^[A-Za-z0-9._:-]{1,40}$` and the ledger row still has the local placeholder `core`, `none`, or `mock`. A missing field leaves that placeholder. It is not a cost and it is not an email. |
+| `model` | Stored only when the response string matches `^[A-Za-z0-9._:-]{1,80}$`. On the reservation it replaces `unspecified`, `none`, or `mock`. Never copied from this app's env. |
 | `usage.inputTokens`, `usage.outputTokens`, `usage.cachedTokens`, `usage.thinkingTokens` | Stored as separate counts. Thinking tokens are not added into output tokens. |
 | `usage.imageCount`, `usage.audioSeconds`, `usage.videoSeconds` | Stored when present. |
 | `reportedMinor` | Integer USD cents. A missing or non-integer value stays null. It is not treated as zero. A reservation estimate is not this field. |
 
 The separate Omni-Engine draft, from `feat/animind-core-api`, is what has to start returning those fields. A nested provider read inside a paid render stays inside the same reservation. This app also writes one `read` row for that call, with the same user, request, and attempt. Its estimated and reported amounts stay null.
+
+Owner-scoped proxies send `X-Animind-User` set to the account id (`usr_…`). The value matches `^[A-Za-z0-9_-]{1,80}$`. An email is deleted and never forwarded. The header goes on `/render`, `/plan`, `/characters`, `/preview`, `/scenarios`, `/jobs/`, `/files/`, and `/personas/` (sheet and deep). `GET /health`, `GET /tones`, and `GET /voices` do not send it. Omni-Engine draft [PR 100](https://github.com/diogolean/Omni-Engine/pull/100) stores the persona sheet under a hash of that header and leaves the public sheet shared when the header is absent. This repo does not change that repository.
+
+`GET /v1/jobs` and `GET /v1/files` on the core still do not check the owner. This app records a job id or a file path only when a response it proxied for that account names it, and answers 404 to every other account before calling the core. A job or file that exists only on the core, and was never named in a stored response, is 404 here too. The 404 body is a fixed sentence. It does not include the character name or the path.
 
 Account rows use the same driver as the spend ledger. A Neon host stays on the Neon HTTP driver. The CI Postgres service uses the wire protocol. `tests/privacy.test.ts` covers the file store. `tests/isolation-postgres.test.ts` covers two accounts on the isolated database.
 
@@ -143,9 +147,9 @@ Rate, concurrency, and budget are the ledger. There is no process-memory limiter
 | `POST /api/characters` | `character` reservation. | Ledger. |
 | `POST /api/scenarios` | `scenario` reservation. | Ledger. |
 | `POST /api/personas/deep` and `GET /api/personas/deep` | `persona_deep` reservation. | Ledger. |
-| `GET /api/personas/sheet` | Core mode: `persona_sheet` reservation and a proxy to the core contract. Any other mode: labeled Wikiquote fixture from the file cache, no reservation and no provider. | Ledger only in core mode. |
-| `GET /api/jobs/:id` | `job` read. Amounts stay null. | Session required. No money reservation. |
-| `GET /api/files/*` | `file` read. Amounts stay null. | Session required. No money reservation. |
+| `GET /api/personas/sheet` | Core mode: `persona_sheet` reservation and a proxy to the core contract, with `X-Animind-User`. Any other mode: labeled Wikiquote fixture from the file cache, no reservation and no provider. | Ledger only in core mode. The fixture path does not call the core. |
+| `GET /api/jobs/:id` | `job` read. Amounts stay null. A usage object on the payload can fill the matching reservation once. A missing `reportedMinor` stays null. | Session required, then the owning account. A visitor is 401. Another account is 404. No money reservation. |
+| `GET /api/files/*` | `file` read. Amounts stay null. | Session required, then the owning account. A visitor is 401. Another account is 404. No money reservation. |
 | `GET /api/voices` | Local catalog. No ledger row. | None. |
 | `GET /api/tones` | Local catalog. No ledger row. A core tone lookup that happens inside render is the nested read above. | None on this route. |
 | `GET /api/health` | No ledger row. | None. |

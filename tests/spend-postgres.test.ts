@@ -178,11 +178,13 @@ describe("postgres spend ledger", { skip: url ? false : "isolated DATABASE_URL i
     const row = entry({ jobRef: "jobhash" });
     assert.equal((await reserve({ entry: row, globalLimit: 10, userLimit: 10, ratePerMin: 10, concurrency: 2 })).ok, true);
     await settle(row.id, { status: "uncertain", block: "timeout", jobRef: "jobhash" });
-    assert.equal(await attachUsage("jobhash", { inputTokens: 3, outputTokens: 1, reportedMinor: null }), true);
-    assert.equal(await attachUsage("jobhash", { inputTokens: 9, outputTokens: 8, reportedMinor: 4 }), false);
+    assert.equal(await attachUsage("jobhash", { inputTokens: 3, outputTokens: 1, reportedMinor: null, provider: "deepseek", model: "deepseek-flash" }), true);
+    assert.equal(await attachUsage("jobhash", { inputTokens: 9, outputTokens: 8, reportedMinor: 4, provider: "google" }), false);
     const stored = (await listEntries()).entries.find((item) => item.id === row.id);
     assert.equal(stored?.inputTokens, 3);
     assert.equal(stored?.outputTokens, 1);
     assert.equal(stored?.reportedMinor, null);
+    assert.equal(stored?.provider, "deepseek");
+    assert.equal(stored?.model, "deepseek-flash");
   });
 });
