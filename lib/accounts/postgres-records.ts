@@ -1,28 +1,27 @@
-import { neon, type NeonQueryFunction } from "@neondatabase/serverless";
 import { databaseUrl } from "./config";
 import type { AccountRecords } from "./records";
 import type { AssetKind, LibraryAsset, LibraryCharacter, LibraryStatus, LibraryViewName, Role, UserRecord } from "./types";
+import { sqlFor, type SqlQuery } from "../spend/sql";
 
-type Sql = NeonQueryFunction<false, false>;
+let schema: { url: string; ready: Promise<void> } | null = null;
 
-let cached: { url: string; sql: Sql } | null = null;
-let schema: Promise<void> | null = null;
-
-function sql(): Sql {
+function sql(): SqlQuery {
   const url = databaseUrl();
   if (!url) throw new Error("DATABASE_URL ausente");
-  if (!cached || cached.url !== url) cached = { url, sql: neon(url) };
-  return cached.sql;
+  return sqlFor(url);
 }
 
 function isUnique(error: unknown): boolean {
   return typeof error === "object" && error !== null && "code" in error && (error as { code?: string }).code === "23505";
 }
 
-async function ready(): Promise<Sql> {
+async function ready(): Promise<SqlQuery> {
+  const url = databaseUrl();
+  if (!url) throw new Error("DATABASE_URL ausente");
   const db = sql();
-  schema ??= (async () => {
-    await db`CREATE TABLE IF NOT EXISTS animind_users (
+  if (!schema || schema.url !== url) {
+    const pending = db.session(async (locked) => {
+      await locked`CREATE TABLE IF NOT EXISTS animind_users (
       id text PRIMARY KEY,
       email text NOT NULL UNIQUE,
       name text NOT NULL,
@@ -30,10 +29,10 @@ async function ready(): Promise<Sql> {
       password_hash text NOT NULL,
       created_at timestamptz NOT NULL
     )`;
-    await db`ALTER TABLE animind_users ADD COLUMN IF NOT EXISTS generation_enabled boolean`;
-    await db`UPDATE animind_users SET generation_enabled = true WHERE role = 'super_admin' AND generation_enabled IS NULL`;
-    await db`UPDATE animind_users SET generation_enabled = false WHERE generation_enabled IS NULL`;
-    await db`CREATE TABLE IF NOT EXISTS animind_characters (
+      await locked`ALTER TABLE animind_users ADD COLUMN IF NOT EXISTS generation_enabled boolean`;
+      await locked`UPDATE animind_users SET generation_enabled = true WHERE role = 'super_admin' AND generation_enabled IS NULL`;
+      await locked`UPDATE animind_users SET generation_enabled = false WHERE generation_enabled IS NULL`;
+      await locked`CREATE TABLE IF NOT EXISTS animind_characters (
       id text PRIMARY KEY,
       owner_id text NOT NULL REFERENCES animind_users (id),
       name text NOT NULL,
@@ -46,7 +45,7 @@ async function ready(): Promise<Sql> {
       created_at timestamptz NOT NULL,
       updated_at timestamptz NOT NULL
     )`;
-    await db`CREATE TABLE IF NOT EXISTS animind_assets (
+      await locked`CREATE TABLE IF NOT EXISTS animind_assets (
       id text PRIMARY KEY,
       owner_id text NOT NULL REFERENCES animind_users (id),
       kind text NOT NULL,
@@ -58,11 +57,16 @@ async function ready(): Promise<Sql> {
       project_id text,
       created_at timestamptz NOT NULL
     )`;
-  })().catch((error: unknown) => {
-    schema = null;
-    throw error;
-  });
-  await schema;
+    });
+    schema = {
+      url,
+      ready: pending.catch((error: unknown) => {
+        schema = null;
+        throw error;
+      }),
+    };
+  }
+  await schema.ready;
   return db;
 }
 
@@ -125,7 +129,7 @@ function characterFrom(row: Record<string, unknown>): LibraryCharacter {
   };
 }
 
-/** Neon / Vercel Postgres. Selected when DATABASE_URL or POSTGRES_URL is set. */
+/** Accounts on Postgres. Neon hosts use the HTTP driver. The CI service and any other host use the wire protocol. */
 export function postgresRecords(): AccountRecords {
   return {
     async users() {
