@@ -35,7 +35,8 @@ import { loadDraft, saveDraft } from "@/lib/draft";
 import { track } from "@/lib/analytics-client";
 import type { PublicUser } from "@/lib/accounts/types";
 import { useI18n } from "@/components/locale";
-import { translate, type Locale, type MessageKey } from "@/lib/i18n";
+import { artStyleLabel, scenarioDisplay, scenarioPresetId, translate, type Locale, type MessageKey } from "@/lib/i18n";
+import { fixturePersona } from "@/lib/persona-sheet";
 import { CharacterListEditor } from "@/components/flow/character-list-editor";
 import { CharacterVoicesEditor } from "@/components/flow/character-voices-editor";
 import { ChoiceCard } from "@/components/flow/choice-card";
@@ -119,7 +120,7 @@ export function CreationStudio() {
   const [format, setFormat] = useState<VideoFormat>("16:9");
   const [viewer, setViewer] = useState<PublicUser | null>(null);
   const [loginOpen, setLoginOpen] = useState(false);
-  const { t } = useI18n();
+  const { locale, t } = useI18n();
 
   const [rendering, setRendering] = useState(false);
   const [status, setStatus] = useState("");
@@ -263,7 +264,8 @@ export function CreationStudio() {
       artStyle: manualStyle,
       characterType: manualType,
       scenarioRequest,
-      scenarioLabel: manualScenarioMode === "prompt" ? manualScenarioPrompt || "Cenário por prompt" : "Automático por época",
+      scenarioLabel: manualScenarioMode === "prompt" ? manualScenarioPrompt || t("scenarioFromPrompt") : t("scenarioAutomaticEra"),
+      personaSheets: manualCharacters.map((character) => fixturePersona(character.name)).filter((sheet) => sheet.found),
       duration: manualDuration,
       source: "local",
     };
@@ -280,6 +282,7 @@ export function CreationStudio() {
     manualScenarioPrompt,
     manualDuration,
     manualLanguage,
+    t,
   ]);
 
   const activePlan = automatic ? plan : manualPlan;
@@ -377,7 +380,7 @@ export function CreationStudio() {
         style: activePlan.artStyle,
       });
       setScenarioResolution(scenario);
-      setStreamScenario(scenario.scenario === "agora" ? "Ágora" : activePlan.scenarioLabel);
+      setStreamScenario(scenarioDisplay(locale, scenario.scenario === "agora" ? "Ágora" : activePlan.scenarioLabel));
       const done = await waitJob(job.id, (state) => {
         setProgress(state.progress);
         setStatus(`Renderizando · ${Math.round(state.progress * 100)}%`);
@@ -504,6 +507,28 @@ export function CreationStudio() {
           <p data-testid="planner-source" className="mt-3 text-xs text-muted-foreground">
             {t("corePlan")}
           </p>
+        ) : null}
+        {plan?.personaSheets?.length ? (
+          <div data-testid="persona-sheets" className="mt-4 space-y-3">
+            <p className="text-xs text-muted-foreground">{t("fixtureSheetBody")}</p>
+            {plan.personaSheets.map((sheet) => (
+              <article key={sheet.name} data-testid="persona-sheet" className="rounded-2xl border border-white/10 p-4">
+                <div className="flex flex-wrap items-center gap-2">
+                  <h3 className="text-sm font-medium">{sheet.name}</h3>
+                  <span className="rounded-full border border-amber-400/40 px-2 py-0.5 text-[10px] uppercase tracking-wide text-amber-300">{t("fixtureSheet")}</span>
+                </div>
+                {sheet.wikiquote ? <a href={sheet.wikiquote} className="mt-2 block break-all text-xs underline" target="_blank" rel="noreferrer">{sheet.wikiquote}</a> : null}
+                <ul className="mt-3 space-y-3">
+                  {sheet.quotes.map((quote) => (
+                    <li key={quote.id}>
+                      <p className="text-sm">{quote.text}</p>
+                      <a href={quote.url} className="text-xs text-muted-foreground underline" target="_blank" rel="noreferrer">{quote.label}</a>
+                    </li>
+                  ))}
+                </ul>
+              </article>
+            ))}
+          </div>
         ) : null}
         {loginOpen ? (
           <div role="dialog" aria-modal="true" data-testid="login-gate" className="fixed inset-0 z-50 flex items-end justify-center bg-black/70 p-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:items-center">
@@ -689,25 +714,25 @@ function PlanEditor({
   if (field === "style")
     return (
       <select data-testid="plan-style" value={plan.artStyle} onChange={(event) => onChange({ artStyle: event.target.value as ArtStyle })} className="h-11 w-full rounded-xl border bg-background px-3">
-        {ART_STYLES.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
+        {ART_STYLES.map((item) => <option key={item.id} value={item.id}>{artStyleLabel(locale, item.id)}</option>)}
       </select>
     );
   if (field === "scenario")
     return (
       <select
         data-testid="plan-scenario"
-        value={Object.entries(SCENARIO_PROMPTS).find(([, item]) => plan.scenarioLabel.startsWith(item.label))?.[0] ?? "studio"}
+        value={scenarioPresetId(plan.scenarioLabel)}
         onChange={(event) => {
           const key = event.target.value as keyof typeof SCENARIO_PROMPTS;
           const item = SCENARIO_PROMPTS[key];
           onChange({
-            scenarioLabel: item.label,
+            scenarioLabel: scenarioDisplay(locale, item.label),
             scenarioRequest: { mode: "prompt", prompt: item.prompt, characterNames: plan.characters.map((character) => character.name) },
           });
         }}
         className="h-11 w-full rounded-xl border bg-background px-3"
       >
-        {Object.entries(SCENARIO_PROMPTS).map(([id, item]) => <option key={id} value={id}>{item.label}</option>)}
+        {Object.entries(SCENARIO_PROMPTS).map(([id, item]) => <option key={id} value={id}>{scenarioDisplay(locale, item.label)}</option>)}
       </select>
     );
   return (
@@ -796,7 +821,7 @@ function ManualControls(props: ManualControlsProps) {
         <div>
           <Label>{t("style")}</Label>
           <div className="flex flex-wrap gap-2">
-            {ART_STYLES.map((item) => <button key={item.id} type="button" data-testid={`manual-art-${item.id}`} onClick={() => props.onArtStyle(item.id)} className={cn("rounded-full border px-3 py-2 text-sm", props.artStyle === item.id ? "border-[var(--accent-brand)] bg-[var(--accent-brand)] text-white" : "text-muted-foreground")}>{item.label}</button>)}
+            {ART_STYLES.map((item) => <button key={item.id} type="button" data-testid={`manual-art-${item.id}`} onClick={() => props.onArtStyle(item.id)} className={cn("rounded-full border px-3 py-2 text-sm", props.artStyle === item.id ? "border-[var(--accent-brand)] bg-[var(--accent-brand)] text-white" : "text-muted-foreground")}>{artStyleLabel(locale, item.id)}</button>)}
           </div>
         </div>
       </section>

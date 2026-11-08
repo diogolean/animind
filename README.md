@@ -50,7 +50,7 @@ o cenário existente mais próximo e devolve `source: "fallback"` com uma nota v
 
 O switch **Automático** começa ligado. `lib/planner.ts` extrai o elenco e o tema do prompt e delega as
 escolhas criativas para `lib/auto-config.ts`. Por exemplo, “Sócrates fala sobre a morte” resulta em
-Sábio, Ensinar, Ghibli retrô, Ágora e 60s.
+Sábio, Ensinar, Ghibli retrô, Ágora e 60s. O painel mostra esses nomes no idioma da interface.
 
 ## Idioma e vozes
 
@@ -81,8 +81,9 @@ Nos dois modos, os trechos servem só de contexto para as falas escritas. Citaç
 
 ## Estilos de arte e vista frontal
 
-O seletor de estilo começa em Ghibli retrô (padrão do núcleo) e também oferece Cartoon, Anime, Retrô,
-Realista, Cyberpunk e Aquarela (`ART_STYLES` em `lib/contract.ts`). O estilo vai como `artStyle` no `POST /api/characters`
+O seletor de estilo abre em inglês: Retro Ghibli, Cartoon, Anime, Retro, Realistic, Cyberpunk e Watercolor.
+O seletor de idioma mostra os nomes em português. O id gravado continua `ghibli` e os demais de `ART_STYLES`
+em `lib/contract.ts`. O estilo vai como `artStyle` no `POST /api/characters`
 (entra no prompt do Gemini) e como `style` no render (visual da cena: paleta, LUT, textura). No mock o
 estilo é só ecoado.
 

@@ -45,8 +45,8 @@ const EN = {
   willCreate: "What will be created",
   manualDirection: "Manual direction",
   mode: "Mode",
-  cast: "Cast",
-  topic: "Topic",
+  cast: "Characters",
+  topic: "Theme",
   tone: "Tone",
   objective: "Objective",
   style: "Style",
@@ -138,6 +138,24 @@ const EN = {
   gazeUp: "Up",
   gazeDown: "Down",
   gazeUnavailable: "These eyes cannot be moved yet. The picture stays as painted.",
+  styleGhibli: "Retro Ghibli",
+  styleCartoon: "Cartoon",
+  styleAnime: "Anime",
+  styleRetro: "Retro",
+  styleRealistic: "Realistic",
+  styleCyberpunk: "Cyberpunk",
+  styleWatercolor: "Watercolor",
+  scenarioAgoraEra: "Agora · character's era",
+  scenarioAutomaticEra: "Automatic for the era",
+  scenarioAutomaticStudio: "Automatic studio",
+  scenarioFromPrompt: "Scene from the prompt",
+  scenarioStudio: "Studio",
+  scenarioClassroom: "Classroom",
+  scenarioArena: "Arena",
+  scenarioSpace: "Space",
+  scenarioAgora: "Agora",
+  fixtureSheet: "Fixture sheet",
+  fixtureSheetBody: "These quotes are a bundled Wikiquote fixture. They are not a live core lookup and no model was called.",
 } as const;
 
 const PT: Record<keyof typeof EN, string> = {
@@ -185,7 +203,7 @@ const PT: Record<keyof typeof EN, string> = {
   willCreate: "O que será criado",
   manualDirection: "Direção manual",
   mode: "Modo",
-  cast: "Elenco",
+  cast: "Personagens",
   topic: "Tema",
   tone: "Tom",
   objective: "Objetivo",
@@ -278,10 +296,77 @@ const PT: Record<keyof typeof EN, string> = {
   gazeUp: "Cima",
   gazeDown: "Baixo",
   gazeUnavailable: "Estes olhos ainda não se movem. A imagem fica como foi pintada.",
+  styleGhibli: "Ghibli retrô",
+  styleCartoon: "Cartoon",
+  styleAnime: "Anime",
+  styleRetro: "Retrô",
+  styleRealistic: "Realista",
+  styleCyberpunk: "Cyberpunk",
+  styleWatercolor: "Aquarela",
+  scenarioAgoraEra: "Ágora · época do personagem",
+  scenarioAutomaticEra: "Automático por época",
+  scenarioAutomaticStudio: "Estúdio automático",
+  scenarioFromPrompt: "Cenário por prompt",
+  scenarioStudio: "Estúdio",
+  scenarioClassroom: "Sala de aula",
+  scenarioArena: "Arena",
+  scenarioSpace: "Espaço",
+  scenarioAgora: "Ágora",
+  fixtureSheet: "Ficha de fixture",
+  fixtureSheetBody: "Estas citações são uma fixture Wikiquote embutida. Não são uma consulta ao vivo do núcleo e nenhum modelo foi chamado.",
 };
 
 export type MessageKey = keyof typeof EN;
 
 export function translate(locale: Locale, key: MessageKey): string {
   return locale === "pt-BR" ? PT[key] : EN[key];
+}
+
+const ART_STYLE_KEYS = {
+  ghibli: "styleGhibli",
+  cartoon: "styleCartoon",
+  anime: "styleAnime",
+  retro: "styleRetro",
+  realista: "styleRealistic",
+  cyberpunk: "styleCyberpunk",
+  aquarela: "styleWatercolor",
+} as const satisfies Record<string, MessageKey>;
+
+export function artStyleLabel(locale: Locale, id: string): string {
+  const key = ART_STYLE_KEYS[id as keyof typeof ART_STYLE_KEYS];
+  return key ? translate(locale, key) : id;
+}
+
+const SCENARIO_KEYS: { prefix: string; key: MessageKey }[] = [
+  { prefix: "Ágora · época do personagem", key: "scenarioAgoraEra" },
+  { prefix: "Agora · character's era", key: "scenarioAgoraEra" },
+  { prefix: "Automático por época", key: "scenarioAutomaticEra" },
+  { prefix: "Automatic for the era", key: "scenarioAutomaticEra" },
+  { prefix: "Estúdio automático", key: "scenarioAutomaticStudio" },
+  { prefix: "Automatic studio", key: "scenarioAutomaticStudio" },
+  { prefix: "Cenário por prompt", key: "scenarioFromPrompt" },
+  { prefix: "Scene from the prompt", key: "scenarioFromPrompt" },
+  { prefix: "Sala de aula", key: "scenarioClassroom" },
+  { prefix: "Classroom", key: "scenarioClassroom" },
+  { prefix: "Espaço", key: "scenarioSpace" },
+  { prefix: "Space", key: "scenarioSpace" },
+  { prefix: "Ágora", key: "scenarioAgora" },
+  { prefix: "Agora", key: "scenarioAgora" },
+  { prefix: "Estúdio", key: "scenarioStudio" },
+  { prefix: "Studio", key: "scenarioStudio" },
+  { prefix: "Arena", key: "scenarioArena" },
+];
+
+export function scenarioDisplay(locale: Locale, label: string): string {
+  const hit = SCENARIO_KEYS.find((row) => label.startsWith(row.prefix));
+  if (!hit) return label;
+  return translate(locale, hit.key) + label.slice(hit.prefix.length);
+}
+
+export function scenarioPresetId(label: string): "studio" | "classroom" | "arena" | "space" | "agora" {
+  if (label.startsWith("Sala de aula") || label.startsWith("Classroom")) return "classroom";
+  if (label.startsWith("Espaço") || label.startsWith("Space")) return "space";
+  if (label.startsWith("Ágora") || label.startsWith("Agora")) return "agora";
+  if (label.startsWith("Arena")) return "arena";
+  return "studio";
 }

@@ -2,10 +2,9 @@
 
 import { Pencil } from "lucide-react";
 import type { CreationPlan, ToneOption, VoiceCatalog } from "@/lib/contract";
-import { ART_STYLES } from "@/lib/contract";
 import { languageLabel } from "@/components/flow/language-combobox";
 import { useI18n } from "@/components/locale";
-import { translate, type MessageKey } from "@/lib/i18n";
+import { artStyleLabel, scenarioDisplay, translate, type MessageKey } from "@/lib/i18n";
 import type { Tone } from "@/lib/contract";
 
 export type PlanField = "language" | "mode" | "characters" | "topic" | "tone" | "objective" | "style" | "scenario" | "duration" | `voice-${number}`;
@@ -48,8 +47,8 @@ export function PlanChips({ plan, tones, voices, onEdit }: { plan: CreationPlan;
       return key ? translate(locale, key) : tone?.label ?? plan.tone;
     })() },
     { field: "objective", label: t("objective"), value: OBJECTIVES[locale][plan.objective] },
-    { field: "style", label: t("style"), value: ART_STYLES.find((style) => style.id === plan.artStyle)?.label ?? plan.artStyle },
-    { field: "scenario", label: t("scene"), value: plan.scenarioLabel },
+    { field: "style", label: t("style"), value: artStyleLabel(locale, plan.artStyle) },
+    { field: "scenario", label: t("scene"), value: scenarioDisplay(locale, plan.scenarioLabel) },
     { field: "duration", label: t("duration"), value: `${plan.duration}s` },
   ];
   return (
