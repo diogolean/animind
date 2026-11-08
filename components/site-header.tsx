@@ -3,12 +3,12 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { HEALTH_EVENT } from "@/lib/api";
-import { ROLE_LABEL } from "@/lib/accounts/labels";
 import type { PublicUser } from "@/lib/accounts/types";
 import { LanguageToggle, useI18n } from "@/components/locale";
+import { translate } from "@/lib/i18n";
 
 export function SiteHeader() {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const pathname = usePathname();
   const router = useRouter();
   const [mode, setMode] = useState<{ label: string; tone: string; note?: string } | null>(null);
@@ -22,21 +22,21 @@ export function SiteHeader() {
             h.mode === "core"
               ? h.core?.ok
                 ? {
-                    label: h.core.generator === "gemini" ? "núcleo real" : "núcleo (arte mock)",
+                    label: h.core.generator === "gemini" ? translate(locale, "coreLive") : translate(locale, "coreMockArt"),
                     tone: "text-emerald-600 dark:text-emerald-400",
                     note: h.core.generatorNote,
                   }
-                : { label: "núcleo fora do ar", tone: "text-red-600 dark:text-red-400" }
+                : { label: translate(locale, "coreDown"), tone: "text-red-600 dark:text-red-400" }
               : h.mode === "mock"
-                ? { label: "mock de dev", tone: "text-amber-600 dark:text-amber-400" }
-                : { label: "núcleo não configurado", tone: "text-red-600 dark:text-red-400" },
+                ? { label: translate(locale, "coreDevMock"), tone: "text-amber-600 dark:text-amber-400" }
+                : { label: translate(locale, "coreUnconfigured"), tone: "text-red-600 dark:text-red-400" },
           ),
         )
         .catch(() => {});
     load();
     window.addEventListener(HEALTH_EVENT, load);
     return () => window.removeEventListener(HEALTH_EVENT, load);
-  }, []);
+  }, [locale]);
   useEffect(() => {
     let cancelled = false;
     fetch("/api/auth/me", { cache: "no-store" })
@@ -85,7 +85,7 @@ export function SiteHeader() {
           </Link>
           <span className="hidden text-sm text-muted-foreground sm:inline">{user.name}</span>
           <span data-testid="account-role" data-role={user.role} className="rounded-full border border-white/10 px-2 py-1 text-[10px] uppercase tracking-wide text-muted-foreground">
-            {ROLE_LABEL[user.role]}
+            {user.role === "super_admin" ? t("roleSuper") : user.role === "admin" ? t("roleAdmin") : t("roleUser")}
           </span>
           <button type="button" data-testid="logout" onClick={logout} className="inline-flex min-h-11 items-center text-sm text-muted-foreground hover:text-foreground">
             {t("signOut")}

@@ -15,10 +15,21 @@ import type {
   VoiceCatalog,
 } from "./contract";
 
+export class ApiError extends Error {
+  readonly code: string;
+  readonly status: number;
+  constructor(status: number, code: string, message: string) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+    this.code = code;
+  }
+}
+
 async function call<T>(url: string, init?: RequestInit): Promise<T> {
   const r = await fetch(url, { ...init, headers: { "content-type": "application/json", ...init?.headers } });
-  const data = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error((data as { error?: string }).error ?? `Erro ${r.status}`);
+  const data = (await r.json().catch(() => ({}))) as { error?: string; code?: string };
+  if (!r.ok) throw new ApiError(r.status, data.code ?? "", data.error ?? "");
   return data as T;
 }
 
@@ -49,11 +60,11 @@ export const getJob = (id: string) => call<RenderJob>(`/api/jobs/${encodeURIComp
 
 export async function waitJob(id: string, onProgress: (j: RenderJob) => void, signal?: AbortSignal): Promise<RenderJob> {
   for (;;) {
-    if (signal?.aborted) throw new Error("cancelado");
+    if (signal?.aborted) throw new ApiError(0, "cancelled", "cancelled");
     const j = await getJob(id);
     onProgress(j);
     if (j.status === "done") return j;
-    if (j.status === "failed") throw new Error(j.error ?? "Falha no render");
+    if (j.status === "failed") throw new ApiError(0, "render_failed", j.error ?? "");
     await new Promise((r) => setTimeout(r, 500));
   }
 }

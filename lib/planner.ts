@@ -33,7 +33,7 @@ function namedCharacters(prompt: string, mode: CreationMode): string[] {
 
   const solo = prompt.match(/^(.+?)\s+(?:fala|explica|ensina|conta|reflete|explains|explain|teaches|teach|talks|talk|says|say)\b/i);
   if (solo) return [titleCase(solo[1])];
-  return mode === "monologue" ? ["Personagem principal"] : ["Personagem 1", "Personagem 2"];
+  return [];
 }
 
 function inferTopic(prompt: string): string {
@@ -71,13 +71,18 @@ export function inferCreationPlan(rawPrompt: string, requestedLanguage?: Languag
   const language = requestedLanguage ?? inferLanguage(prompt);
   const mode = inferMode(prompt);
   const names = namedCharacters(prompt, mode);
-  const sheets = names.map((name) => fixturePersona(name));
+  const cast = names.length ? names : language === "pt-BR"
+    ? (mode === "monologue" ? ["Personagem principal"] : ["Personagem 1", "Personagem 2"])
+    : (mode === "monologue" ? ["Main character"] : ["Character 1", "Character 2"]);
+  const sheets = cast.map((name) => fixturePersona(name));
   const personaSheets = sheets.filter((sheet) => sheet.found);
-  const characters: CreationPlanCharacter[] = names.map((name, index) => {
+  const characters: CreationPlanCharacter[] = cast.map((name, index) => {
     const sheet = sheets[index];
     const directed = sheet?.found && sheet.wikiquote
       ? `${sheet.name}. Use only the verified quotes at ${sheet.wikiquote}. Scene: ${prompt}`
-      : `${name}, coerente com esta criação: ${prompt}`;
+      : language === "pt-BR"
+        ? `${name}, coerente com esta criação: ${prompt}`
+        : `${name}, consistent with this creation: ${prompt}`;
     return {
       name,
       prompt: directed.slice(0, 600),
@@ -87,7 +92,7 @@ export function inferCreationPlan(rawPrompt: string, requestedLanguage?: Languag
   const topic = inferTopic(prompt);
   const automatic = inferAutoConfig({
     mode: mode === "monologue" ? "monologue" : "dialogue",
-    characterNames: names,
+    characterNames: cast,
     characterPrompts: characters.map((character) => character.prompt),
     topic,
     scriptPrompt: prompt,

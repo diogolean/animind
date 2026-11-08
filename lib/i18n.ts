@@ -162,6 +162,42 @@ const EN = {
   scenarioAgora: "Agora",
   fixtureSheet: "Fixture sheet",
   fixtureSheetBody: "These quotes are a bundled Wikiquote fixture. They are not a live core lookup and no model was called.",
+  statusCreating: "Creating {name} · {n}/{total}",
+  statusScene: "Preparing the scene",
+  statusWriting: "Writing and animating",
+  statusRendering: "Rendering · {percent}%",
+  statusPreparing: "Preparing the animation",
+  characterUnavailable: "Character unavailable",
+  requestFailed: "Request failed",
+  renderFailed: "Render failed",
+  renderCancelled: "Cancelled",
+  generationOffTitle: "Paid generation is off",
+  generationOffBody: "This account cannot create a character, start a render, or open a job. No provider is called. The sheet below, when it appears, is a fixture.",
+  generationDisabled: "Generation is turned off on this server. Nothing was sent.",
+  generationUnapproved: "This account cannot generate yet. Nothing was sent.",
+  priceUnavailable: "This call has no published price, so it was not sent.",
+  generationBudget: "The budget for this period is already reserved. Nothing was sent.",
+  generationRate: "Too many requests. Nothing was sent.",
+  generationBusy: "Generation is busy. Nothing was sent.",
+  generationLedger: "The spend ledger is unavailable. Nothing was sent.",
+  generationOverCap: "This request is over the cap. Nothing was sent.",
+  coreLive: "live core",
+  coreMockArt: "core (mock art)",
+  coreDown: "core unreachable",
+  coreDevMock: "dev mock",
+  coreUnconfigured: "core not configured",
+  sourceGenerating: "Generating in the core",
+  sourceLocal: "Local preview",
+  sourceCutout: "Core cut-out",
+  previewOf: "Preview of {name}",
+  cutoutOf: "Cut-out of {name}",
+  guestName: "Guest",
+  guestPrompt: "an interlocutor",
+  debateWith: "A debate with {name}",
+  videoWith: "A video with {name}",
+  roleUser: "User",
+  roleAdmin: "Admin",
+  roleSuper: "Super admin",
 } as const;
 
 const PT: Record<keyof typeof EN, string> = {
@@ -326,12 +362,72 @@ const PT: Record<keyof typeof EN, string> = {
   scenarioAgora: "Ágora",
   fixtureSheet: "Ficha de fixture",
   fixtureSheetBody: "Estas citações são uma fixture Wikiquote embutida. Não são uma consulta ao vivo do núcleo e nenhum modelo foi chamado.",
+  statusCreating: "Criando {name} · {n}/{total}",
+  statusScene: "Preparando o cenário",
+  statusWriting: "Escrevendo e animando",
+  statusRendering: "Renderizando · {percent}%",
+  statusPreparing: "Preparando a animação",
+  characterUnavailable: "Personagem indisponível",
+  requestFailed: "A solicitação falhou",
+  renderFailed: "O render falhou",
+  renderCancelled: "Cancelado",
+  generationOffTitle: "Geração paga desligada",
+  generationOffBody: "Esta conta não pode criar um personagem, iniciar um render nem abrir um job. Nenhum provedor é chamado. A ficha abaixo, quando aparece, é uma fixture.",
+  generationDisabled: "A geração está desligada neste servidor. Nada foi enviado.",
+  generationUnapproved: "Esta conta ainda não pode gerar. Nada foi enviado.",
+  priceUnavailable: "Esta chamada não tem preço publicado, então não foi enviada.",
+  generationBudget: "O orçamento deste período já está reservado. Nada foi enviado.",
+  generationRate: "Pedidos demais. Nada foi enviado.",
+  generationBusy: "A geração está ocupada. Nada foi enviado.",
+  generationLedger: "O livro de gastos não está disponível. Nada foi enviado.",
+  generationOverCap: "Este pedido passa do limite. Nada foi enviado.",
+  coreLive: "núcleo real",
+  coreMockArt: "núcleo (arte mock)",
+  coreDown: "núcleo fora do ar",
+  coreDevMock: "mock de dev",
+  coreUnconfigured: "núcleo não configurado",
+  sourceGenerating: "Gerando no núcleo",
+  sourceLocal: "Prévia local",
+  sourceCutout: "Recorte do núcleo",
+  previewOf: "Prévia de {name}",
+  cutoutOf: "Recorte de {name}",
+  guestName: "Convidado",
+  guestPrompt: "um interlocutor",
+  debateWith: "Um debate com {name}",
+  videoWith: "Um vídeo com {name}",
+  roleUser: "Usuário",
+  roleAdmin: "Admin",
+  roleSuper: "Super admin",
 };
 
 export type MessageKey = keyof typeof EN;
 
 export function translate(locale: Locale, key: MessageKey): string {
   return locale === "pt-BR" ? PT[key] : EN[key];
+}
+
+export function fill(template: string, values: Record<string, string | number>): string {
+  return template.replace(/\{(\w+)\}/g, (_, name: string) => String(values[name] ?? ""));
+}
+
+const API_ERROR_KEYS: Partial<Record<string, MessageKey>> = {
+  disabled: "generationDisabled",
+  unapproved: "generationUnapproved",
+  price_unavailable: "priceUnavailable",
+  budget: "generationBudget",
+  rate: "generationRate",
+  busy: "generationBusy",
+  unavailable: "generationLedger",
+  ledger: "generationLedger",
+  over_cap: "generationOverCap",
+  cancelled: "renderCancelled",
+  render_failed: "renderFailed",
+};
+
+/** UI copy for a failed call. The server sentence is not shown, so English stays English. */
+export function apiErrorMessage(locale: Locale, error: unknown): string {
+  const code = error && typeof error === "object" && "code" in error ? String((error as { code?: unknown }).code ?? "") : "";
+  return translate(locale, API_ERROR_KEYS[code] ?? "requestFailed");
 }
 
 const ART_STYLE_KEYS = {

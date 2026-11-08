@@ -3,11 +3,14 @@
 /* eslint-disable @next/next/no-img-element */
 import { motion } from "framer-motion";
 import { Loader2 } from "lucide-react";
+import { useI18n } from "@/components/locale";
 import type { CharacterPreview } from "@/lib/contract";
+import { fill } from "@/lib/i18n";
 
 function StickFigure({ preview }: { preview: CharacterPreview }) {
+  const { t } = useI18n();
   return (
-    <svg viewBox="0 0 160 220" className="h-52 w-40 overflow-visible" aria-label={`Preview de ${preview.name}`}>
+    <svg viewBox="0 0 160 220" className="h-52 w-40 overflow-visible" aria-label={fill(t("previewOf"), { name: preview.name })}>
       <defs>
         <filter id={`glow-${preview.id}`} x="-50%" y="-50%" width="200%" height="200%">
           <feGaussianBlur stdDeviation="7" />
@@ -29,6 +32,7 @@ function StickFigure({ preview }: { preview: CharacterPreview }) {
 }
 
 function Cutout({ preview }: { preview: CharacterPreview }) {
+  const { t } = useI18n();
   const view = preview.cutout;
   if (!view || view.layers.length === 0) {
     if (!preview.imageUrl) return null;
@@ -38,7 +42,7 @@ function Cutout({ preview }: { preview: CharacterPreview }) {
   const mouth = view.visemes.X;
   const parts = [...view.layers, ...(mouth ? [mouth] : [])].sort((a, b) => a.z - b.z);
   return (
-    <div data-testid="stream-cutout" className="relative h-52" style={{ aspectRatio: `${w} / ${h}` }} aria-label={`Recorte de ${preview.name}`}>
+    <div data-testid="stream-cutout" className="relative h-52" style={{ aspectRatio: `${w} / ${h}` }} aria-label={fill(t("cutoutOf"), { name: preview.name })}>
       {parts.map((layer) => (
         <img
           key={`${layer.name}-${layer.url}`}
@@ -74,10 +78,10 @@ function CorePreview({ preview }: { preview: CharacterPreview }) {
   );
 }
 
-function sourceLabel(preview: CharacterPreview) {
-  if (preview.source === "loading") return "Gerando no núcleo";
-  if (preview.source === "local") return "Prévia local";
-  return "Recorte do núcleo";
+function sourceLabel(preview: CharacterPreview, t: (key: "sourceGenerating" | "sourceLocal" | "sourceCutout") => string) {
+  if (preview.source === "loading") return t("sourceGenerating");
+  if (preview.source === "local") return t("sourceLocal");
+  return t("sourceCutout");
 }
 
 export function ProgressivePreview({
@@ -89,6 +93,7 @@ export function ProgressivePreview({
   scenario: string | null;
   status: string;
 }) {
+  const { t } = useI18n();
   return (
     <motion.section
       data-testid="preview-stream"
@@ -125,7 +130,7 @@ export function ProgressivePreview({
                 {preview.name}
               </span>
               <span data-testid={`stream-badge-${preview.index}`} className="mt-1 text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
-                {sourceLabel(preview)}
+                {sourceLabel(preview, t)}
               </span>
               {preview.note ? <span className="mt-1 line-clamp-2 max-w-40 text-center text-[10px] text-amber-500/90">{preview.note}</span> : null}
             </motion.div>
@@ -133,7 +138,7 @@ export function ProgressivePreview({
         </div>
       </div>
       <div className="relative flex items-center justify-between gap-3 border-t border-white/8 px-5 py-3 text-xs text-muted-foreground">
-        <span data-testid="job-status" className="flex min-w-0 items-center gap-2"><Loader2 className="size-3.5 shrink-0 animate-spin" /><span className="truncate">{status || "Preparando animação"}</span></span>
+        <span data-testid="job-status" className="flex min-w-0 items-center gap-2"><Loader2 className="size-3.5 shrink-0 animate-spin" /><span className="truncate">{status || t("statusPreparing")}</span></span>
         {scenario ? <motion.span initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="shrink-0 text-foreground/70">{scenario}</motion.span> : null}
       </div>
     </motion.section>

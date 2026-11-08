@@ -35,6 +35,7 @@ import { loadDraft, saveDraft } from "@/lib/draft";
 import { track } from "@/lib/analytics-client";
 import type { PublicUser } from "@/lib/accounts/types";
 import { useI18n } from "@/components/locale";
+import { apiErrorMessage, fill } from "@/lib/i18n";
 import { artStyleLabel, scenarioDisplay, scenarioPresetId, translate, type Locale, type MessageKey } from "@/lib/i18n";
 import { fixturePersona } from "@/lib/persona-sheet";
 import { CharacterListEditor } from "@/components/flow/character-list-editor";
@@ -124,6 +125,7 @@ export function CreationStudio() {
 
   const [rendering, setRendering] = useState(false);
   const [status, setStatus] = useState("");
+  const [blockCode, setBlockCode] = useState("");
   const [progress, setProgress] = useState(0);
   const [audio, setAudio] = useState<AudioContext | null>(null);
   const [result, setResult] = useState<RenderResult | null>(null);
@@ -180,7 +182,7 @@ export function CreationStudio() {
     fetch(`/api/library/${encodeURIComponent(libraryId)}`, { cache: "no-store" })
       .then(async (response) => {
         const data = (await response.json().catch(() => ({}))) as { error?: string; character?: LibraryCharacter; rig?: Character | null };
-        if (!response.ok || !data.character) throw new Error(data.error ?? "Personagem indisponível");
+        if (!response.ok || !data.character) throw Object.assign(new Error(data.error ?? ""), { code: (data as { code?: string }).code ?? "" });
         return data;
       })
       .then((data) => {
@@ -196,18 +198,18 @@ export function CreationStudio() {
         setManualTopic(name);
         setManualCharacters(
           libraryIntent === "debate"
-            ? [{ name, prompt: persona }, { name: "Convidado", prompt: "um interlocutor" }]
+            ? [{ name, prompt: persona }, { name: t("guestName"), prompt: t("guestPrompt") }]
             : [{ name, prompt: persona }],
         );
-        setPrompt(libraryIntent === "debate" ? `Um debate com ${name}` : `Um vídeo com ${name}`);
+        setPrompt(fill(t(libraryIntent === "debate" ? "debateWith" : "videoWith"), { name }));
       })
       .catch((error) => {
-        if (!cancelled) toast.error((error as Error).message);
+        if (!cancelled) toast.error(apiErrorMessage(locale, error));
       });
     return () => {
       cancelled = true;
     };
-  }, [libraryId, libraryIntent]);
+  }, [libraryId, libraryIntent, locale]);
 
   useEffect(() => {
     if (rendering && progressivePreviews.length === 1)
@@ -229,7 +231,7 @@ export function CreationStudio() {
           setPlan(next);
           setEditing(null);
         })
-        .catch((error) => toast.error((error as Error).message))
+        .catch((error) => toast.error(apiErrorMessage(locale, error)))
         .finally(() => setPlanning(false));
     }, 220);
   };
@@ -327,7 +329,7 @@ export function CreationStudio() {
       setVoiceCatalog(availableVoices);
       const cast: Character[] = [];
       for (let index = 0; index < drafts.length; index++) {
-        setStatus(`Criando ${drafts[index].name} · ${index + 1}/${drafts.length}`);
+        setStatus(fill(t("statusCreating"), { name: drafts[index].name, n: index + 1, total: drafts.length }));
         if (index === 0 && libraryRigRef.current) {
           const character = { ...libraryRigRef.current, name: drafts[index].name.trim() || libraryRigRef.current.name };
           cast.push(character);
@@ -349,9 +351,9 @@ export function CreationStudio() {
         if (character.generator === "mock" && character.generatorNote) window.dispatchEvent(new Event(HEALTH_EVENT));
       }
       await previewFlow;
-      setStatus("Preparando cenário");
+      setStatus(t("statusScene"));
       const scenario = await resolveScenario(activePlan.scenarioRequest);
-      setStatus("Escrevendo e animando");
+      setStatus(t("statusWriting"));
       const template = activePlan.mode === "monologue" ? (activePlan.objective === "ensinar" ? "lesson" : "solo") : "debate";
       const voiceIndex = { male: 0, female: 0 };
       const voices = drafts.map((character) => {
@@ -383,7 +385,7 @@ export function CreationStudio() {
       setStreamScenario(scenarioDisplay(locale, scenario.scenario === "agora" ? "Ágora" : activePlan.scenarioLabel));
       const done = await waitJob(job.id, (state) => {
         setProgress(state.progress);
-        setStatus(`Renderizando · ${Math.round(state.progress * 100)}%`);
+        setStatus(fill(t("statusRendering"), { percent: Math.round(state.progress * 100) }));
       });
       setResult(done.result!);
       setStatus("");
@@ -397,7 +399,10 @@ export function CreationStudio() {
       }
       window.dispatchEvent(new Event(HEALTH_EVENT));
     } catch (error) {
-      toast.error((error as Error).message);
+      const message = apiErrorMessage(locale, error);
+      toast.error(message);
+      const code = error && typeof error === "object" && "code" in error ? String((error as { code?: unknown }).code ?? "") : "";
+      setBlockCode(code || "request");
       setStatus("");
       setProgressivePreviews((current) =>
         current.map((item) => (item.source === "loading" ? stickPreview({ name: item.name }, item.index, "local") : item)),
@@ -485,7 +490,8 @@ export function CreationStudio() {
                   if (!viewer.generationEnabled) {
                     track("create_attempt", { result: "unapproved" });
                     track("access_denied", { reason: "unapproved" });
-                    toast.error(t("generationDenied"));
+                    setBlockCode("unapproved");
+                    toast.error(t("generationUnapproved"));
                     return;
                   }
                   track("create_attempt", { result: "started" });
@@ -499,6 +505,17 @@ export function CreationStudio() {
             </div>
           </div>
         </div>
+        {viewer && !viewer.generationEnabled ? (
+          <p data-testid="generation-off" role="status" className="mt-3 rounded-2xl border border-amber-400/40 bg-amber-400/10 px-4 py-3 text-sm text-amber-100">
+            <span className="font-medium">{t("generationOffTitle")}. </span>
+            {t("generationOffBody")}
+          </p>
+        ) : null}
+        {blockCode ? (
+          <p data-testid="generation-block" role="alert" className="mt-3 rounded-2xl border border-red-400/40 bg-red-400/10 px-4 py-3 text-sm text-red-100">
+            {apiErrorMessage(locale, { code: blockCode })}
+          </p>
+        ) : null}
         {plan?.source === "local" ? (
           <p data-testid="planner-source" className="mt-3 text-xs text-muted-foreground">
             {t("localPlan")}
@@ -635,7 +652,7 @@ export function CreationStudio() {
 
         {rendering && progressivePreviews.length ? (
           <div ref={streamRef}>
-            <ProgressivePreview previews={progressivePreviews} scenario={streamScenario} status={status || `Renderizando · ${Math.round(progress * 100)}%`} />
+            <ProgressivePreview previews={progressivePreviews} scenario={streamScenario} status={status || fill(t("statusRendering"), { percent: Math.round(progress * 100) })} />
           </div>
         ) : null}
         {scenarioResolution?.note ? <p data-testid="scenario-fallback" className="mt-3 text-sm text-amber-500">{scenarioResolution.note}</p> : null}
