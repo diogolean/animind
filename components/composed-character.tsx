@@ -6,10 +6,11 @@ import type { LibraryCharacter, LibraryViewName } from "@/lib/accounts/types";
 import type { Character, CharacterView, ViewName } from "@/lib/contract";
 import { AvatarStage } from "@/components/avatar-stage";
 import { useI18n } from "@/components/locale";
+import { longSide, MIN_LONG_SIDE, sceneryPreference, type PlateKind, type SceneryState } from "@/lib/avatar-source";
 import { controlClass } from "@/lib/control-class";
 import type { EyeCapability, GazeDirection } from "@/lib/eye-rig";
 import { separableGaze } from "@/lib/eye-rig";
-import type { MessageKey } from "@/lib/i18n";
+import { fill, type MessageKey } from "@/lib/i18n";
 import { SHEET_CELL, SHEET_GRID, sheetGroups, type SheetCategory, type SheetGroup } from "@/lib/sheet";
 import { hasFullBody, type Framing } from "@/lib/stage-frame";
 
@@ -60,8 +61,9 @@ export function ComposedCharacter({ character, rig }: { character: LibraryCharac
   const [gaze, setGaze] = useState<GazeDirection>("center");
   const [eyeCapability, setEyeCapability] = useState<EyeCapability | "pending">("pending");
   const [framing, setFraming] = useState<Framing>(rigView && hasFullBody(rigView) ? "body" : "close");
-  const [scenery, setScenery] = useState(false);
-  const [sceneryAvailable, setSceneryAvailable] = useState(false);
+  const [sceneryOn, setSceneryOn] = useState(false);
+  const [sceneryState, setSceneryState] = useState<SceneryState | "pending">("pending");
+  const [plate, setPlate] = useState<{ width: number; height: number; kind: PlateKind } | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
   const lids = Boolean(rigView?.layers.some((layer) => layer.name === "eyes_half" || layer.name === "eyes_closed"));
   const brows = Boolean(rigView?.layers.some((layer) => layer.name === "brows" || layer.name === "brow_left"));
@@ -75,6 +77,10 @@ export function ComposedCharacter({ character, rig }: { character: LibraryCharac
     return sheetGroups(source, capability).map((group) => ({ view, group }));
   });
   const waiting = hasRig && eyeCapability === "pending" && sheet.length === 0;
+
+  useEffect(() => {
+    setSceneryOn(sceneryPreference(window.sessionStorage).read());
+  }, []);
 
   useEffect(() => {
     if (!sheetOpen) return;
@@ -94,16 +100,17 @@ export function ComposedCharacter({ character, rig }: { character: LibraryCharac
     <section className="mt-6" data-testid="composed-character">
       <div className="overflow-hidden rounded-[1.5rem] border border-white/10 bg-black">
         {selected && hasRig && rigView ? (
-          <figure data-testid={selected.testId} data-framing={framing} className="mx-auto w-full max-w-md bg-black">
+          <figure data-testid={selected.testId} data-framing={framing} data-ground="black" className="mx-auto w-full max-w-md bg-black">
             <AvatarStage
               view={rigView}
               emotion={emotion}
               lids={eyes}
               gaze={gaze}
               framing={bodyReady ? framing : "close"}
-              scenery={sceneryAvailable && scenery}
+              scenery={sceneryOn}
               onCapability={(capability) => setEyeCapability(capability)}
-              onScenery={setSceneryAvailable}
+              onScenery={setSceneryState}
+              onPlate={setPlate}
             />
           </figure>
         ) : selected && character.views[selected.id] ? (
@@ -126,7 +133,8 @@ export function ComposedCharacter({ character, rig }: { character: LibraryCharac
               setEmotion("rest");
               setGaze("center");
               setEyeCapability("pending");
-              setSceneryAvailable(false);
+              setSceneryState("pending");
+              setPlate(null);
               setFraming(next && hasFullBody(next) ? "body" : "close");
             }}
             label={t(view.label)}
@@ -139,10 +147,41 @@ export function ComposedCharacter({ character, rig }: { character: LibraryCharac
           <Choice pressed={framing === "close"} onClick={() => setFraming("close")} label={t("framingClose")} testId="framing-close" />
         </div>
       ) : null}
-      {hasRig && sceneryAvailable ? (
-        <div className="mt-3 flex flex-wrap gap-2" role="group" aria-label={t("sceneryOn")} data-testid="scenery-controls">
-          <Choice pressed={!scenery} onClick={() => setScenery(false)} label={t("sceneryOff")} testId="scenery-off" />
-          <Choice pressed={scenery} onClick={() => setScenery(true)} label={t("sceneryOn")} testId="scenery-on" />
+      {hasRig ? (
+        <div className="mt-3 flex flex-wrap items-center gap-3" data-testid="scenery-controls">
+          <button
+            type="button"
+            role="switch"
+            aria-checked={sceneryState === "ready" && sceneryOn}
+            aria-disabled={sceneryState !== "ready"}
+            data-testid="scenery-switch"
+            data-scenery={sceneryState}
+            className={`${controlClass(sceneryState === "ready" && sceneryOn)} font-medium tracking-wide`}
+            onClick={() => {
+              if (sceneryState !== "ready") return;
+              setSceneryOn((value) => {
+                const next = !value;
+                sceneryPreference(window.sessionStorage).write(next);
+                return next;
+              });
+            }}
+          >
+            {t("scenerySwitch")}
+          </button>
+          {sceneryState === "needs-original" ? <p id="scenery-note" data-testid="scenery-note" className="max-w-md text-sm leading-relaxed text-white/80">{t("sceneryNeedsOriginal")}</p> : null}
+          {sceneryState === "needs-scenery" ? <p id="scenery-note" data-testid="scenery-note" className="max-w-md text-sm leading-relaxed text-white/80">{t("sceneryNeedsLayer")}</p> : null}
+        </div>
+      ) : null}
+      {hasRig ? (
+        <div className="mt-3 flex flex-wrap items-center gap-2" role="group" aria-label={t("resolution")} data-testid="resolution-controls">
+          <button type="button" aria-pressed="true" data-testid="resolution-1k" className={controlClass(true)}>{t("resolution1k")}</button>
+          <button type="button" aria-disabled="true" aria-describedby="resolution-note" data-testid="resolution-4k" className={`${controlClass(false)} opacity-60`} onClick={(event) => event.preventDefault()}>{t("resolution4k")}</button>
+          <p id="resolution-note" data-testid="resolution-note" className="max-w-md text-sm leading-relaxed text-white/80">
+            {plate
+              ? fill(t(longSide(plate.width, plate.height) < MIN_LONG_SIDE ? "legacyBelow1k" : "plateSize"), { w: plate.width, h: plate.height })
+              : null}{" "}
+            {t("resolution4kOff")}
+          </p>
         </div>
       ) : null}
       {emotions.length ? (
@@ -172,7 +211,7 @@ export function ComposedCharacter({ character, rig }: { character: LibraryCharac
       ) : null}
       {missingSides ? <p className="mt-3 text-sm text-muted-foreground">{t("missingSides")}</p> : null}
       {sheet.length ? (
-        <section className="mt-8" data-testid="emotion-sheet">
+        <section className="mt-8 bg-black" data-testid="emotion-sheet" data-ground="black">
           <h2 className="text-sm font-medium">{t("emotionSheet")}</h2>
           {views.map((view) => {
             const groups = sheet.filter((entry) => entry.view.id === view.id);

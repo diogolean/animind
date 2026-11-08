@@ -1,11 +1,18 @@
 import type { Character, CreateCharacterRequest } from "@/lib/contract";
 import { guardedGeneration } from "@/lib/accounts/generation";
+import { authorizeResolution, productResolutionSupport, readRequestedResolution } from "@/lib/avatar-source";
 import { coreMode, coreOff, json, proxyJson } from "@/lib/core";
 import { holdUnprovenCharacter } from "@/lib/eye-rig";
 import { mockCreateCharacter } from "@/lib/mock";
 
 export async function POST(req: Request) {
-  return guardedGeneration(req, "character", () => perform(req));
+  const peeked = await req.clone().json().catch(() => null);
+  const resolution = authorizeResolution(readRequestedResolution(peeked), productResolutionSupport());
+  if (!resolution.ok) {
+    const error = resolution.code === "resolution_invalid" ? "Resolução inválida" : "4K não está habilitado";
+    return json({ error, code: resolution.code }, resolution.code === "resolution_invalid" ? 400 : 403);
+  }
+  return guardedGeneration(req, "character", () => perform(req, resolution.requested));
 }
 
 const MAX_UPLOAD = 6 * 1024 * 1024;
@@ -23,7 +30,7 @@ async function gateEyes(response: Response): Promise<Response> {
   }
 }
 
-async function perform(req: Request) {
+async function perform(req: Request, requestedResolution: "1k" | "4k") {
   let body: CreateCharacterRequest;
   try {
     body = (await req.json()) as CreateCharacterRequest;
@@ -51,6 +58,7 @@ async function perform(req: Request) {
     const coreBody = {
       ...body,
       type,
+      requestedResolution,
       ...(body.gender ? { gender: body.gender } : {}),
       ...(body.voiceId ? { voiceId: body.voiceId } : {}),
     };

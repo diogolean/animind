@@ -1,6 +1,7 @@
 import { deleteObjectPrefix, keyFromAssetUrl, putObject } from "./object-store";
 import { newId, normalizeRel } from "./paths";
 import { findOwnedCharacter, writeImportedCharacter } from "./store";
+import { assessImportedAvatar, pointLayersAtAvatar, retainAvatarSources } from "../avatar-source";
 import { blockReadyWithoutEyes } from "../eye-gate";
 import type { LibraryCharacter, LibraryDemo, LibraryStatus, LibraryViewName } from "./types";
 import { isLibraryStatus } from "./types";
@@ -285,6 +286,12 @@ export async function importCharacterPackage(options: {
   const id = previous?.id ?? newId("chr");
   if (previous) await deleteObjectPrefix(id);
   ensureViewBases(puppet, files);
+  const retained = retainAvatarSources(files);
+  files.length = 0;
+  files.push(...retained);
+  pointLayersAtAvatar(puppet, new Set(files.map((file) => file.path)));
+  const avatarPlate = assessImportedAvatar(files);
+  if (avatarPlate) puppet.avatarSource = avatarPlate;
   const urls = new Map<string, string>();
   for (const file of files) {
     if (file.path === puppetFile.path) continue;
@@ -326,6 +333,7 @@ export async function importCharacterPackage(options: {
 
   let status = ((options.status as LibraryStatus) || "ready");
   if (status === "ready" && blockReadyWithoutEyes(puppet, files)) status = "draft";
+  if (status === "ready" && avatarPlate?.block) status = "draft";
   const character: LibraryCharacter = {
     id,
     ownerId: options.ownerId,

@@ -65,12 +65,16 @@ The interactive view is first. Full body is the canvas when a torso or a single 
 
 The sheet under the controls uses the same composer. Five gaze cells appear only after the pupils are proved. Emotions and lids appear only when those layers exist. The caricature has no 3/4 views, so the sheet does not show them. Cells share one size, one black ground, and wrap with no empty track.
 
-A scenery control is drawn only when `sceneryMatte` clears a flat border without touching the center. The caricature room does not pass: the shelves are not the wall color, and the suit is close to that wall. The plate stays as painted and the file stays in the pack. The sheet never turns scenery on.
+The interactive view and the sheet sit on uniform black. That black is the page, not a pixel written into the PNG. There is no gradient.
+
+A scenery switch is on the interactive view only. It starts off. Off draws the avatar on the black ground. On draws a separate layer named `scenery` behind the same avatar and does not save either image. The sheet never turns scenery on. The switch stays disabled, with a written reason, when the plate has no real transparency or when no scenery layer exists. `sceneryMatte` is not the switch and does not punch the plate.
+
+`avatar.png` in a view folder is the transparent source. A sibling `flattened.png`, `composed.png`, `canvas.png`, or `final.png` is not stored in its place. The source bytes and the source width and height stay. A plate whose long side is under 1024 is kept and labeled as below 1K. It is not scaled up and called a 1K generation. 4K is a request the server accepts only when a premium entitlement and a proven provider setting both exist. Neither exists here, so a 4K request is refused before the spend guard and before any provider call. A browser flag cannot grant it. An upscale is never labeled as native 4K. The preview canvas is not written back over the master.
 
 The caricature rest viseme is a dark shape placed below the painted mustache. It is not composited. The smile in `body.png` stays. The viseme files stay.
 
 ## Editing one detail
 
-No edit panel is shipped. Deterministic controls already cover gaze, eyelids, emotion, framing, and a scenery toggle when the matte proof passes. They preview in the viewer and do not write a PNG.
+No edit panel is shipped. Deterministic controls cover gaze, eyelids, emotion, framing, and the scenery switch when the plate is transparent and a scenery layer exists. They preview in the viewer and do not write a PNG. Resolution sits in its own control, apart from framing.
 
 A real correction of one region would be a copy of one layer of one view, owned by the account, with the original bytes kept, an in-memory undo, and a save that happens only when the owner asks. The route would have to check that owner the way the library already does. A paid redraw (an image model repairing the mustache, the room, or a side view) is not authorized. It must not run from the preview, and it must not run because a control was opened.
