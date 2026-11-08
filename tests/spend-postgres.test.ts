@@ -107,6 +107,56 @@ describe("postgres spend ledger", { skip: url ? false : "isolated DATABASE_URL i
     assert.equal(holds.find((hold) => hold.scope === "global")?.reservedMinor, 1);
   });
 
+  it("keeps a burst from two accounts inside the global and per-user limits", async () => {
+    const users = ["usr_burst_a", "usr_burst_b"];
+    const results = await Promise.all(
+      Array.from({ length: 12 }, (_, index) =>
+        reserve({
+          entry: entry({ id: `burst-${index}`, userId: users[index % 2], estimatedMinor: 1 }),
+          globalLimit: 3,
+          userLimit: 2,
+          ratePerMin: 100,
+          concurrency: 20,
+        }),
+      ),
+    );
+    const ok = results.filter((result) => result.ok);
+    assert.equal(ok.length, 3);
+    assert.equal(results.filter((result) => !result.ok).every((result) => result.block === "budget"), true);
+    const { entries, holds } = await listEntries();
+    const reserved = entries.filter((item) => item.id.startsWith("burst-") && item.status === "reserved");
+    assert.equal(reserved.length, 3);
+    for (const user of users) assert.ok(reserved.filter((item) => item.userId === user).length <= 2);
+    assert.equal(holds.find((hold) => hold.scope === "global")?.reservedMinor, 3);
+    for (const user of users) {
+      const personal = holds.find((hold) => hold.scope === `user:${user}`)?.reservedMinor ?? 0;
+      assert.ok(personal <= 2);
+    }
+  });
+
+  it("keeps a burst from two accounts inside the per-minute window", async () => {
+    const users = ["usr_rate_a", "usr_rate_b"];
+    const results = await Promise.all(
+      Array.from({ length: 10 }, (_, index) =>
+        reserve({
+          entry: entry({ id: `rate-${index}`, userId: users[index % 2], estimatedMinor: 0 }),
+          globalLimit: 100,
+          userLimit: 100,
+          ratePerMin: 2,
+          concurrency: 20,
+        }),
+      ),
+    );
+    for (const user of users) {
+      const mine = results.filter((_, index) => users[index % 2] === user);
+      assert.equal(mine.filter((result) => result.ok).length, 2);
+    }
+    const { entries } = await listEntries();
+    for (const user of users) {
+      assert.equal(entries.filter((item) => item.userId === user && item.id.startsWith("rate-")).length, 2);
+    }
+  });
+
   it("blocks the second call in the same minute and the second slot", async () => {
     const first = await reserve({ entry: entry(), globalLimit: 10, userLimit: 10, ratePerMin: 1, concurrency: 2 });
     const rated = await reserve({ entry: entry(), globalLimit: 10, userLimit: 10, ratePerMin: 1, concurrency: 2 });

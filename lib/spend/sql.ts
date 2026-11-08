@@ -82,6 +82,8 @@ function wire(url: string): SqlQuery {
       client.release();
     }
   };
+  // Schema setup only. This lock is not the spend limit: Neon HTTP cannot hold
+  // pg_advisory_lock across statements, and the limit is animind_spend_reserve.
   query.session = async (fn) => {
     const client = await bound.connect();
     try {
@@ -114,6 +116,8 @@ export function sqlFor(url: string): SqlQuery {
     const inner = cached as unknown as SqlQuery;
     const query = ((strings: TemplateStringsArray, ...values: unknown[]) => inner(strings, ...values)) as SqlQuery;
     query.transaction = (queries) => inner.transaction(queries);
+    // One HTTP call is one transaction. An advisory lock taken here would
+    // release before the next statement, so session() does not take one.
     query.session = (fn) => fn(query);
     return query;
   }

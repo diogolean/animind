@@ -226,9 +226,10 @@ async function ready(): Promise<SqlQuery> {
       slots integer NOT NULL
     )`;
     await db`INSERT INTO animind_spend_inflight (id, slots) VALUES (1, 0) ON CONFLICT (id) DO NOTHING`;
+    await db`DROP FUNCTION IF EXISTS animind_spend_reserve(bigint, bigint, bigint, text, text, integer, integer, timestamptz)`;
     await db`CREATE OR REPLACE FUNCTION animind_spend_reserve(
       p_amount bigint, p_global bigint, p_user bigint, p_user_scope text, p_user_id text,
-      p_rate integer, p_concurrency integer, p_now timestamptz
+      p_rate integer, p_concurrency integer, p_now timestamptz, p_entry jsonb
     ) RETURNS text LANGUAGE plpgsql AS $fn$
     DECLARE
       v_count integer;
@@ -270,6 +271,22 @@ async function ready(): Promise<SqlQuery> {
       UPDATE animind_spend_holds SET reserved_minor = reserved_minor + p_amount WHERE scope = 'global';
       UPDATE animind_spend_holds SET reserved_minor = reserved_minor + p_amount WHERE scope = p_user_scope;
       UPDATE animind_spend_inflight SET slots = slots + 1 WHERE id = 1;
+      INSERT INTO animind_spend_entries (
+        id, request_id, attempt, job_ref, user_id, operation, provider, model, status, block, latency_ms,
+        input_tokens, output_tokens, cached_tokens, thinking_tokens, image_count, audio_seconds, video_seconds,
+        estimated_minor, reported_minor, currency, price_version, origin, idempotency_key, created_at, updated_at
+      ) VALUES (
+        p_entry->>'id', p_entry->>'request_id', (p_entry->>'attempt')::integer, p_entry->>'job_ref',
+        p_entry->>'user_id', p_entry->>'operation', p_entry->>'provider', p_entry->>'model',
+        p_entry->>'status', p_entry->>'block', (p_entry->>'latency_ms')::integer,
+        (p_entry->>'input_tokens')::integer, (p_entry->>'output_tokens')::integer,
+        (p_entry->>'cached_tokens')::integer, (p_entry->>'thinking_tokens')::integer,
+        (p_entry->>'image_count')::integer, (p_entry->>'audio_seconds')::double precision,
+        (p_entry->>'video_seconds')::double precision, (p_entry->>'estimated_minor')::integer,
+        (p_entry->>'reported_minor')::integer, p_entry->>'currency', p_entry->>'price_version',
+        p_entry->>'origin', p_entry->>'idempotency_key',
+        (p_entry->>'created_at')::timestamptz, (p_entry->>'updated_at')::timestamptz
+      );
       RETURN 'ok';
     END
     $fn$`;
@@ -427,18 +444,48 @@ export async function reserve(input: ReserveInput): Promise<ReserveResult> {
   });
 }
 
+function entryPayload(entry: SpendEntry): string {
+  return JSON.stringify({
+    id: entry.id,
+    request_id: entry.requestId,
+    attempt: entry.attempt,
+    job_ref: entry.jobRef,
+    user_id: entry.userId,
+    operation: entry.operation,
+    provider: entry.provider,
+    model: entry.model,
+    status: entry.status,
+    block: entry.block,
+    latency_ms: entry.latencyMs,
+    input_tokens: entry.inputTokens,
+    output_tokens: entry.outputTokens,
+    cached_tokens: entry.cachedTokens,
+    thinking_tokens: entry.thinkingTokens,
+    image_count: entry.imageCount,
+    audio_seconds: entry.audioSeconds,
+    video_seconds: entry.videoSeconds,
+    estimated_minor: entry.estimatedMinor,
+    reported_minor: entry.reportedMinor,
+    currency: entry.currency,
+    price_version: entry.priceVersion,
+    origin: entry.origin,
+    idempotency_key: entry.idempotencyKey,
+    created_at: entry.createdAt,
+    updated_at: entry.updatedAt,
+  });
+}
+
 async function reservePostgres(input: ReserveInput, amount: number): Promise<ReserveResult> {
   const db = await ready();
   const userScope = `user:${input.entry.userId}`;
   const now = new Date().toISOString();
   const rows = await db`SELECT animind_spend_reserve(
     ${amount}, ${input.globalLimit}, ${input.userLimit}, ${userScope}, ${input.entry.userId},
-    ${input.ratePerMin}, ${input.concurrency}, ${now}::timestamptz
+    ${input.ratePerMin}, ${input.concurrency}, ${now}::timestamptz, ${entryPayload(input.entry)}::jsonb
   ) AS result`;
   const result = String(rows[0]?.result ?? "budget");
   if (result === "rate" || result === "busy" || result === "budget") return { ok: false, block: result };
   if (result !== "ok") return { ok: false, block: "budget" };
-  await insertEntry(input.entry);
   return { ok: true };
 }
 
