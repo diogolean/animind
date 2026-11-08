@@ -425,6 +425,72 @@ export interface RenderJob {
   error?: string;
 }
 
+/**
+ * Avatar progress shared with the core writer.
+ * The app shows a stage only when a real event arrives. It does not fill the
+ * gaps with a timer, and it does not treat an offline adapter as image generation.
+ * `generate_avatar` is not a function in the factory copy this app can see
+ * (`generate_character_image`, `create_puppet`, `generate_view` are). This app
+ * does not call those functions.
+ */
+export const AVATAR_PROGRESS_STAGES = ["plan", "login", "queued", "image", "cutout", "rig", "qa", "save", "ready", "fail", "retry"] as const;
+export type AvatarProgressStage = (typeof AVATAR_PROGRESS_STAGES)[number];
+
+export type AvatarIntent = "monologue" | "presentation" | "speech" | "debate" | "unspecified";
+export type AvatarDisposition = "blocked" | "reused" | "cancelled";
+export type AvatarOutcome = "blocked" | "partial" | "reused" | "cancelled";
+
+export interface AvatarParticipant {
+  id: string;
+  name: string;
+  source: "prompt" | "edited" | "library";
+}
+
+/** Local, zero-cost reading of a prompt. Not a provider response. */
+export interface AvatarPlan {
+  prompt: string;
+  language: LanguageCode;
+  intent: AvatarIntent;
+  /** 1 for a speech-like prompt, 2 for a debate. Extra names stay on `participants`. */
+  defaultCount: 1 | 2;
+  participants: AvatarParticipant[];
+  selectedIds: string[];
+  context: string;
+  artStyle: ArtStyle;
+  requestedResolution: "1k" | "4k";
+  source: "local";
+}
+
+export interface AvatarJobState {
+  id: string;
+  index: number;
+  name: string;
+  stage: AvatarProgressStage;
+  disposition: AvatarDisposition;
+  fixture: false;
+  reusedCharacterId?: string;
+  /** Empty until a real plate exists. An upscale is never stored here as native 4K. */
+  actual: null;
+  qa: null;
+  rig: null;
+}
+
+/**
+ * One confirmed attempt. `cost: "unknown"` is not zero.
+ * `requestId` is opaque. It is not an email, a token, or a provider secret.
+ */
+export interface AvatarAttempt {
+  requestId: string;
+  ownerId: string;
+  outcome: AvatarOutcome;
+  code: "avatar_provider_unavailable" | "reused" | "cancelled";
+  cost: "unknown";
+  fixture: false;
+  providerCalls: 0;
+  providerFunction: null;
+  jobs: AvatarJobState[];
+}
+
 export const PARODY_DISCLAIMER = "Paródia • Gerado por IA";
 
 export interface ApiError {

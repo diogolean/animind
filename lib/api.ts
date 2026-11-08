@@ -4,6 +4,7 @@ import type {
   CharacterPreviewRequest,
   CreationPlan,
   CreationPlanRequest,
+  AvatarAttempt,
   CreateCharacterRequest,
   DeepStatus,
   LanguageCode,
@@ -43,6 +44,23 @@ export const startRender = (body: RenderRequest) => call<RenderJob>("/api/render
 
 export const planCreation = (body: CreationPlanRequest) =>
   call<CreationPlan>("/api/plan", { method: "POST", body: JSON.stringify(body) });
+
+export async function requestAvatarBatch(body: {
+  prompt: string;
+  language?: LanguageCode;
+  addedNames?: string[];
+  selectedIds?: string[];
+}, signal?: AbortSignal): Promise<AvatarAttempt> {
+  const response = await fetch("/api/avatars", {
+    method: "POST",
+    signal,
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  const data = await response.json().catch(() => ({})) as Partial<AvatarAttempt> & { error?: string; code?: string };
+  if (!Array.isArray(data.jobs)) throw new ApiError(response.status, data.code ?? "", data.error ?? "");
+  return data as AvatarAttempt;
+}
 
 export const getTones = () => call<ToneCatalog>("/api/tones");
 

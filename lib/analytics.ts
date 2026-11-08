@@ -12,6 +12,7 @@ const PATH_TITLES: Record<string, string> = {
 const EVENTS: Record<string, Record<string, readonly string[]>> = {
   login: { method: ["google", "password"] },
   create_attempt: { result: ["login_required", "unapproved", "started"] },
+  avatar_attempt: { result: ["login_required", "unapproved", "blocked", "confirmed", "included"] },
   access_denied: { reason: ["anonymous", "unapproved", "disabled", "unavailable"] },
   generation_result: { status: ["queued", "succeeded", "failed", "denied"] },
 };

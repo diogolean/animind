@@ -38,6 +38,7 @@ import { useI18n } from "@/components/locale";
 import { apiErrorMessage, fill } from "@/lib/i18n";
 import { artStyleLabel, scenarioDisplay, scenarioPresetId, translate, type Locale, type MessageKey } from "@/lib/i18n";
 import { fixturePersona } from "@/lib/persona-sheet";
+import { AvatarRequest } from "@/components/avatar-request";
 import { CharacterListEditor } from "@/components/flow/character-list-editor";
 import { CharacterVoicesEditor } from "@/components/flow/character-voices-editor";
 import { ChoiceCard } from "@/components/flow/choice-card";
@@ -105,6 +106,7 @@ export function CreationStudio() {
   const [editing, setEditing] = useState<PlanField | null>(null);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const planTicket = useRef(0);
   const [tones, setTones] = useState<ToneOption[]>(normalizeToneCatalog().tones);
 
   const [manualMode, setManualMode] = useState<CreationMode>("monologue");
@@ -121,6 +123,7 @@ export function CreationStudio() {
   const [format, setFormat] = useState<VideoFormat>("16:9");
   const [viewer, setViewer] = useState<PublicUser | null>(null);
   const [loginOpen, setLoginOpen] = useState(false);
+  const [awaitingSignIn, setAwaitingSignIn] = useState(false);
   const { locale, t } = useI18n();
 
   const [rendering, setRendering] = useState(false);
@@ -218,6 +221,7 @@ export function CreationStudio() {
 
   const requestPlan = (value: string, language: LanguageCode | null = null) => {
     if (timer.current) clearTimeout(timer.current);
+    const ticket = ++planTicket.current;
     const clean = value.trim();
     if (!clean) {
       setPlan(null);
@@ -228,11 +232,17 @@ export function CreationStudio() {
     timer.current = setTimeout(() => {
       planCreation({ prompt: clean, ...(language ? { language } : {}) })
         .then((next) => {
+          if (ticket !== planTicket.current) return;
           setPlan(next);
           setEditing(null);
         })
-        .catch((error) => toast.error(apiErrorMessage(locale, error)))
-        .finally(() => setPlanning(false));
+        .catch((error) => {
+          if (ticket !== planTicket.current) return;
+          toast.error(apiErrorMessage(locale, error));
+        })
+        .finally(() => {
+          if (ticket === planTicket.current) setPlanning(false);
+        });
     }, 220);
   };
 
@@ -479,11 +489,12 @@ export function CreationStudio() {
               <button
                 type="button"
                 data-testid="generate"
-                disabled={!valid || rendering || planning}
+                disabled={!valid || rendering}
                 onClick={() => {
                   saveDraft(prompt, format);
                   if (!viewer) {
                     track("create_attempt", { result: "login_required" });
+                    setAwaitingSignIn(true);
                     setLoginOpen(true);
                     return;
                   }
@@ -499,12 +510,27 @@ export function CreationStudio() {
                 }}
                 className="inline-flex min-h-11 items-center gap-2 rounded-full bg-white px-5 text-sm font-medium text-black transition hover:bg-white/90 disabled:cursor-not-allowed disabled:opacity-25"
               >
-                {rendering || planning ? <Loader2 className="size-4 animate-spin" /> : <Sparkles className="size-4" />}
-                {planning ? t("understanding") : rendering ? t("creating") : result ? t("create") : t("create")}
+                {rendering ? <Loader2 className="size-4 animate-spin" /> : <Sparkles className="size-4" />}
+                {rendering ? t("creating") : t("create")}
               </button>
             </div>
           </div>
         </div>
+        <AvatarRequest
+          prompt={prompt}
+          pinnedName={libraryCharacter?.name ?? null}
+          viewer={viewer}
+          awaitingSignIn={awaitingSignIn}
+          onNeedLogin={() => {
+            saveDraft(prompt, format);
+            setAwaitingSignIn(true);
+            setLoginOpen(true);
+          }}
+          onBlocked={(code) => {
+            setBlockCode(code);
+            toast.error(apiErrorMessage(locale, { code }));
+          }}
+        />
         {viewer && !viewer.generationEnabled ? (
           <p data-testid="generation-off" role="status" className="mt-3 rounded-2xl border border-amber-400/40 bg-amber-400/10 px-4 py-3 text-sm text-amber-100">
             <span className="font-medium">{t("generationOffTitle")}. </span>
@@ -561,7 +587,7 @@ export function CreationStudio() {
               <a href="/login?next=/" className="mt-3 flex min-h-11 items-center justify-center rounded-full border border-white/15 text-sm" onClick={() => saveDraft(prompt, format)}>
                 {t("signInPassword")}
               </a>
-              <button type="button" className="mt-3 min-h-11 text-sm text-muted-foreground" onClick={() => setLoginOpen(false)}>{t("notNow")}</button>
+              <button type="button" className="mt-3 min-h-11 text-sm text-muted-foreground" onClick={() => { setLoginOpen(false); setAwaitingSignIn(false); }}>{t("notNow")}</button>
             </div>
           </div>
         ) : null}

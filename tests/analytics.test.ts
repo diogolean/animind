@@ -18,6 +18,9 @@ describe("ga4 sanitizer", () => {
     assert.equal(sanitizeEvent("create_attempt", { result: "login_required", prompt: "ideia secreta" })?.params.prompt, undefined);
     assert.equal(sanitizeEvent("access_denied", { reason: "the prompt was hello" }), null);
     assert.equal(sanitizeEvent("page_view", { page_path: "/" }), null);
+    assert.equal(sanitizeEvent("avatar_attempt", { result: "login_required", prompt: "ideia secreta" })?.params.prompt, undefined);
+    assert.equal(sanitizeEvent("avatar_attempt", { result: "login_required" })?.params.result, "login_required");
+    assert.equal(sanitizeEvent("avatar_attempt", { result: "the whole prompt" }), null);
   });
 
   it("does not hardcode the measurement id or a GTM container", async () => {

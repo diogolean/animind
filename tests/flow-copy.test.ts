@@ -5,6 +5,7 @@ import { apiErrorMessage, fill, translate } from "../lib/i18n";
 
 const studio = readFileSync(new URL("../components/creation-studio.tsx", import.meta.url), "utf8");
 const preview = readFileSync(new URL("../components/flow/progressive-preview.tsx", import.meta.url), "utf8");
+const avatar = readFileSync(new URL("../components/avatar-request.tsx", import.meta.url), "utf8");
 
 describe("main flow copy", () => {
   it("keeps create, sheet, render, and job labels in both locales", () => {
@@ -18,10 +19,18 @@ describe("main flow copy", () => {
     assert.equal(apiErrorMessage("en", { code: "price_unavailable" }), translate("en", "priceUnavailable"));
     assert.equal(apiErrorMessage("pt-BR", { code: "disabled" }), translate("pt-BR", "generationDisabled"));
     assert.equal(apiErrorMessage("en", new Error("Geração desligada")), translate("en", "requestFailed"));
+    assert.equal(translate("en", "generateAvatar"), "Generate avatar");
+    assert.equal(translate("pt-BR", "generateAvatar"), "Gerar avatar");
+    assert.equal(translate("en", "waitingForSignIn"), "Waiting for sign-in");
+    assert.equal(translate("pt-BR", "waitingForSignIn"), "Login necessário");
+    assert.equal(translate("en", "avatarIncluded"), "Included in the automatic generation");
+    assert.equal(translate("pt-BR", "avatarIncluded"), "Incluído na geração automática");
+    assert.equal(translate("en", "avatarFixtureStage"), "Fixture · {stage}");
+    assert.equal(translate("pt-BR", "avatarFixtureStage"), "Simulado · {stage}");
   });
 
   it("does not leave Portuguese status strings in the main flow components", () => {
-    for (const source of [studio, preview]) {
+    for (const source of [studio, preview, avatar]) {
       assert.equal(source.includes("Renderizando"), false);
       assert.equal(source.includes("Preparando cenário"), false);
       assert.equal(source.includes("Preparando animação"), false);
@@ -29,6 +38,8 @@ describe("main flow copy", () => {
       assert.equal(source.includes("Gerando no núcleo"), false);
       assert.equal(source.includes("Personagem indisponível"), false);
       assert.equal(source.includes("Um debate com"), false);
+      assert.equal(source.includes("Processando"), false);
+      assert.equal(source.includes("Gerando"), false);
     }
   });
 });
