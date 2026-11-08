@@ -491,7 +491,9 @@ export interface AvatarAttempt {
   requestId: string;
   ownerId: string;
   outcome: AvatarOutcome;
-  code: "avatar_provider_unavailable" | "reused" | "cancelled" | "generation_not_authorized";
+  code: "avatar_provider_unavailable" | "reused" | "cancelled" | "generation_not_authorized" | "price_unavailable";
+  /** Set when the events came from the core poll, not the offline fixture. */
+  transport?: "core";
   /** Absent or unknown is not zero. */
   cost: "unknown";
   fixture: boolean;

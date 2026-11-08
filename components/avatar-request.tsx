@@ -13,6 +13,13 @@ import { track } from "@/lib/analytics-client";
 
 const ANALYSIS_MS = 450;
 
+type CoreSheet = {
+  name: string;
+  found: boolean;
+  source: "core-fixture" | "core";
+  quotes: { id: string; text: string; source: string; url: string; verification?: "verified" }[];
+};
+
 const INTENT_KEY: Record<AvatarIntent, MessageKey> = {
   monologue: "avatarMonologue",
   presentation: "avatarPresentation",
@@ -54,6 +61,7 @@ export function AvatarRequest({
   const [attempt, setAttempt] = useState<AvatarAttempt | null>(null);
   const [view, setView] = useState<AvatarProgressView>(emptyAvatarProgress());
   const [pollNonce, setPollNonce] = useState(0);
+  const [sheets, setSheets] = useState<CoreSheet[]>([]);
   const [tracked, setTracked] = useState(`${prompt}\n${pinnedName ?? ""}`);
   const ticket = useRef(0);
   const abortRef = useRef<AbortController | null>(null);
@@ -121,6 +129,25 @@ export function AvatarRequest({
   }, [viewer, pollNonce]);
 
   const shown = plan ? applyEdits(plan, added, picked) : null;
+  const sheetKey = shown ? `${shown.language}\n${shown.participants.map((person) => person.name).join("\n")}` : "";
+
+  useEffect(() => {
+    if (!viewer || !sheetKey) return;
+    const [language, ...names] = sheetKey.split("\n");
+    const controller = new AbortController();
+    void Promise.all(names.filter(Boolean).slice(0, 2).map(async (name) => {
+      const response = await fetch(`/api/personas/sheet?${new URLSearchParams({ name, lang: language ?? "en-US" })}`, {
+        signal: controller.signal,
+        cache: "no-store",
+      });
+      if (!response.ok) return null;
+      const data = await response.json() as CoreSheet;
+      return data?.source === "core-fixture" && data.found ? data : null;
+    })).then((rows) => {
+      if (!controller.signal.aborted) setSheets(rows.filter((row): row is CoreSheet => Boolean(row)));
+    }).catch(() => undefined);
+    return () => controller.abort();
+  }, [viewer, sheetKey]);
   const issues = shown ? avatarIssues(shown) : [];
   const included = avatarRunning(automaticStages, "automatic");
   const state = !shown ? "incomplete" : included ? "included" : issues.length ? "incomplete" : !viewer ? "sign-in" : !viewer.generationEnabled ? "blocked" : "ready";
@@ -254,17 +281,40 @@ export function AvatarRequest({
           ) : null}
         </div>
       ) : null}
+      {sheets.map((sheet) => (
+        <article key={sheet.name} data-testid="core-persona-sheet" className="mt-3 max-w-xl rounded-2xl border border-white/10 p-4 text-sm text-white/90">
+          <p className="text-xs uppercase tracking-wide text-amber-300">{t("coreFixtureSheet")}</p>
+          <p className="mt-1 text-white/80">{t("coreFixtureSheetBody")}</p>
+          <h3 className="mt-3 text-sm font-medium">{sheet.name}</h3>
+          <ul className="mt-2 space-y-2">
+            {sheet.quotes.map((quote) => (
+              <li key={quote.id}>
+                <p>{quote.text}</p>
+                <p className="text-xs text-white/70">{quote.source}{quote.verification === "verified" ? ` · ${t("coreFixtureVerified")}` : ""}</p>
+              </li>
+            ))}
+          </ul>
+        </article>
+      ))}
       {attempt ? (
         <ul data-testid="avatar-progress" role="status" className="mt-3 max-w-xl space-y-1 text-sm text-white/90">
           {attempt.outcome === "partial" ? (
             <li data-testid="avatar-partial">{attempt.jobs.some((job) => job.disposition === "reused") ? t("avatarPartial") : t("avatarPartialKept")}</li>
           ) : null}
-          {attempt.jobs.map((job) => {
+          {attempt.transport === "core" ? (
+            <>
+              {(attempt.events ?? []).filter((event) => event.index === 0).map((event) => (
+                <li key={`${event.index}-${event.stage}`} data-testid={`avatar-core-${event.stage}`}>{fill(t("avatarCoreStage"), { stage: event.stage })}</li>
+              ))}
+              <li data-testid="avatar-core-block">{attempt.code === "price_unavailable" ? t("priceUnavailable") : t("avatarProviderOff")}</li>
+              <li>{t("avatarCoreNote")}</li>
+            </>
+          ) : attempt.jobs.map((job) => {
             const stage = view.stages[job.index] ?? job.stage;
             const feedback = avatarJobFeedback({ ...job, stage });
             return <li key={job.id} data-testid={`avatar-job-${job.index}`}>{fill(t(feedback.key), feedback.values)}</li>;
           })}
-          {attempt.outcome !== "partial" && attempt.jobs.some((job) => job.disposition === "blocked") ? <li>{t("avatarProviderOff")}</li> : null}
+          {attempt.transport !== "core" && attempt.outcome !== "partial" && attempt.jobs.some((job) => job.disposition === "blocked") ? <li>{t("avatarProviderOff")}</li> : null}
         </ul>
       ) : null}
     </section>

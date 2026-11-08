@@ -102,7 +102,7 @@ export function SiteHeader() {
       )}
       </nav>
       {mode && (
-        <span data-testid="core-mode" title={mode.note} className="sr-only">
+        <span data-testid="core-mode" title={mode.note} className={`basis-full text-xs ${mode.tone}`}>
           {mode.label}
         </span>
       )}

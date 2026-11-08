@@ -48,5 +48,8 @@ describe("verified persona fixture", () => {
     const route = await readFile("app/api/personas/sheet/route.ts", "utf8");
     assert.match(route, /if \(coreMode\(\) !== "core"\) return fixtureResponse/);
     assert.equal(route.includes("coreFetch"), false);
+    assert.equal(route.includes("guardedGeneration"), false);
+    assert.match(route, /presentCoreSheet/);
+    assert.match(route, /coreUserHeader/);
   });
 });

@@ -5,7 +5,7 @@ import { AVATAR_PROGRESS_STAGES } from "./contract";
 export const AVATAR_POLL_KEY = "animindly-avatar-poll";
 
 const ID = /^[A-Za-z0-9_-]{1,80}$/;
-const ALLOWED_ERROR = new Set(["generation_not_authorized", "qa_rejected", "avatar_not_found", "login"]);
+const ALLOWED_ERROR = new Set(["generation_not_authorized", "price_unavailable", "qa_rejected", "avatar_not_found", "login"]);
 const LEAK = /@|\/|\\|gemini|deepseek|openai|birefnet|api[_-]?key|secret|users\/|provider|costUsd|token/i;
 
 export function avatarTransport(mode: "core" | "mock" | "off"): "core" | "fixture" {
@@ -131,6 +131,11 @@ export function mapCoreAvatar(payload: unknown, ownerId: string): AvatarAttempt 
   const error = (Array.isArray(body.events) ? body.events : []).map((item) => (
     item && typeof item === "object" ? sanitizeAvatarError((item as { error?: unknown }).error) : null
   )).find((item) => item);
+  const code = error?.code === "price_unavailable"
+    ? "price_unavailable"
+    : error?.code === "generation_not_authorized"
+      ? "generation_not_authorized"
+      : "avatar_provider_unavailable";
   const jobs: AvatarJobState[] = people.map((person, index) => ({
     id: person.id,
     index,
@@ -147,9 +152,10 @@ export function mapCoreAvatar(payload: unknown, ownerId: string): AvatarAttempt 
     requestId,
     ownerId,
     outcome,
-    code: error?.code === "generation_not_authorized" ? "generation_not_authorized" : "avatar_provider_unavailable",
+    code,
     cost: "unknown",
     fixture,
+    transport: "core",
     providerCalls: reportedCalls,
     providerFunction: null,
     jobs,
@@ -170,6 +176,37 @@ export function presentCorePayload(status: number, payload: unknown, ownerId: st
   const mapped = mapCoreAvatar(payload, ownerId);
   if (!mapped) return { status: 502, body: avatarMissBody() };
   return { status: 200, body: mapped };
+}
+
+const SHEET_LEAK = /@|\\|users\/|api[_-]?key|secret|costUsd|token/i;
+const SHEET_URL = /^https:\/\/(?:[a-z0-9-]+\.)?wiki(?:pedia|quote|source)\.org\/wiki\/\S+$/;
+
+/** The core sheet read. Drops the owner hash and any quote that carries a path or a secret. */
+export function presentCoreSheet(payload: unknown): {
+  name: string;
+  found: boolean;
+  source: "core-fixture" | "core";
+  quotes: { id: string; text: string; source: string; url: string; verification?: "verified" }[];
+} | null {
+  if (!payload || typeof payload !== "object") return null;
+  const body = payload as { name?: unknown; found?: unknown; quotes?: unknown };
+  const name = typeof body.name === "string" ? body.name.trim() : "";
+  if (!name || name.length > 80 || SHEET_LEAK.test(name)) return null;
+  const quotes = (Array.isArray(body.quotes) ? body.quotes : []).slice(0, 8).flatMap((item) => {
+    if (!item || typeof item !== "object") return [];
+    const quote = item as { id?: unknown; text?: unknown; source?: unknown; url?: unknown; verification?: unknown };
+    const text = typeof quote.text === "string" ? quote.text.trim() : "";
+    const source = typeof quote.source === "string" ? quote.source.trim() : "";
+    const url = typeof quote.url === "string" ? quote.url.trim() : "";
+    const id = typeof quote.id === "string" && /^[A-Za-z0-9_-]{1,40}$/.test(quote.id) ? quote.id : "";
+    if (!id || !text || text.length > 400 || !source || source.length > 80) return [];
+    if (SHEET_LEAK.test(text) || SHEET_LEAK.test(source) || !SHEET_URL.test(url)) return [];
+    const row: { id: string; text: string; source: string; url: string; verification?: "verified" } = { id, text, source, url };
+    if (quote.verification === "verified") row.verification = "verified";
+    return [row];
+  });
+  const labeled = quotes.some((quote) => /labeled fixture|fixture rotulada/i.test(quote.source));
+  return { name, found: body.found === true && quotes.length > 0, source: labeled ? "core-fixture" : "core", quotes };
 }
 
 /** Offline confirmation. The events are plan and fail only. No image stage is invented. */

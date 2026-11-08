@@ -5,7 +5,7 @@ import { addAvatarParticipant, avatarAttemptKey, avatarIssues, inferAvatarPlan, 
 import { avatarJobReady, cancelAvatarAttempt, decideAvatarRequest, memoryAvatarStore } from "../lib/avatar-batch";
 import { AVATAR_PAID_CALLS_AUTHORIZED } from "../lib/avatar-provider";
 import { abortAvatarProgress, applyAvatarEvent, avatarBatchShape, avatarJobFeedback, avatarRunning, costIsReportedZero, emptyAvatarProgress, foldAvatarEvents } from "../lib/avatar-progress";
-import { avatarReconnect, avatarTransport, labelOfflineAttempt, mapCoreAvatar, mapCoreStage, presentCorePayload, promptForCore, rememberAvatarPoll, rememberedAvatarPoll, sanitizeAvatarError } from "../lib/avatar-core";
+import { avatarReconnect, avatarTransport, labelOfflineAttempt, mapCoreAvatar, mapCoreStage, presentCorePayload, presentCoreSheet, promptForCore, rememberAvatarPoll, rememberedAvatarPoll, sanitizeAvatarError } from "../lib/avatar-core";
 import { fill, translate } from "../lib/i18n";
 
 describe("avatar plan", () => {
@@ -212,7 +212,39 @@ describe("avatar core contract", () => {
     const mapped = mapCoreAvatar(blockedPayload, "usr_a");
     assert.ok(mapped);
     assert.equal(mapped?.code, "generation_not_authorized");
+    assert.equal(mapped?.transport, "core");
     assert.equal(mapped?.fixture, true);
+    const priced = mapCoreAvatar({
+      ...blockedPayload,
+      plan: { ...blockedPayload.plan, resolution: { prices: { "1K": { usdPerImage: 0.039, model: "gemini-2.5-flash-image", where: "production/cost/pricing.py" } } } },
+      events: blockedPayload.events.map((event, index) => index === 2 ? { ...event, error: { code: "price_unavailable", recoverable: true }, blockedBefore: "image generation" } : event),
+    }, "usr_a");
+    assert.equal(priced?.code, "price_unavailable");
+    assert.equal(priced?.transport, "core");
+    assert.deepEqual(priced?.events?.map((event) => event.stage), ["plan", "queued", "fail"]);
+    assert.equal(priced?.jobs[0]?.stage, "fail");
+    const pricedText = JSON.stringify(priced);
+    assert.equal(pricedText.includes("0.039"), false);
+    assert.equal(pricedText.includes("gemini"), false);
+    assert.equal(pricedText.includes("production/cost"), false);
+    assert.equal(pricedText.includes("image generation"), false);
+    const sheet = presentCoreSheet({
+      name: "Ada",
+      found: true,
+      owner: "abc123hashowner",
+      quotes: [{ id: "q1", text: "A labeled fixture quote.", source: "labeled fixture", url: "https://pt.wikiquote.org/wiki/Ada", verification: "verified" }],
+    });
+    assert.equal(sheet?.source, "core-fixture");
+    assert.equal(sheet?.found, true);
+    assert.equal(sheet?.quotes[0]?.verification, "verified");
+    assert.equal(JSON.stringify(sheet).includes("abc123hashowner"), false);
+    const leaked = presentCoreSheet({
+      name: "Ada",
+      found: true,
+      quotes: [{ id: "q1", text: "users/secret", source: "labeled fixture", url: "https://pt.wikiquote.org/wiki/Ada", verification: "verified" }],
+    });
+    assert.equal(leaked?.quotes.length, 0);
+    assert.equal(leaked?.found, false);
     assert.equal(mapped?.cost, "unknown");
     assert.equal(costIsReportedZero(mapped?.cost), false);
     assert.equal(mapped?.providerCalls, 0);
