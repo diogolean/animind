@@ -47,7 +47,7 @@ export function AvatarRequest({
 }: {
   prompt: string;
   pinnedName: string | null;
-  viewer: { generationEnabled: boolean } | null;
+  viewer: { generationEnabled: boolean; role?: "user" | "admin" | "super_admin" } | null;
   awaitingSignIn: boolean;
   automaticStages?: Partial<Record<number, AvatarProgressStage>>;
   onNeedLogin: () => void;
@@ -64,6 +64,7 @@ export function AvatarRequest({
   const [pollNonce, setPollNonce] = useState(0);
   const [sheets, setSheets] = useState<CoreSheet[]>([]);
   const [planUsage, setPlanUsage] = useState<CoreUsageView | null>(null);
+  const [coreLive, setCoreLive] = useState(false);
   const [tracked, setTracked] = useState(`${prompt}\n${pinnedName ?? ""}`);
   const ticket = useRef(0);
   const abortRef = useRef<AbortController | null>(null);
@@ -78,6 +79,21 @@ export function AvatarRequest({
     setAttempt(null);
     setPlanUsage(null);
   }
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/health", { cache: "no-store" })
+      .then((response) => response.json())
+      .then((data: { mode?: string }) => {
+        if (!cancelled) setCoreLive(data?.mode === "core");
+      })
+      .catch(() => {
+        if (!cancelled) setCoreLive(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     const current = ++ticket.current;
@@ -185,7 +201,8 @@ export function AvatarRequest({
 
   const issues = shown ? avatarIssues(shown) : [];
   const included = avatarRunning(automaticStages, "automatic");
-  const state = !shown ? "incomplete" : included ? "included" : issues.length ? "incomplete" : !viewer ? "sign-in" : !viewer.generationEnabled ? "blocked" : "ready";
+  const mayRequest = viewer?.role === "admin" || viewer?.role === "super_admin";
+  const state = !shown ? "incomplete" : included ? "included" : issues.length ? "incomplete" : !viewer ? "sign-in" : !mayRequest ? "blocked" : !coreLive ? "offline" : "confirm";
 
   function addName() {
     if (!shown) return;
@@ -207,10 +224,15 @@ export function AvatarRequest({
       onNeedLogin();
       return;
     }
-    if (!viewer.generationEnabled) {
+    if (viewer.role !== "admin" && viewer.role !== "super_admin") {
       track("avatar_attempt", { result: "unapproved" });
       track("access_denied", { reason: "unapproved" });
       onBlocked("unapproved");
+      return;
+    }
+    if (!coreLive) {
+      track("avatar_attempt", { result: "offline" });
+      onBlocked("avatar_provider_unavailable");
       return;
     }
     track("avatar_attempt", { result: "confirmed" });
@@ -246,7 +268,7 @@ export function AvatarRequest({
         type="button"
         data-testid="generate-avatar"
         data-state={state}
-        aria-disabled={state !== "sign-in" && state !== "ready"}
+        aria-disabled={state !== "sign-in" && state !== "confirm"}
         aria-describedby="avatar-note"
         onClick={() => void confirmAvatar()}
         className="inline-flex min-h-11 items-center rounded-full border border-white/45 bg-black px-4 text-sm font-medium text-white hover:bg-white/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
@@ -255,6 +277,7 @@ export function AvatarRequest({
       </button>
       <p id="avatar-note" data-testid="avatar-note" className="mt-2 max-w-xl text-sm leading-relaxed text-white/85">
         {t("avatarNoVideo")}
+        {state === "offline" ? ` ${t("avatarProviderOff")}` : ""}
         {included ? ` ${t("avatarIncluded")}` : ""}
         {checking ? ` ${t("avatarChecking")}` : ""}
       </p>

@@ -31,8 +31,8 @@ export interface PublicUser {
 export interface UserRecord extends Omit<PublicUser, "generationEnabled"> {
   passwordHash: string;
   /**
-   * Explicit opt-in. Missing on older rows: a super_admin is treated as enabled
-   * and every other role as disabled. New rows always store the boolean.
+   * Stored opt-in. The public flag follows the role: admin and super_admin may
+   * generate, a user may not. The spend ledger stays super_admin only.
    */
   generationEnabled?: boolean;
 }

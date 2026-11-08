@@ -16,7 +16,8 @@ export type SpendOperation =
   | "persona_sheet"
   | "voice"
   | "tone"
-  | "health";
+  | "health"
+  | "avatar";
 
 export type SpendClass = "generation" | "read";
 

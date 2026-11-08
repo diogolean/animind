@@ -4,6 +4,7 @@ import { describe, it } from "node:test";
 import { addAvatarParticipant, avatarAttemptKey, avatarIssues, inferAvatarPlan, toggleAvatarParticipant } from "../lib/avatar-plan";
 import { avatarJobReady, cancelAvatarAttempt, decideAvatarRequest, memoryAvatarStore } from "../lib/avatar-batch";
 import { AVATAR_PAID_CALLS_AUTHORIZED } from "../lib/avatar-provider";
+import { realAvatarCall } from "../lib/accounts/generation-policy";
 import { abortAvatarProgress, applyAvatarEvent, avatarBatchShape, avatarJobFeedback, avatarRunning, costIsReportedZero, emptyAvatarProgress, foldAvatarEvents } from "../lib/avatar-progress";
 import { avatarReconnect, avatarTransport, labelOfflineAttempt, mapCoreAvatar, mapCoreStage, presentCoreDebate, presentCorePayload, presentCoreSheet, presentCoreUsage, presentDebateCreated, presentDebateResponse, presentPlanUsage, promptForCore, rememberAvatarPoll, rememberedAvatarPoll, sanitizeAvatarError } from "../lib/avatar-core";
 import { fill, translate } from "../lib/i18n";
@@ -423,6 +424,34 @@ describe("avatar routes", () => {
     assert.match(studio, /AvatarRequest/);
     assert.match(studio, /setAwaitingSignIn\(true\)/);
     assert.ok(files.indexOf("ownsResource") < files.indexOf("coreFetch"));
+    const post = route.slice(route.indexOf("export async function POST"));
+    const gateAt = post.indexOf("realAvatarCall");
+    const reserveAt = post.indexOf("beginGeneration");
+    const proxyAt = post.indexOf('proxyJson("/avatars"');
+    assert.ok(gateAt >= 0 && reserveAt > gateAt && proxyAt > reserveAt);
+    assert.equal(post.includes("generate_character_image"), false);
+    assert.equal(post.includes("create_puppet"), false);
+    assert.equal(post.includes("generate_view"), false);
+    assert.equal(button.includes(': "ready"'), false);
+    assert.match(button, /"confirm"/);
+    assert.match(button, /"offline"/);
+    assert.match(button, /mode === "core"/);
+    assert.match(button, /super_admin/);
+    assert.match(button, /data-state=\{state\}/);
+    const spend = readFileSync(new URL("../app/api/admin/spend/route.ts", import.meta.url), "utf8");
+    assert.match(spend, /role !== "super_admin"/);
+  });
+
+  it("lets only an admin or super_admin reach a priced core avatar call", () => {
+    assert.equal(AVATAR_PAID_CALLS_AUTHORIZED, false);
+    assert.deepEqual(realAvatarCall({ role: "anonymous", mode: "core", generationOn: true, priceMinor: 1 }), { allow: false, code: "unapproved" });
+    assert.deepEqual(realAvatarCall({ role: "user", mode: "core", generationOn: true, priceMinor: 1 }), { allow: false, code: "unapproved" });
+    assert.deepEqual(realAvatarCall({ role: "admin", mode: "mock", generationOn: true, priceMinor: 1 }), { allow: false, code: "core_off" });
+    assert.deepEqual(realAvatarCall({ role: "admin", mode: "off", generationOn: true, priceMinor: 1 }), { allow: false, code: "core_off" });
+    assert.deepEqual(realAvatarCall({ role: "super_admin", mode: "core", generationOn: false, priceMinor: 1 }), { allow: false, code: "disabled" });
+    assert.deepEqual(realAvatarCall({ role: "admin", mode: "core", generationOn: true, priceMinor: null }), { allow: false, code: "price_unavailable" });
+    assert.deepEqual(realAvatarCall({ role: "admin", mode: "core", generationOn: true, priceMinor: 1 }), { allow: true });
+    assert.deepEqual(realAvatarCall({ role: "super_admin", mode: "core", generationOn: true, priceMinor: 0 }), { allow: true });
   });
 });
 

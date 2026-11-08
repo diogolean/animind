@@ -22,8 +22,27 @@ export function generationConcurrency(): { cap: number } | { error: true } {
 }
 
 export function userMayGenerate(user: { role: Role; generationEnabled?: boolean }): boolean {
-  if (typeof user.generationEnabled === "boolean") return user.generationEnabled;
-  return user.role === "super_admin";
+  return user.role === "admin" || user.role === "super_admin";
+}
+
+export type RealAvatarDenial = "unapproved" | "core_off" | "disabled" | "price_unavailable";
+
+/**
+ * A real avatar proxy is allowed only for admin or super_admin, only while the
+ * core is connected, only while generation is on, and only with a published price.
+ * A user or a visitor never reaches it. No price means no call.
+ */
+export function realAvatarCall(input: {
+  role: Role | "anonymous";
+  mode: "core" | "mock" | "off";
+  generationOn: boolean;
+  priceMinor: number | null;
+}): { allow: true } | { allow: false; code: RealAvatarDenial } {
+  if (input.role !== "admin" && input.role !== "super_admin") return { allow: false, code: "unapproved" };
+  if (input.mode !== "core") return { allow: false, code: "core_off" };
+  if (!input.generationOn) return { allow: false, code: "disabled" };
+  if (input.priceMinor === null || !Number.isInteger(input.priceMinor) || input.priceMinor < 0) return { allow: false, code: "price_unavailable" };
+  return { allow: true };
 }
 
 const IDEMPOTENCY = /^[A-Za-z0-9_-]{8,80}$/;

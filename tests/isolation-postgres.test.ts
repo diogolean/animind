@@ -65,7 +65,7 @@ describe("postgres account isolation", { skip: url ? false : "isolated DATABASE_
     if (!user.ok || !admin.ok) return;
     ids.push(user.value.id, admin.value.id);
     assert.equal(user.value.generationEnabled, false);
-    assert.equal(admin.value.generationEnabled, false);
+    assert.equal(admin.value.generationEnabled, true);
     assert.equal(owner.generationEnabled, true);
     const imported = await importCharacterPackage({
       ownerId: owner.id,
@@ -111,7 +111,7 @@ describe("postgres account isolation", { skip: url ? false : "isolated DATABASE_
       assert.equal(userLogin.user.generationEnabled, false);
       assert.equal(userLogin.text.includes("render"), false);
       const adminLogin = await login(app.base, admin.value.email, password);
-      assert.equal(adminLogin.user.generationEnabled, false);
+      assert.equal(adminLogin.user.generationEnabled, true);
       const ownerLogin = await login(app.base, owner.email, password);
 
       const userLibrary = await hit(app.base, "/api/library", userLogin.cookie);

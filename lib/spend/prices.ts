@@ -43,6 +43,7 @@ const OPERATIONS = new Set<string>([
   "persona_sheet",
   "voice",
   "tone",
+  "avatar",
 ]);
 
 export function parsePriceTable(raw: string | undefined): PriceTable | { error: string } {

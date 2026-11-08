@@ -2,8 +2,8 @@
 
 /* eslint-disable @next/next/no-img-element */
 import { useEffect, useState } from "react";
-import type { LibraryCharacter, LibraryViewName } from "@/lib/accounts/types";
-import type { Character, CharacterView, ViewName, Viseme } from "@/lib/contract";
+import type { LibraryCharacter } from "@/lib/accounts/types";
+import { VISEMES, type Character, type CharacterView, type Viseme } from "@/lib/contract";
 import { AvatarStage } from "@/components/avatar-stage";
 import { useI18n } from "@/components/locale";
 import { PackVoice } from "@/components/pack-voice";
@@ -13,15 +13,15 @@ import type { EyeCapability, GazeDirection } from "@/lib/eye-rig";
 import { separableGaze } from "@/lib/eye-rig";
 import { fill, type MessageKey } from "@/lib/i18n";
 import { packVoiceUrls, viewHasMouth } from "@/lib/pack-voice";
+import { controllerSlots, normalizedAnchors, poseAt, visemePresent, type ControllerSlotId } from "@/lib/puppet-controller";
 import { SHEET_CELL, SHEET_GRID, sheetGroups, type SheetCategory, type SheetGroup } from "@/lib/sheet";
 import { hasFullBody, type Framing } from "@/lib/stage-frame";
 
-const VIEWS: { id: LibraryViewName; label: MessageKey; testId: string; rig: ViewName }[] = [
-  { id: "front", label: "front", testId: "view-front", rig: "front" },
-  { id: "three_quarter_left", label: "left", testId: "view-three-quarter-left", rig: "left" },
-  { id: "three_quarter", label: "left", testId: "view-three-quarter", rig: "left" },
-  { id: "three_quarter_right", label: "right", testId: "view-three-quarter-right", rig: "right" },
-  { id: "profile", label: "profile", testId: "view-profile", rig: "right" },
+const SLOT_META: { id: ControllerSlotId; label: MessageKey; testId: string }[] = [
+  { id: "front", label: "front", testId: "view-front" },
+  { id: "three_quarter_left", label: "left", testId: "view-three-quarter-left" },
+  { id: "three_quarter_right", label: "right", testId: "view-three-quarter-right" },
+  { id: "profile", label: "profile", testId: "view-profile" },
 ];
 
 const EMOTION_LABEL: Record<string, string> = {
@@ -52,10 +52,12 @@ const CATEGORY_LABEL: Record<SheetCategory, MessageKey> = {
 
 export function ComposedCharacter({ character, rig }: { character: LibraryCharacter; rig: Character | null }) {
   const { t, locale } = useI18n();
-  const views = VIEWS.filter((view) => character.views[view.id]).filter((view) => view.id !== "three_quarter" || !character.views.three_quarter_left);
-  const [viewId, setViewId] = useState<LibraryViewName>(views[0]?.id ?? "front");
-  const selected = views.find((view) => view.id === viewId) ?? views[0];
-  const rigView = selected ? rig?.views[selected.rig] : undefined;
+  const slots = controllerSlots(character.views, rig);
+  const [slotId, setSlotId] = useState<ControllerSlotId>("front");
+  const [holding, setHolding] = useState(false);
+  const active = slots.find((slot) => slot.id === slotId && slot.present) ?? slots.find((slot) => slot.present) ?? slots[0];
+  const selected = SLOT_META.find((slot) => slot.id === active?.id) ?? SLOT_META[0];
+  const rigView = active?.rig ? rig?.views[active.rig] : undefined;
   const hasRig = Boolean(rigView && rigView.layers.length > 0);
   const emotions = Object.keys(rigView?.expressions ?? {});
   const [emotion, setEmotion] = useState("rest");
@@ -72,12 +74,15 @@ export function ComposedCharacter({ character, rig }: { character: LibraryCharac
   const brows = Boolean(rigView?.layers.some((layer) => layer.name === "brows" || layer.name === "brow_left"));
   const gazeReady = eyeCapability === "separable" || eyeCapability === "recovered";
   const bodyReady = Boolean(rigView && hasFullBody(rigView));
-  const missingSides = Boolean(character.views.front) && !character.views.three_quarter_left && !character.views.three_quarter && !character.views.three_quarter_right;
-  const sheet = views.flatMap((view) => {
-    const source = rig?.views[view.rig];
-    if (!source || source.layers.length === 0) return [];
-    const capability = separableGaze(source.layers) ? "separable" : view.id === selected?.id ? eyeCapability : "unavailable";
-    return sheetGroups(source, capability).map((group) => ({ view, group }));
+  const missingSides = !slots.some((slot) => (slot.id === "three_quarter_left" || slot.id === "three_quarter_right") && slot.present);
+  const anchors = normalizedAnchors(rigView);
+  const sheet = slots.flatMap((slot) => {
+    if (!slot.present || !slot.rig) return [];
+    const source = rig?.views[slot.rig];
+    const meta = SLOT_META.find((item) => item.id === slot.id);
+    if (!source || source.layers.length === 0 || !meta) return [];
+    const capability = separableGaze(source.layers) ? "separable" : slot.id === active?.id ? eyeCapability : "unavailable";
+    return sheetGroups(source, capability).map((group) => ({ view: { ...meta, rig: slot.rig }, group }));
   });
   const waiting = hasRig && eyeCapability === "pending" && sheet.length === 0;
 
@@ -99,9 +104,44 @@ export function ComposedCharacter({ character, rig }: { character: LibraryCharac
     };
   }, [sheetOpen]);
 
+  useEffect(() => {
+    if (!holding) return;
+    let frame = 0;
+    const started = performance.now();
+    const tick = (now: number) => {
+      const pose = poseAt((now - started) / 1000);
+      if (lids) setEyes(pose.lids);
+      if (gazeReady) setGaze(pose.gaze);
+      frame = requestAnimationFrame(tick);
+    };
+    frame = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(frame);
+  }, [holding, lids, gazeReady]);
+
+  function chooseSlot(id: ControllerSlotId) {
+    const slot = slots.find((item) => item.id === id);
+    if (!slot?.present || !slot.rig) return;
+    const next = rig?.views[slot.rig];
+    setHolding(false);
+    setSlotId(id);
+    setEmotion("rest");
+    setSpoken(null);
+    setGaze("center");
+    setEyeCapability("pending");
+    setSceneryState("pending");
+    setPlate(null);
+    setFraming(next && hasFullBody(next) ? "body" : "close");
+  }
+
+  const flatUrl = active?.id === "three_quarter_left"
+    ? character.views.three_quarter_left ?? character.views.three_quarter
+    : active ? character.views[active.id] : undefined;
+
   return (
     <section className="mt-6" data-testid="composed-character">
-      <div className="overflow-hidden rounded-[1.5rem] border border-white/10 bg-black">
+      <div data-testid="puppet-controller">
+      <h2 className="text-sm font-medium">{t("controller")}</h2>
+      <div className="mt-3 overflow-hidden rounded-[1.5rem] border border-white/10 bg-black">
         {selected && hasRig && rigView ? (
           <figure data-testid={selected.testId} data-framing={framing} data-ground="black" className="mx-auto w-full max-w-md bg-black">
             <AvatarStage
@@ -117,9 +157,9 @@ export function ComposedCharacter({ character, rig }: { character: LibraryCharac
               onPlate={setPlate}
             />
           </figure>
-        ) : selected && character.views[selected.id] ? (
+        ) : selected && flatUrl ? (
           <figure data-testid={selected.testId} className="mx-auto flex max-h-[70dvh] w-full max-w-md items-center justify-center bg-black">
-            <img src={character.views[selected.id]} alt="" className="max-h-[70dvh] w-full bg-black object-contain" />
+            <img src={flatUrl} alt="" className="max-h-[70dvh] w-full bg-black object-contain" />
           </figure>
         ) : (
           <p className="px-4 py-10 text-sm text-muted-foreground">Sem vista para compor.</p>
@@ -132,25 +172,38 @@ export function ComposedCharacter({ character, rig }: { character: LibraryCharac
         onViseme={setSpoken}
       />
       <div className="mt-4 flex flex-wrap gap-2" data-testid="view-controls">
-        {views.map((view) => (
-          <Choice
-            key={view.id}
-            pressed={selected?.id === view.id}
-            testId={`choose-${view.testId}`}
-            onClick={() => {
-              const next = rig?.views[view.rig];
-              setViewId(view.id);
-              setEmotion("rest");
-              setGaze("center");
-              setEyeCapability("pending");
-              setSceneryState("pending");
-              setPlate(null);
-              setFraming(next && hasFullBody(next) ? "body" : "close");
-            }}
-            label={t(view.label)}
-          />
-        ))}
+        {slots.map((slot) => {
+          const meta = SLOT_META.find((item) => item.id === slot.id);
+          if (!meta) return null;
+          if (!slot.present) {
+            return (
+              <button
+                key={slot.id}
+                type="button"
+                aria-disabled="true"
+                data-missing={slot.reason}
+                data-testid={`missing-${slot.id}`}
+                className={`${controlClass(false)} opacity-60`}
+                onClick={(event) => event.preventDefault()}
+              >
+                {t(meta.label)} · {t("missingView")}
+              </button>
+            );
+          }
+          return (
+            <Choice
+              key={slot.id}
+              pressed={active?.id === slot.id}
+              testId={`choose-${meta.testId}`}
+              onClick={() => chooseSlot(slot.id)}
+              label={t(meta.label)}
+            />
+          );
+        })}
       </div>
+      <p data-testid="puppet-anchors" className="mt-3 text-sm text-white/80">
+        {t("anchorMouth")} {formatAnchor(anchors.mouth)} · {t("anchorEyes")} {formatAnchor(anchors.leftEye)} {formatAnchor(anchors.rightEye)}
+      </p>
       {hasRig && bodyReady ? (
         <div className="mt-3 flex flex-wrap gap-2" role="group" aria-label={t("framingBody")} data-testid="framing-controls">
           <Choice pressed={framing === "body"} onClick={() => setFraming("body")} label={t("framingBody")} testId="framing-body" />
@@ -213,20 +266,59 @@ export function ComposedCharacter({ character, rig }: { character: LibraryCharac
       {hasRig && gazeReady ? (
         <div className="mt-3 flex flex-wrap gap-2" role="group" aria-label={t("gaze")} data-testid="gaze-controls" data-gaze={eyeCapability}>
           {(["center", "left", "right", "up", "down"] as const).map((direction) => (
-            <Choice key={direction} pressed={gaze === direction} onClick={() => setGaze(direction)} label={t(GAZE_LABEL[direction])} testId={`gaze-${direction}`} />
+            <Choice key={direction} pressed={gaze === direction} onClick={() => { setHolding(false); setGaze(direction); }} label={t(GAZE_LABEL[direction])} testId={`gaze-${direction}`} />
           ))}
         </div>
       ) : hasRig && eyeCapability === "unavailable" ? (
         <p className="mt-3 text-sm text-muted-foreground" data-testid="gaze-unavailable">{t("gazeUnavailable")}</p>
       ) : null}
-      {missingSides ? <p className="mt-3 text-sm text-muted-foreground">{t("missingSides")}</p> : null}
+      {hasRig ? (
+        <div className="mt-3 flex flex-wrap gap-2" role="group" aria-label={t("anchorMouth")} data-testid="mouth-controls">
+          {VISEMES.map((viseme) => visemePresent(rigView, viseme) ? (
+            <Choice
+              key={viseme}
+              pressed={spoken === viseme}
+              testId={`mouth-${viseme}`}
+              onClick={() => {
+                setHolding(false);
+                setSpoken(viseme);
+              }}
+              label={viseme}
+            />
+          ) : (
+            <button key={viseme} type="button" aria-disabled="true" data-missing="absent" data-testid={`mouth-${viseme}`} className={`${controlClass(false)} opacity-60`} onClick={(event) => event.preventDefault()}>
+              {viseme} · {t("missingView")}
+            </button>
+          ))}
+        </div>
+      ) : null}
+      <div className="mt-3">
+        <button
+          type="button"
+          data-testid="parametric-pose"
+          aria-pressed={holding}
+          aria-disabled={!lids && !gazeReady}
+          className={`${controlClass(holding)} ${!lids && !gazeReady ? "opacity-60" : ""}`}
+          onClick={() => {
+            if (!lids && !gazeReady) return;
+            setHolding((value) => !value);
+          }}
+        >
+          {t("parametricPose")}
+        </button>
+      </div>
+      {missingSides ? <p className="mt-3 text-sm text-muted-foreground" data-testid="missing-sides">{t("missingSides")}</p> : null}
+      </div>
       {sheet.length ? (
         <section className="mt-8 bg-black" data-testid="emotion-sheet" data-ground="black">
           <h2 className="text-sm font-medium">{t("emotionSheet")}</h2>
-          {views.map((view) => {
+          <p className="mt-1 text-sm text-white/70" data-testid="sheet-review">{t("sheetReview")}</p>
+          {slots.filter((slot) => slot.present).map((slot) => {
+            const view = SLOT_META.find((item) => item.id === slot.id);
+            if (!view || !slot.rig) return null;
             const groups = sheet.filter((entry) => entry.view.id === view.id);
             if (!groups.length) return null;
-            const source = rig?.views[view.rig];
+            const source = rig?.views[slot.rig];
             if (!source) return null;
             return (
               <div key={view.id} className="mt-4" data-testid={`sheet-${view.testId}`}>
@@ -241,6 +333,7 @@ export function ComposedCharacter({ character, rig }: { character: LibraryCharac
       ) : waiting ? null : (
         <section className="mt-8">
           <h2 className="text-sm font-medium">{t("emotionSheet")}</h2>
+          <p className="mt-1 text-sm text-white/70" data-testid="sheet-review">{t("sheetReview")}</p>
           <div data-testid="emotion-sheet" className="mt-3 overflow-hidden rounded-[1.5rem] border border-white/10 bg-black">
             {character.emotionSheetUrl ? (
               <button type="button" data-testid="emotion-sheet-zoom" onClick={() => setSheetOpen(true)} className="block min-h-11 w-full cursor-zoom-in text-left">
@@ -326,6 +419,10 @@ const GAZE_LABEL: Record<GazeDirection, MessageKey> = {
   up: "gazeUp",
   down: "gazeDown",
 };
+
+function formatAnchor(point: { x: number; y: number } | null): string {
+  return point ? `${point.x.toFixed(3)}, ${point.y.toFixed(3)}` : "—";
+}
 
 function Choice({ pressed, onClick, label, testId }: { pressed: boolean; onClick?: () => void; label: string; testId?: string }) {
   return (
