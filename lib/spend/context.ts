@@ -4,6 +4,8 @@ export interface SpendFrame {
   timeoutMs: number;
   maxRetries: number;
   retries: number;
+  userId?: string;
+  requestId?: string;
   noteRetry: (count: number) => void;
   /** Return false to stop before another provider attempt. */
   allowRetry?: () => Promise<boolean>;

@@ -32,8 +32,6 @@ export type GenerationTicket = {
   release: () => void;
 };
 
-const inflight = { n: 0 };
-
 function deny(status: number, code: SpendBlock, error: string): Response {
   return json({ error, code }, status);
 }
@@ -163,12 +161,10 @@ export async function beginGeneration(req: Request, operation: SpendOperation, h
     await remember(actor.id, parsedKey.key, status, held.block, hash);
     return deny(status, held.block, error);
   }
-  inflight.n += 1;
   let released = false;
   const release = () => {
     if (released) return;
     released = true;
-    inflight.n = Math.max(0, inflight.n - 1);
   };
   return {
     user: actor,
@@ -254,6 +250,8 @@ export async function withSpend<T>(ticket: GenerationTicket, fn: () => Promise<T
     timeoutMs: limits.timeoutMs,
     maxRetries: limits.maxRetries,
     retries: 0,
+    userId: ticket.user.id,
+    requestId: ticket.requestId,
     noteRetry(count) {
       frame.retries = count;
     },

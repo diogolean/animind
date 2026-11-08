@@ -127,7 +127,28 @@ The Next.js app reads [`.env.example`](../.env.example). Image, script, and spee
 | `usage.imageCount`, `usage.audioSeconds`, `usage.videoSeconds` | Stored when present. |
 | `reportedMinor` | Integer USD cents. A missing or non-integer value stays null. It is not treated as zero. A reservation estimate is not this field. |
 
-The separate Omni-Engine draft, from `feat/animind-core-api`, is what has to start returning those fields. Nested catalog calls inside a paid render are still one reservation in this app.
+The separate Omni-Engine draft, from `feat/animind-core-api`, is what has to start returning those fields. A nested provider read inside a paid render stays inside the same reservation. This app also writes one `read` row for that call, with the same user, request, and attempt. Its estimated and reported amounts stay null.
+
+Account rows use the same driver as the spend ledger. A Neon host stays on the Neon HTTP driver. The CI Postgres service uses the wire protocol. `tests/privacy.test.ts` covers the file store. `tests/isolation-postgres.test.ts` covers two accounts on the isolated database.
+
+### Route, meter, and lock
+
+Rate, concurrency, and budget are the ledger. There is no process-memory limiter. Unknown money stays null and is not added as zero. A `read` row is a count, not money.
+
+| Route | Meter | Lock |
+| --- | --- | --- |
+| `POST /api/plan` | `plan` reservation. Anonymous, unapproved, and core-off fall through to the local planner with no reservation. | Ledger rate, concurrency, and budget before any provider call. |
+| `POST /api/render` | `render` reservation. The nested `GET /tones` on the core writes a `tone` read on the same user, request, and attempt. Both amounts on that read stay null. | Same ledger reservation. The nested read does not reserve again. |
+| `POST /api/preview` | `preview` reservation. | Ledger. |
+| `POST /api/characters` | `character` reservation. | Ledger. |
+| `POST /api/scenarios` | `scenario` reservation. | Ledger. |
+| `POST /api/personas/deep` and `GET /api/personas/deep` | `persona_deep` reservation. | Ledger. |
+| `GET /api/personas/sheet` | Core mode: `persona_sheet` reservation and a proxy to the core contract. Any other mode: labeled Wikiquote fixture from the file cache, no reservation and no provider. | Ledger only in core mode. |
+| `GET /api/jobs/:id` | `job` read. Amounts stay null. | Session required. No money reservation. |
+| `GET /api/files/*` | `file` read. Amounts stay null. | Session required. No money reservation. |
+| `GET /api/voices` | Local catalog. No ledger row. | None. |
+| `GET /api/tones` | Local catalog. No ledger row. A core tone lookup that happens inside render is the nested read above. | None on this route. |
+| `GET /api/health` | No ledger row. | None. |
 
 ## This app, no outside account
 

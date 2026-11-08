@@ -40,7 +40,7 @@ export const SPEND_PATHS: readonly SpendPath[] = [
   { method: "POST", path: "/api/scenarios", operation: "scenario", class: "generation", denial: "http-deny", guard: "beginGeneration", meter: "reservation", test: "scenario route is guarded" },
   { method: "POST", path: "/api/personas/deep", operation: "persona_deep", class: "generation", denial: "http-deny", guard: "beginGeneration", meter: "reservation", test: "persona deep write is guarded" },
   { method: "GET", path: "/api/personas/deep", operation: "persona_deep", class: "generation", denial: "http-deny", guard: "beginGeneration", meter: "reservation", test: "persona deep read can start core work, so it stays priced" },
-  { method: "GET", path: "/api/personas/sheet", operation: "persona_sheet", class: "generation", denial: "http-deny", guard: "beginGeneration", meter: "reservation", test: "persona sheet route is guarded" },
+  { method: "GET", path: "/api/personas/sheet", operation: "persona_sheet", class: "generation", denial: "http-deny", guard: "beginGeneration", meter: "reservation", test: "core persona sheet stays priced; the labeled fixture is unbilled" },
   { method: "GET", path: "/api/jobs/:id", operation: "job", class: "read", denial: "unbilled-read", guard: "guardedRead", meter: "none", test: "job polling does not reserve or retry a generation" },
   { method: "GET", path: "/api/files/*", operation: "file", class: "read", denial: "unbilled-read", guard: "guardedRead", meter: "none", test: "file download does not reserve a generation" },
   { method: "GET", path: "/api/voices", operation: "voice", class: "read", denial: "local-catalog", guard: "none", meter: "none", test: "voices stay local and never call the core" },

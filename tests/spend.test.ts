@@ -23,6 +23,8 @@ import {
 import { quoteCall, readSpendLimits, requestOverCap } from "../lib/spend/policy";
 import { findPrice, parsePriceTable, PUBLISHED_PRICE_TABLE } from "../lib/spend/prices";
 import { spendTotals } from "../lib/spend/totals";
+import { runWithSpend } from "../lib/spend/context";
+import { noteNestedProviderRead } from "../lib/spend/nested-read";
 
 const root = process.cwd();
 const secretPrompt = "NAO-CHAMAR-PROVEDOR-xyz";
@@ -205,6 +207,29 @@ describe("ledger", () => {
     const released = await listEntries();
     assert.equal(released.holds.find((hold) => hold.scope === "global")?.settledMinor, 4);
   });
+
+  it("records a nested provider read on the same request without storing an unknown cost as zero", async () => {
+    await runWithSpend({
+      timeoutMs: 1000,
+      maxRetries: 0,
+      retries: 1,
+      userId: "usr_nested",
+      requestId: "req_nested",
+      noteRetry() {},
+    }, () => noteNestedProviderRead("tone"));
+    const row = (await listEntries()).entries.find((entry) => entry.requestId === "req_nested");
+    assert.ok(row);
+    assert.equal(row.userId, "usr_nested");
+    assert.equal(row.operation, "tone");
+    assert.equal(row.status, "read");
+    assert.equal(row.attempt, 2);
+    assert.equal(row.estimatedMinor, null);
+    assert.equal(row.reportedMinor, null);
+    const totals = spendTotals((await listEntries()).entries);
+    assert.equal(totals.reads, 1);
+    assert.equal(totals.reported.length, 0);
+    assert.equal(totals.estimated.length, 0);
+  });
 });
 
 describe("route coverage", () => {
@@ -246,6 +271,7 @@ describe("route coverage", () => {
     assert.match(plan, /inferCreationPlan/);
     const render = await readFile("app/api/render/route.ts", "utf8");
     assert.match(render, /coreFetch\("\/tones"\)/);
+    assert.match(render, /noteNestedProviderRead\("tone"\)/);
   });
 });
 

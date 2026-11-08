@@ -1,5 +1,6 @@
 import type { RenderRequest } from "@/lib/contract";
 import { guardedGeneration } from "@/lib/accounts/generation";
+import { noteNestedProviderRead } from "@/lib/spend/nested-read";
 import { coreFetch, coreMode, coreOff, json, proxyJson } from "@/lib/core";
 import { mockCreateJob } from "@/lib/mock";
 import { coreToneId, normalizeToneCatalog } from "@/lib/tones";
@@ -34,9 +35,10 @@ async function perform(req: Request) {
     let catalog = normalizeToneCatalog();
     try {
       const response = await coreFetch("/tones");
+      await noteNestedProviderRead("tone");
       if (response.ok) catalog = normalizeToneCatalog(await response.json(), "core");
     } catch {
-      // The documented fallback mapping keeps render available.
+      await noteNestedProviderRead("tone");
     }
     const coreBody = {
       ...adaptedBody,
