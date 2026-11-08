@@ -1,3 +1,5 @@
+import type { AssetKind, LibraryStatus } from "@/lib/accounts/types";
+
 export type Locale = "en" | "pt-BR";
 
 const EN = {
@@ -273,6 +275,34 @@ const EN = {
   roleUser: "User",
   roleAdmin: "Admin",
   roleSuper: "Super admin",
+  libraryAll: "All",
+  libraryAdmin: "Everything generated, across every account.",
+  libraryOwn: "Characters, views, scripts, audio, and videos on this account.",
+  libraryEmpty: "Nothing in this filter. Import a character or finish a creation.",
+  assetCharacter: "Character",
+  assetView: "View",
+  assetEmotions: "Emotions",
+  assetImage: "Image",
+  assetScript: "Script",
+  assetAudio: "Audio",
+  assetVideo: "Video",
+  assetDebate: "Debate",
+  noPreview: "No preview",
+  openCharacter: "Open character",
+  charactersEmpty: "No characters yet.",
+  noFrontView: "No front view",
+  approvedCatalog: "Approved catalog",
+  importFolder: "Import a folder",
+  importFolderHint: "puppet.json, the views the folder has (front and 3/4; profile if it exists), the emotion sheet, and PNGs in layers/<view>/.",
+  importNamePlaceholder: "Name (optional)",
+  importSheetPlaceholder: "Sheet ref (optional)",
+  importSubmit: "Import",
+  importChooseFolder: "Choose the character folder.",
+  importAdded: "{name} is in the library.",
+  importFallbackName: "Character",
+  statusDraft: "Draft",
+  statusReady: "Ready",
+  statusArchived: "Archived",
 } as const;
 
 const PT: Record<keyof typeof EN, string> = {
@@ -333,7 +363,7 @@ const PT: Record<keyof typeof EN, string> = {
   avatarStyle: "Estilo {style}",
   avatarContext: "Contexto: {context}",
   writeIdea: "Escreva uma ideia para ver os detalhes.",
-  localPlan: "Entendendo usa regras locais neste servidor. Nenhum modelo de provedor é chamado nesse passo.",
+  localPlan: "A etapa de entendimento usa regras locais neste servidor. Nenhum modelo de provedor é chamado neste passo.",
   corePlan: "O plano veio do núcleo. Esta resposta não informa o id do modelo.",
   loginTitle: "Entre para criar",
   loginBody: "Sua ideia fica neste aparelho. O texto não entra no endereço de login.",
@@ -548,12 +578,65 @@ const PT: Record<keyof typeof EN, string> = {
   roleUser: "Usuário",
   roleAdmin: "Admin",
   roleSuper: "Super admin",
+  libraryAll: "Tudo",
+  libraryAdmin: "Tudo o que foi gerado, em todas as contas.",
+  libraryOwn: "Personagens, vistas, roteiros, áudios e vídeos desta conta.",
+  libraryEmpty: "Nada neste filtro. Importe um personagem ou termine uma criação.",
+  assetCharacter: "Personagem",
+  assetView: "Vista",
+  assetEmotions: "Emoções",
+  assetImage: "Imagem",
+  assetScript: "Roteiro",
+  assetAudio: "Áudio",
+  assetVideo: "Vídeo",
+  assetDebate: "Debate",
+  noPreview: "Sem prévia",
+  openCharacter: "Abrir personagem",
+  charactersEmpty: "Nenhum personagem ainda.",
+  noFrontView: "Sem vista frontal",
+  approvedCatalog: "Catálogo aprovado",
+  importFolder: "Importar pasta",
+  importFolderHint: "puppet.json, as vistas que a pasta tiver (frente e 3/4; perfil se houver), ficha de emoções e PNGs em layers/<vista>/.",
+  importNamePlaceholder: "Nome (opcional)",
+  importSheetPlaceholder: "Ref. da ficha (opcional)",
+  importSubmit: "Importar",
+  importChooseFolder: "Escolha a pasta do personagem.",
+  importAdded: "{name} entrou na biblioteca.",
+  importFallbackName: "Personagem",
+  statusDraft: "Rascunho",
+  statusReady: "Pronto",
+  statusArchived: "Arquivado",
 };
 
 export type MessageKey = keyof typeof EN;
 
 export function translate(locale: Locale, key: MessageKey): string {
   return locale === "pt-BR" ? PT[key] : EN[key];
+}
+
+const ASSET_KEYS = {
+  character: "assetCharacter",
+  view: "assetView",
+  emotion_sheet: "assetEmotions",
+  image: "assetImage",
+  script: "assetScript",
+  audio: "assetAudio",
+  video: "assetVideo",
+  debate: "assetDebate",
+} as const satisfies Record<AssetKind, MessageKey>;
+
+export function assetLabel(locale: Locale, kind: AssetKind): string {
+  return translate(locale, ASSET_KEYS[kind]);
+}
+
+const STATUS_KEYS = {
+  draft: "statusDraft",
+  ready: "statusReady",
+  archived: "statusArchived",
+} as const satisfies Record<LibraryStatus, MessageKey>;
+
+export function statusLabel(locale: Locale, status: LibraryStatus): string {
+  return translate(locale, STATUS_KEYS[status]);
 }
 
 export function voiceChipValue(locale: Locale, gender: "male" | "female" | undefined, voiceLabel?: string): string {

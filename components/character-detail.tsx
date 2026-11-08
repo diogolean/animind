@@ -5,12 +5,11 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
-import { STATUS_LABEL } from "@/lib/accounts/labels";
-import type { LibraryCharacter, LibraryDemo, LibraryStatus } from "@/lib/accounts/types";
+import { apiErrorMessage, statusLabel } from "@/lib/i18n";
+import { LIBRARY_STATUSES, type LibraryCharacter, type LibraryDemo, type LibraryStatus } from "@/lib/accounts/types";
 import type { Character } from "@/lib/contract";
 import { ComposedCharacter } from "@/components/composed-character";
 import { useI18n } from "@/components/locale";
-import { apiErrorMessage } from "@/lib/i18n";
 
 export function CharacterDetail() {
   const router = useRouter();
@@ -128,7 +127,7 @@ export function CharacterDetail() {
         <div className="flex flex-wrap items-center gap-2">
           {character.catalog ? (
             <span data-testid="catalog-badge" className="rounded-full border border-white/15 px-3 py-2 text-xs uppercase tracking-wide text-muted-foreground">
-              Catálogo aprovado
+              {t("approvedCatalog")}
             </span>
           ) : (
             <>
@@ -143,9 +142,9 @@ export function CharacterDetail() {
             onChange={(event) => changeStatus(event.target.value as LibraryStatus)}
             className="min-h-11 rounded-full border border-white/10 bg-black/30 px-3 text-base"
           >
-            {(Object.keys(STATUS_LABEL) as LibraryStatus[]).map((status) => (
+            {LIBRARY_STATUSES.map((status) => (
               <option key={status} value={status}>
-                {STATUS_LABEL[status]}
+                {statusLabel(locale, status)}
               </option>
             ))}
           </select>

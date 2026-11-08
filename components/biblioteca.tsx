@@ -6,8 +6,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
 import { useI18n } from "@/components/locale";
-import { apiErrorMessage } from "@/lib/i18n";
-import { ASSET_LABEL } from "@/lib/accounts/labels";
+import { apiErrorMessage, assetLabel } from "@/lib/i18n";
 import { ASSET_KINDS, type AssetKind, type LibraryAsset, type PublicUser } from "@/lib/accounts/types";
 
 const VISUAL = new Set<AssetKind>(["character", "view", "emotion_sheet", "image"]);
@@ -50,15 +49,13 @@ export function Biblioteca() {
 
   return (
     <div data-testid="biblioteca" className="mx-auto w-full max-w-5xl flex-1 px-5 py-10 sm:px-8">
-      <h1 className="text-3xl font-medium tracking-tight">Biblioteca</h1>
+      <h1 className="text-3xl font-medium tracking-tight">{t("library")}</h1>
       <p className="mt-2 max-w-xl text-sm text-muted-foreground">
-        {viewer?.role === "super_admin"
-          ? "Tudo o que foi gerado, em todas as contas."
-          : "Personagens, vistas, roteiros, áudios e vídeos desta conta."}
+        {viewer?.role === "super_admin" ? t("libraryAdmin") : t("libraryOwn")}
       </p>
       <div className="-mx-5 mt-6 flex gap-2 overflow-x-auto px-5 pb-1 sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0">
         <button type="button" data-testid="asset-filter-all" onClick={() => setKind("")} className={`shrink-0 rounded-full px-3 py-1.5 text-xs ${kind === "" ? "bg-white text-black" : "border border-white/10 text-muted-foreground"}`}>
-          Tudo
+          {t("libraryAll")}
         </button>
         {ASSET_KINDS.map((item) => (
           <button
@@ -68,7 +65,7 @@ export function Biblioteca() {
             onClick={() => setKind(item)}
             className={`shrink-0 rounded-full px-3 py-1.5 text-xs ${kind === item ? "bg-white text-black" : "border border-white/10 text-muted-foreground"}`}
           >
-            {ASSET_LABEL[item]}
+            {assetLabel(locale, item)}
           </button>
         ))}
       </div>
@@ -79,7 +76,7 @@ export function Biblioteca() {
         </p>
       ) : assets.length === 0 ? (
         <p data-testid="biblioteca-empty" className="mt-10 text-sm text-muted-foreground">
-          Nada neste filtro. Importe um personagem ou termine uma criação.
+          {t("libraryEmpty")}
         </p>
       ) : (
         <ul className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -93,7 +90,7 @@ export function Biblioteca() {
                 ) : asset.kind === "audio" && asset.url ? (
                   <audio src={asset.url} controls className="w-full" />
                 ) : (
-                  <p className="line-clamp-6 text-sm text-muted-foreground">{asset.text || "Sem prévia"}</p>
+                  <p className="line-clamp-6 text-sm text-muted-foreground">{asset.text || t("noPreview")}</p>
                 )}
               </div>
               <div className="flex items-center justify-between gap-3 px-4 py-3">
@@ -102,12 +99,12 @@ export function Biblioteca() {
                   {asset.owner ? <p className="truncate text-xs text-muted-foreground">{asset.owner.name}</p> : null}
                   {asset.kind === "character" && asset.characterId?.startsWith("chr_") ? (
                     <Link href={`/characters/${asset.characterId}`} className="text-xs text-muted-foreground underline">
-                      Abrir personagem
+                      {t("openCharacter")}
                     </Link>
                   ) : null}
                 </div>
                 <span className="shrink-0 rounded-full border border-white/10 px-2 py-0.5 text-[10px] uppercase tracking-wide text-muted-foreground">
-                  {ASSET_LABEL[asset.kind]}
+                  {assetLabel(locale, asset.kind)}
                 </span>
               </div>
             </li>

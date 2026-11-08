@@ -4,9 +4,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useI18n } from "@/components/locale";
-import { apiErrorMessage } from "@/lib/i18n";
+import { apiErrorMessage, fill, statusLabel } from "@/lib/i18n";
 import { Loader2 } from "lucide-react";
-import { STATUS_LABEL } from "@/lib/accounts/labels";
 import type { LibraryCharacter, PublicUser } from "@/lib/accounts/types";
 
 async function readLibrary(): Promise<{ characters: LibraryCharacter[]; viewer: PublicUser | null; errorCode: string }> {
@@ -65,7 +64,7 @@ export function MyCharacters() {
     const input = form.elements.namedItem("folder");
     const files = input instanceof HTMLInputElement ? input.files : null;
     if (!files?.length) {
-      setNotice("Escolha a pasta do personagem.");
+      setNotice(t("importChooseFolder"));
       return;
     }
     const body = new FormData();
@@ -83,7 +82,7 @@ export function MyCharacters() {
         setNotice(apiErrorMessage(locale, { code: data.code || "import_rejected" }));
         return;
       }
-      setNotice(`${data.character?.name ?? "Personagem"} entrou na biblioteca.`);
+      setNotice(fill(t("importAdded"), { name: data.character?.name ?? t("importFallbackName") }));
       form.reset();
       await load();
     } catch {
@@ -126,7 +125,7 @@ export function MyCharacters() {
         </p>
       ) : !viewer ? null : characters.length === 0 ? (
         <p data-testid="characters-empty" className="mt-10 text-sm text-muted-foreground">
-          Nenhum personagem ainda.
+          {t("charactersEmpty")}
         </p>
       ) : (
         <ul className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -142,7 +141,7 @@ export function MyCharacters() {
                   {character.views.front ? (
                     <img src={character.views.front} alt="" data-testid="card-view-front" className="size-full object-contain" />
                   ) : (
-                    <span className="px-3 text-center text-xs text-muted-foreground">Sem vista frontal</span>
+                    <span className="px-3 text-center text-xs text-muted-foreground">{t("noFrontView")}</span>
                   )}
                 </div>
                 <div className="flex items-center justify-between gap-3 px-4 py-3">
@@ -150,7 +149,7 @@ export function MyCharacters() {
                     <p className="truncate font-medium">{character.name}</p>
                     {character.catalog ? (
                       <p data-testid="catalog-badge" className="text-xs text-muted-foreground">
-                        Catálogo aprovado
+                        {t("approvedCatalog")}
                       </p>
                     ) : null}
                     {character.owner ? (
@@ -160,7 +159,7 @@ export function MyCharacters() {
                     ) : null}
                   </div>
                   <span className="shrink-0 rounded-full border border-white/10 px-2 py-0.5 text-[10px] uppercase tracking-wide text-muted-foreground">
-                    {STATUS_LABEL[character.status]}
+                    {statusLabel(locale, character.status)}
                   </span>
                 </div>
             </Link>
@@ -171,11 +170,11 @@ export function MyCharacters() {
       )}
 
       {viewer ? <form onSubmit={onImport} data-testid="import-character" className="mt-12 max-w-full rounded-[1.5rem] border border-white/10 bg-white/[0.025] p-5">
-        <h2 className="text-sm font-medium">Importar pasta</h2>
-        <p className="mt-1 text-sm text-muted-foreground">puppet.json, as vistas que a pasta tiver (frente e 3/4; perfil se houver), ficha de emoções e PNGs em layers/&lt;vista&gt;/.</p>
+        <h2 className="text-sm font-medium">{t("importFolder")}</h2>
+        <p className="mt-1 text-sm text-muted-foreground">{t("importFolderHint")}</p>
         <div className="mt-4 grid gap-3 sm:grid-cols-2">
-          <input name="name" placeholder="Nome (opcional)" className="min-h-11 w-full min-w-0 rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-base outline-none" />
-          <input name="persona" placeholder="Ref. da ficha (opcional)" className="min-h-11 w-full min-w-0 rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-base outline-none" />
+          <input name="name" placeholder={t("importNamePlaceholder")} className="min-h-11 w-full min-w-0 rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-base outline-none" />
+          <input name="persona" placeholder={t("importSheetPlaceholder")} className="min-h-11 w-full min-w-0 rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-base outline-none" />
         </div>
         <input
           ref={folderRef}
@@ -193,7 +192,7 @@ export function MyCharacters() {
           className="mt-4 inline-flex min-h-11 items-center gap-2 rounded-full bg-white px-5 text-sm font-medium text-black disabled:opacity-50"
         >
           {importing ? <Loader2 className="size-4 animate-spin" /> : null}
-          Importar
+          {t("importSubmit")}
         </button>
         {notice ? (
           <p data-testid="import-notice" className="mt-3 text-sm text-muted-foreground">

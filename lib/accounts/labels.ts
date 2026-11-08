@@ -1,5 +1,7 @@
 import type { AssetKind, LibraryStatus, Role } from "./types";
 
+/** Pages use assetLabel and statusLabel in lib/i18n.ts. These names stay Portuguese. */
+
 export const ROLE_LABEL: Record<Role, string> = {
   user: "Usuário",
   admin: "Admin",

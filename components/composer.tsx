@@ -1,5 +1,11 @@
 "use client";
 
+/**
+ * COMPOSER_UNSERVED: no page imports this file, so it is not served.
+ * The Portuguese labels stay here until a route needs them. Do not add a page
+ * only to translate this file.
+ */
+
 import { useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Loader2, Sparkles, Trash2 } from "lucide-react";
