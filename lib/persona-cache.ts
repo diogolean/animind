@@ -32,7 +32,11 @@ export async function cachedFixturePersona(name: string): Promise<CachedSheet> {
     // The first lookup creates the file.
   }
   const fresh: CachedSheet = { ...fixturePersona(name), cacheKey: key };
-  await mkdir(path.dirname(file), { recursive: true });
-  await writeFile(file, JSON.stringify(fresh));
+  try {
+    await mkdir(path.dirname(file), { recursive: true });
+    await writeFile(file, JSON.stringify(fresh));
+  } catch {
+    // A read-only host still answers with the labeled fixture. The file is only a cache.
+  }
   return fresh;
 }

@@ -55,6 +55,20 @@ describe("verified persona fixture", () => {
     assert.match(route, /coreUserHeader/);
   });
 
+  it("returns the fixture when the cache directory cannot be written", async () => {
+    const dir = await mkdtemp(path.join(os.tmpdir(), "animind-persona-ro-"));
+    const blocked = path.join(dir, "not-a-directory");
+    const { writeFile } = await import("node:fs/promises");
+    await writeFile(blocked, "x");
+    process.env.ANIMINDLY_DATA_DIR = blocked;
+    process.env.ANIMINDLY_SKIP_ENV_FILE = "1";
+    const sheet = await cachedFixturePersona("Sócrates");
+    assert.equal(sheet.source, "fixture");
+    assert.equal(sheet.found, true);
+    assert.ok(sheet.quotes.length > 0);
+    assert.equal(sheet.quotes.every((quote) => quote.verification === "verified"), true);
+  });
+
   it("shows fixture quotes for a known name and invents none for an unknown name", () => {
     const sheet = sheetForScreen(fixturePersona("Socrates"));
     assert.equal(sheet?.source, "fixture");
