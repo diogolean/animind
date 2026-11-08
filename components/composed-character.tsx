@@ -3,14 +3,16 @@
 /* eslint-disable @next/next/no-img-element */
 import { useEffect, useState } from "react";
 import type { LibraryCharacter, LibraryViewName } from "@/lib/accounts/types";
-import type { Character, CharacterView, ViewName } from "@/lib/contract";
+import type { Character, CharacterView, ViewName, Viseme } from "@/lib/contract";
 import { AvatarStage } from "@/components/avatar-stage";
 import { useI18n } from "@/components/locale";
+import { PackVoice } from "@/components/pack-voice";
 import { longSide, MIN_LONG_SIDE, sceneryPreference, type PlateKind, type SceneryState } from "@/lib/avatar-source";
 import { controlClass } from "@/lib/control-class";
 import type { EyeCapability, GazeDirection } from "@/lib/eye-rig";
 import { separableGaze } from "@/lib/eye-rig";
 import { fill, type MessageKey } from "@/lib/i18n";
+import { packVoiceUrls, viewHasMouth } from "@/lib/pack-voice";
 import { SHEET_CELL, SHEET_GRID, sheetGroups, type SheetCategory, type SheetGroup } from "@/lib/sheet";
 import { hasFullBody, type Framing } from "@/lib/stage-frame";
 
@@ -65,6 +67,7 @@ export function ComposedCharacter({ character, rig }: { character: LibraryCharac
   const [sceneryState, setSceneryState] = useState<SceneryState | "pending">("pending");
   const [plate, setPlate] = useState<{ width: number; height: number; kind: PlateKind } | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
+  const [spoken, setSpoken] = useState<Viseme | null>(null);
   const lids = Boolean(rigView?.layers.some((layer) => layer.name === "eyes_half" || layer.name === "eyes_closed"));
   const brows = Boolean(rigView?.layers.some((layer) => layer.name === "brows" || layer.name === "brow_left"));
   const gazeReady = eyeCapability === "separable" || eyeCapability === "recovered";
@@ -108,6 +111,7 @@ export function ComposedCharacter({ character, rig }: { character: LibraryCharac
               gaze={gaze}
               framing={bodyReady ? framing : "close"}
               scenery={sceneryOn}
+              viseme={spoken}
               onCapability={(capability) => setEyeCapability(capability)}
               onScenery={setSceneryState}
               onPlate={setPlate}
@@ -121,6 +125,12 @@ export function ComposedCharacter({ character, rig }: { character: LibraryCharac
           <p className="px-4 py-10 text-sm text-muted-foreground">Sem vista para compor.</p>
         )}
       </div>
+      <PackVoice
+        key={`${selected?.id ?? "none"}:${packVoiceUrls(character.demos, locale).join("|")}`}
+        urls={packVoiceUrls(character.demos, locale)}
+        mouths={viewHasMouth(rigView)}
+        onViseme={setSpoken}
+      />
       <div className="mt-4 flex flex-wrap gap-2" data-testid="view-controls">
         {views.map((view) => (
           <Choice

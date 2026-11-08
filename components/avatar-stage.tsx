@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import type { CharacterView, Layer } from "@/lib/contract";
+import type { CharacterView, Layer, Viseme } from "@/lib/contract";
 import {
   composeRecovered,
   composeSeparable,
@@ -15,6 +15,7 @@ import {
 import { visemeSitsOnMouth } from "@/lib/mouth-place";
 import { plateKind, presentAvatar, sceneryState, type PlateKind, type SceneryState } from "@/lib/avatar-source";
 import type { Raster } from "@/lib/png-rgba";
+import { stageMouth } from "@/lib/pack-voice";
 import { stageFrame, type Framing, type StageFrame } from "@/lib/stage-frame";
 
 export function AvatarStage({
@@ -24,6 +25,7 @@ export function AvatarStage({
   gaze,
   framing = "close",
   scenery = false,
+  viseme = null,
   onCapability,
   onScenery,
   onPlate,
@@ -34,6 +36,7 @@ export function AvatarStage({
   gaze: GazeDirection;
   framing?: Framing;
   scenery?: boolean;
+  viseme?: Viseme | null;
   onCapability?: (capability: EyeCapability | "unavailable", reason?: string) => void;
   onScenery?: (state: SceneryState) => void;
   onPlate?: (plate: { width: number; height: number; kind: PlateKind }) => void;
@@ -50,7 +53,7 @@ export function AvatarStage({
   useEffect(() => {
     let cancel = false;
     setFailed(false);
-    void paint(view, emotion, lids, gaze, framing, scenery)
+    void paint(view, emotion, lids, gaze, framing, scenery, viseme)
       .then((result) => {
         if (cancel) return;
         setFrame(result.frame);
@@ -75,12 +78,13 @@ export function AvatarStage({
     return () => {
       cancel = true;
     };
-  }, [view, emotion, lids, gaze, framing, scenery]);
+  }, [view, emotion, lids, gaze, framing, scenery, viseme]);
   if (failed) return null;
   return (
     <canvas
       ref={canvasRef}
       data-testid="avatar-canvas"
+      data-viseme={viseme ?? "X"}
       className="mx-auto block w-full bg-black motion-reduce:transition-none"
       style={{ aspectRatio: `${frame.w} / ${frame.h}` }}
     />
@@ -94,9 +98,10 @@ async function paint(
   gaze: GazeDirection,
   framing: Framing,
   scenery: boolean,
+  viseme: Viseme | null,
 ): Promise<{ canvas: HTMLCanvasElement; capability: EyeCapability; reason?: string; scenery: SceneryState; plate: { width: number; height: number; kind: PlateKind }; frame: StageFrame }> {
-  const expression = emotion !== "rest" ? view.expressions?.[emotion] : undefined;
-  const mouth = expression ?? view.visemes.X;
+  const chosen = stageMouth(view, emotion, viseme);
+  const mouth = chosen.layer;
   const separable = view.layers.some((layer) => layer.name === "iris") && view.layers.some((layer) => layer.name === "eye_socket") && view.layers.some((layer) => layer.name === "eye_white" || layer.name === "eyes");
   const plateLayer = view.layers.find((layer) => layer.name === "eye_white") ?? view.layers.find((layer) => layer.name === "eyes");
   const irisLayer = view.layers.find((layer) => layer.name === "iris");
@@ -145,7 +150,8 @@ async function paint(
     const bodyIm = images.get(body.url) ?? (await loadImage(body.url));
     const plate = rasterOf(bodyIm);
     const eyes = recoverPaintedEyes(plate);
-    const mouthOnFace = !mouth || Boolean(expression) || !eyes || visemeSitsOnMouth(mouth, eyes.sockets, body.y);
+    const expression = emotion !== "rest" && Boolean(view.expressions?.[emotion]);
+    const mouthOnFace = !mouth || expression || !eyes || chosen.speaking || visemeSitsOnMouth(mouth, eyes.sockets, body.y);
     const frame = stageFrame(view, framing, eyes?.sockets);
     if (!eyes) return finish(partsOf(view, lids, false, mouthOnFace ? mouth : undefined), images, frame, null, "unavailable", scene, measured, undefined, "the painted plate has no separable pupil pair");
     const composed = composeRecovered(plate, eyes, gaze);
