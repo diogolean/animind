@@ -7,7 +7,7 @@ import { puppetToRig } from "../lib/accounts/rig";
 import type { LibraryCharacter } from "../lib/accounts/types";
 import type { Character, Layer } from "../lib/contract";
 import { blockReadyWithoutEyes } from "../lib/eye-gate";
-import { composeSeparable, eyesReady, fitTravel, gazeVector, holdUnprovenCharacter, proveGaze, recoverPaintedEyes, reportPainted, reportSeparable, separableGaze, type GazeDirection } from "../lib/eye-rig";
+import { composeRecoveredOffset, composeSeparable, eyesReady, fitTravel, gazeVector, holdUnprovenCharacter, proveGaze, recoverPaintedEyes, reportPainted, reportSeparable, separableGaze, type GazeDirection } from "../lib/eye-rig";
 import { decodePngRgba, type Raster } from "../lib/png-rgba";
 
 const root = process.cwd();
@@ -196,6 +196,33 @@ describe("eye rig", () => {
     });
     assert.equal(dropped.views.front.eyeRig, undefined);
   });
+
+  it("removes the right-gaze black margin and keeps a half-pixel shift distinct", async () => {
+    const base = "private/characters/einstein-realista/layers/front";
+    const [plate, iris, socket] = await Promise.all([png(`${base}/eye_white.png`), png(`${base}/iris.png`), png(`${base}/eye_socket.png`)]);
+    const shared = { plate, iris, socket, plateOrigin: [0, 0] as [number, number], irisOrigin: [13, -4] as [number, number], socketOrigin: [0, 0] as [number, number] };
+    const center = composeSeparable({ ...shared, offset: [0, 0] });
+    const right = composeSeparable({ ...shared, offset: [8, 0] });
+    const half = composeSeparable({ ...shared, offset: [0.5, 0] });
+    const step = composeSeparable({ ...shared, offset: [1, 0] });
+    assert.equal(same(center, half), false, "a half pixel must change the iris");
+    assert.equal(same(half, step), false, "a half pixel must differ from a whole pixel");
+    assert.equal(contiguousDark(right, 0, 90), true, "left eye right-gaze has a separated black bar");
+    assert.equal(contiguousDark(right, 110, right.width), true, "right eye right-gaze has a separated black bar");
+    const charge = await png("private/characters/einstein-charge/layers/front/body.png");
+    const eyes = recoverPaintedEyes(charge);
+    assert.ok(eyes);
+    const chargeRight = composeRecoveredOffset(charge, eyes, [eyes.travel[0], 0]);
+    const chargeHalf = composeRecoveredOffset(charge, eyes, [0.5, 0]);
+    const chargeCenter = composeRecoveredOffset(charge, eyes, [0, 0]);
+    assert.equal(same(chargeHalf, chargeCenter), false);
+    for (const box of eyes.sockets) assert.equal(contiguousDark(chargeRight, box.x, box.x + box.w), true, `charge eye ${box.x}`);
+    for (const direction of ["center", "left", "right", "up", "down"] as const) {
+      const [vx, vy] = gazeVector(direction);
+      const frame = composeSeparable({ ...shared, offset: [vx * 8, vy * 2] });
+      assert.equal(outsideUntouched(plate, frame, socket), true, direction);
+    }
+  });
 });
 
 function character(patch: Partial<Character>): Character {
@@ -222,6 +249,42 @@ async function walk(dir: string, prefix = ""): Promise<{ path: string; bytes: Ui
     else if (entry.isFile() && (rel.endsWith(".png") || rel.endsWith(".json"))) out.push({ path: rel, bytes: await readFile(path.join(dir, rel)) });
   }
   return out;
+}
+
+function same(a: Raster, b: Raster): boolean {
+  return Buffer.from(a.data).equals(Buffer.from(b.data));
+}
+
+function contiguousDark(frame: Raster, x0: number, x1: number): boolean {
+  const columns: number[] = [];
+  for (let x = x0; x < x1; x += 1) {
+    let run = 0;
+    let best = 0;
+    for (let y = 0; y < frame.height; y += 1) {
+      const i = (y * frame.width + x) * 4;
+      const dark = frame.data[i + 3] > 32 && frame.data[i] + frame.data[i + 1] + frame.data[i + 2] < 50;
+      if (dark) {
+        run += 1;
+        best = Math.max(best, run);
+      } else run = 0;
+    }
+    if (best >= 4) columns.push(x);
+  }
+  if (columns.length < 2) return false;
+  for (let i = 1; i < columns.length; i += 1) if (columns[i] - columns[i - 1] > 2) return false;
+  return true;
+}
+
+function outsideUntouched(plate: Raster, frame: Raster, socket: Raster): boolean {
+  for (let y = 0; y < socket.height; y += 1) {
+    for (let x = 0; x < socket.width; x += 1) {
+      if (socket.data[(y * socket.width + x) * 4 + 3] > 32) continue;
+      const i = (y * frame.width + x) * 4;
+      const p = (y * plate.width + x) * 4;
+      if (frame.data[i + 3] !== 0 && (frame.data[i] !== plate.data[p] || frame.data[i + 1] !== plate.data[p + 1] || frame.data[i + 2] !== plate.data[p + 2])) return false;
+    }
+  }
+  return true;
 }
 
 function blank(width: number, height: number): Raster {

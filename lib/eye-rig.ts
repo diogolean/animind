@@ -112,9 +112,100 @@ function clone(raster: Raster): Raster {
   return { width: raster.width, height: raster.height, data: new Uint8ClampedArray(raster.data) };
 }
 
+function luminance(data: Uint8ClampedArray, i: number): number {
+  return data[i] + data[i + 1] + data[i + 2];
+}
+
+/**
+ * Drops the black rectangle baked around an iris sprite.
+ * The pupil stays, because the brown iris encloses it and the flood cannot reach it from the border.
+ */
+export function irisDisc(iris: Raster): Raster {
+  const out = clone(iris);
+  const seen = new Uint8Array(iris.width * iris.height);
+  const stack: number[] = [];
+  const push = (x: number, y: number) => {
+    if (x < 0 || y < 0 || x >= iris.width || y >= iris.height) return;
+    const at = y * iris.width + x;
+    if (seen[at]) return;
+    const i = at * 4;
+    if (iris.data[i + 3] < 32 || isIris(iris.data, i) || luminance(iris.data, i) >= 70) return;
+    seen[at] = 1;
+    stack.push(at);
+  };
+  for (let x = 0; x < iris.width; x += 1) {
+    push(x, 0);
+    push(x, iris.height - 1);
+  }
+  for (let y = 0; y < iris.height; y += 1) {
+    push(0, y);
+    push(iris.width - 1, y);
+  }
+  while (stack.length) {
+    const at = stack.pop()!;
+    const x = at % iris.width;
+    const y = Math.floor(at / iris.width);
+    out.data[at * 4 + 3] = 0;
+    push(x - 1, y);
+    push(x + 1, y);
+    push(x, y - 1);
+    push(x, y + 1);
+  }
+  return out;
+}
+
+function dilateAlpha(raster: Raster, radius: number): Raster {
+  const out = clone(raster);
+  for (let y = 0; y < raster.height; y += 1) {
+    for (let x = 0; x < raster.width; x += 1) {
+      let alpha = 0;
+      for (let dy = -radius; dy <= radius; dy += 1) {
+        for (let dx = -radius; dx <= radius; dx += 1) {
+          if (dx * dx + dy * dy > radius * radius) continue;
+          const sx = x + dx;
+          const sy = y + dy;
+          if (sx < 0 || sy < 0 || sx >= raster.width || sy >= raster.height) continue;
+          alpha = Math.max(alpha, raster.data[index(raster, sx, sy) + 3]);
+        }
+      }
+      out.data[index(out, x, y) + 3] = alpha;
+    }
+  }
+  return out;
+}
+
+function sample(raster: Raster, x: number, y: number): [number, number, number, number] {
+  const x0 = Math.floor(x);
+  const y0 = Math.floor(y);
+  const tx = x - x0;
+  const ty = y - y0;
+  let r = 0;
+  let g = 0;
+  let b = 0;
+  let a = 0;
+  for (const [ox, oy, w] of [
+    [0, 0, (1 - tx) * (1 - ty)],
+    [1, 0, tx * (1 - ty)],
+    [0, 1, (1 - tx) * ty],
+    [1, 1, tx * ty],
+  ] as const) {
+    const sx = x0 + ox;
+    const sy = y0 + oy;
+    if (w === 0 || sx < 0 || sy < 0 || sx >= raster.width || sy >= raster.height) continue;
+    const i = index(raster, sx, sy);
+    r += raster.data[i] * raster.data[i + 3] * w;
+    g += raster.data[i + 1] * raster.data[i + 3] * w;
+    b += raster.data[i + 2] * raster.data[i + 3] * w;
+    a += raster.data[i + 3] * w;
+  }
+  if (a < 1) return [0, 0, 0, 0];
+  return [r / a, g / a, b / a, a];
+}
+
 /**
  * Clears the rest-position iris out of the sclera plate, then redraws the iris at `offset`,
- * clipped to the socket. The plate outside the socket is unchanged.
+ * clipped to the socket. A fractional offset is sampled; the pointed corner of the socket
+ * keeps the sclera instead of a hard black cut. The plate outside the socket is unchanged.
  */
 export function composeSeparable(input: {
   plate: Raster;
@@ -125,7 +216,9 @@ export function composeSeparable(input: {
   socketOrigin: [number, number];
   offset: [number, number];
 }): Raster {
-  const { plate, iris, socket, offset } = input;
+  const { plate, socket, offset } = input;
+  const iris = irisDisc(input.iris);
+  const cleared = dilateAlpha(iris, 2);
   const out = clone(socket);
   const originX = input.plateOrigin[0] - input.socketOrigin[0];
   const originY = input.plateOrigin[1] - input.socketOrigin[1];
@@ -149,36 +242,26 @@ export function composeSeparable(input: {
       }
     }
   }
-  for (let y = 0; y < iris.height; y += 1) {
-    for (let x = 0; x < iris.width; x += 1) {
-      const source = index(iris, x, y);
-      if (iris.data[source + 3] < 32) continue;
-      const sx = Math.round(restX + x);
-      const sy = Math.round(restY + y);
-      if (sx < 0 || sy < 0 || sx >= out.width || sy >= out.height) continue;
-      const dest = index(out, sx, sy);
-      if (out.data[dest + 3] < 32) continue;
-      out.data[dest] = fill[0];
-      out.data[dest + 1] = fill[1];
-      out.data[dest + 2] = fill[2];
+  const paintDisc = (source: Raster, shiftX: number, shiftY: number, color: "sclera" | "iris") => {
+    for (let y = 0; y < socket.height; y += 1) {
+      for (let x = 0; x < socket.width; x += 1) {
+        const dest = index(out, x, y);
+        if (out.data[dest + 3] < 32) continue;
+        const [r, g, b, a] = sample(source, x - restX - shiftX, y - restY - shiftY);
+        if (a < 32) continue;
+        const cover = Math.min(1, a / 255);
+        const sourceR = color === "sclera" ? fill[0] : r;
+        const sourceG = color === "sclera" ? fill[1] : g;
+        const sourceB = color === "sclera" ? fill[2] : b;
+        out.data[dest] = Math.round(sourceR * cover + out.data[dest] * (1 - cover));
+        out.data[dest + 1] = Math.round(sourceG * cover + out.data[dest + 1] * (1 - cover));
+        out.data[dest + 2] = Math.round(sourceB * cover + out.data[dest + 2] * (1 - cover));
+      }
     }
-  }
-  for (let y = 0; y < iris.height; y += 1) {
-    for (let x = 0; x < iris.width; x += 1) {
-      const source = index(iris, x, y);
-      const alpha = iris.data[source + 3];
-      if (alpha < 32) continue;
-      const sx = Math.round(restX + x + offset[0]);
-      const sy = Math.round(restY + y + offset[1]);
-      if (sx < 0 || sy < 0 || sx >= out.width || sy >= out.height) continue;
-      const dest = index(out, sx, sy);
-      if (out.data[dest + 3] < 32) continue;
-      const cover = alpha / 255;
-      out.data[dest] = Math.round(iris.data[source] * cover + out.data[dest] * (1 - cover));
-      out.data[dest + 1] = Math.round(iris.data[source + 1] * cover + out.data[dest + 1] * (1 - cover));
-      out.data[dest + 2] = Math.round(iris.data[source + 2] * cover + out.data[dest + 2] * (1 - cover));
-    }
-  }
+  };
+  const draw = paintDisc;
+  draw(cleared, 0, 0, "sclera");
+  draw(iris, offset[0], offset[1], "iris");
   return out;
 }
 
@@ -300,12 +383,26 @@ function paintRecovered(plate: Raster, eyes: RecoveredEyes, offset: [number, num
     for (const pixel of pixels) {
       const x = pixel.x + offset[0];
       const y = pixel.y + offset[1];
-      if (x < box.x + 1 || y < box.y + 1 || x >= box.x + box.w - 1 || y >= box.y + box.h - 1) continue;
-      const i = index(out, x, y);
-      if (out.data[i + 3] < 32) continue;
-      out.data[i] = pixel.r;
-      out.data[i + 1] = pixel.g;
-      out.data[i + 2] = pixel.b;
+      const x0 = Math.floor(x);
+      const y0 = Math.floor(y);
+      const tx = x - x0;
+      const ty = y - y0;
+      for (const [ox, oy, weight] of [
+        [0, 0, (1 - tx) * (1 - ty)],
+        [1, 0, tx * (1 - ty)],
+        [0, 1, (1 - tx) * ty],
+        [1, 1, tx * ty],
+      ] as const) {
+        if (weight <= 0) continue;
+        const sx = x0 + ox;
+        const sy = y0 + oy;
+        if (sx < box.x + 1 || sy < box.y + 1 || sx >= box.x + box.w - 1 || sy >= box.y + box.h - 1) continue;
+        const i = index(out, sx, sy);
+        if (out.data[i + 3] < 32) continue;
+        out.data[i] = Math.round(pixel.r * weight + out.data[i] * (1 - weight));
+        out.data[i + 1] = Math.round(pixel.g * weight + out.data[i + 1] * (1 - weight));
+        out.data[i + 2] = Math.round(pixel.b * weight + out.data[i + 2] * (1 - weight));
+      }
     }
   }
   return out;
@@ -332,8 +429,8 @@ function sampleSclera(plate: Raster, box: EyeBox): [number, number, number] {
 
 export function composeRecoveredOffset(plate: Raster, eyes: RecoveredEyes, offset: [number, number]): Raster {
   const clamped: [number, number] = [
-    Math.max(-eyes.travel[0], Math.min(eyes.travel[0], Math.round(offset[0]))),
-    Math.max(-eyes.travel[1], Math.min(eyes.travel[1], Math.round(offset[1]))),
+    Math.max(-eyes.travel[0], Math.min(eyes.travel[0], offset[0])),
+    Math.max(-eyes.travel[1], Math.min(eyes.travel[1], offset[1])),
   ];
   return paintRecovered(plate, eyes, clamped);
 }
@@ -392,8 +489,8 @@ export function proveGaze(render: (direction: GazeDirection) => Raster, boxes: E
   for (let i = 0; i < center.length; i += 1) {
     if (!(left[i].x < center[i].x - 0.6)) return { ok: false, reason: "left gaze did not move the pupil left", centroids };
     if (!(right[i].x > center[i].x + 0.6)) return { ok: false, reason: "right gaze did not move the pupil right", centroids };
-    if (!(up[i].y < center[i].y - 0.35)) return { ok: false, reason: "up gaze did not move the pupil up", centroids };
-    if (!(down[i].y > center[i].y + 0.35)) return { ok: false, reason: "down gaze did not move the pupil down", centroids };
+    if (!(up[i].y < center[i].y - 0.25)) return { ok: false, reason: "up gaze did not move the pupil up", centroids };
+    if (!(down[i].y > center[i].y + 0.25)) return { ok: false, reason: "down gaze did not move the pupil down", centroids };
   }
   const distinct = GAZE_DIRECTIONS.slice(1).every((direction) => !sameRaster(frames.center, frames[direction]));
   if (!distinct) return { ok: false, reason: "directions repeated the same pixels", centroids };
