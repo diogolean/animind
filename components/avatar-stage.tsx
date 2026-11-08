@@ -25,6 +25,7 @@ export function AvatarStage({
   gaze,
   framing = "close",
   scenery = false,
+  sceneryId = null,
   viseme = null,
   onCapability,
   onScenery,
@@ -36,6 +37,7 @@ export function AvatarStage({
   gaze: GazeDirection;
   framing?: Framing;
   scenery?: boolean;
+  sceneryId?: string | null;
   viseme?: Viseme | null;
   onCapability?: (capability: EyeCapability | "unavailable", reason?: string) => void;
   onScenery?: (state: SceneryState) => void;
@@ -44,6 +46,7 @@ export function AvatarStage({
   const [failed, setFailed] = useState(false);
   const [frame, setFrame] = useState<StageFrame>(() => stageFrame(view, framing));
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const previousRef = useRef<HTMLCanvasElement | null>(null);
   const onCapabilityRef = useRef(onCapability);
   const onSceneryRef = useRef(onScenery);
   const onPlateRef = useRef(onPlate);
@@ -52,8 +55,9 @@ export function AvatarStage({
   onPlateRef.current = onPlate;
   useEffect(() => {
     let cancel = false;
+    let fade = 0;
     setFailed(false);
-    void paint(view, emotion, lids, gaze, framing, scenery, viseme)
+    void paint(view, emotion, lids, gaze, framing, scenery, sceneryId, viseme)
       .then((result) => {
         if (cancel) return;
         setFrame(result.frame);
@@ -65,8 +69,31 @@ export function AvatarStage({
         if (!target || !context) return;
         target.width = result.canvas.width;
         target.height = result.canvas.height;
-        context.clearRect(0, 0, target.width, target.height);
-        context.drawImage(result.canvas, 0, 0);
+        const previous = previousRef.current;
+        const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+        const sameSize = previous && previous.width === result.canvas.width && previous.height === result.canvas.height;
+        if (reduced || !sameSize) {
+          context.clearRect(0, 0, target.width, target.height);
+          context.drawImage(result.canvas, 0, 0);
+        } else {
+          const from = previous;
+          const started = performance.now();
+          context.clearRect(0, 0, target.width, target.height);
+          context.drawImage(from, 0, 0);
+          const step = (now: number) => {
+            if (cancel) return;
+            const alpha = Math.min(1, (now - started) / 160);
+            context.clearRect(0, 0, target.width, target.height);
+            context.globalAlpha = 1 - alpha;
+            context.drawImage(from, 0, 0);
+            context.globalAlpha = alpha;
+            context.drawImage(result.canvas, 0, 0);
+            context.globalAlpha = 1;
+            if (alpha < 1) fade = requestAnimationFrame(step);
+          };
+          fade = requestAnimationFrame(step);
+        }
+        previousRef.current = result.canvas;
       })
       .catch(() => {
         if (!cancel) {
@@ -77,13 +104,15 @@ export function AvatarStage({
       });
     return () => {
       cancel = true;
+      cancelAnimationFrame(fade);
     };
-  }, [view, emotion, lids, gaze, framing, scenery, viseme]);
+  }, [view, emotion, lids, gaze, framing, scenery, sceneryId, viseme]);
   if (failed) return null;
   return (
     <canvas
       ref={canvasRef}
       data-testid="avatar-canvas"
+      data-emotion={emotion}
       data-viseme={viseme ?? "X"}
       className="mx-auto block w-full bg-black motion-reduce:transition-none"
       style={{ aspectRatio: `${frame.w} / ${frame.h}` }}
@@ -98,6 +127,7 @@ async function paint(
   gaze: GazeDirection,
   framing: Framing,
   scenery: boolean,
+  sceneryId: string | null,
   viseme: Viseme | null,
 ): Promise<{ canvas: HTMLCanvasElement; capability: EyeCapability; reason?: string; scenery: SceneryState; plate: { width: number; height: number; kind: PlateKind }; frame: StageFrame }> {
   const chosen = stageMouth(view, emotion, viseme);
@@ -106,7 +136,8 @@ async function paint(
   const plateLayer = view.layers.find((layer) => layer.name === "eye_white") ?? view.layers.find((layer) => layer.name === "eyes");
   const irisLayer = view.layers.find((layer) => layer.name === "iris");
   const socketLayer = view.layers.find((layer) => layer.name === "eye_socket");
-  const sceneryLayer = view.layers.find((layer) => layer.name === "scenery");
+  const sceneryLayers = view.layers.filter((layer) => layer.name === "scenery");
+  const sceneryLayer = sceneryId ? sceneryLayers.find((layer) => layer.url === sceneryId) : sceneryLayers[0];
   const plateLayers = view.layers.filter((layer) => layer.name !== "scenery");
   const body = plateLayers.find((layer) => layer.name === "body");
   const avatarLayer = body ?? plateLayers.find((layer) => layer.name === "torso") ?? plateLayers.find((layer) => layer.name === "head");

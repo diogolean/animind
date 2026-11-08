@@ -57,10 +57,14 @@ export function viewHasMouth(view: CharacterView | undefined): boolean {
   return Object.values(view.visemes).some((layer) => Boolean(layer));
 }
 
-/** Rest is X. A speaking viseme replaces it. An expression plate still wins. */
+/** Rest is X. Neutral uses the closed expression plate when the pack has one. A speaking viseme replaces either. Another expression plate still wins. */
 export function stageMouth(view: CharacterView, emotion: string, viseme: Viseme | null | undefined): { layer: Layer | undefined; speaking: boolean } {
-  const expression = emotion !== "rest" ? view.expressions?.[emotion] : undefined;
-  if (expression) return { layer: expression, speaking: false };
+  const home = emotion === "neutral" || emotion === "rest" || emotion === "";
+  if (!home) {
+    const expression = view.expressions?.[emotion];
+    if (expression) return { layer: expression, speaking: false };
+  }
   if (viseme && viseme !== "X" && view.visemes[viseme]) return { layer: view.visemes[viseme], speaking: true };
+  if (emotion === "neutral" && view.expressions?.neutral) return { layer: view.expressions.neutral, speaking: false };
   return { layer: view.visemes.X, speaking: false };
 }

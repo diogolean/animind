@@ -75,6 +75,8 @@ web_modules/
 # Character packages. Seed imports uploads/albert_einstein.zip when that file is present.
 *.zip
 /uploads/
+# Approved charge heads, hashes, and provenance. Not a puppet and not a commit.
+/private/characters/einstein-charge-approved/
 
 # parcel-bundler cache (https://parceljs.org/)
 .cache

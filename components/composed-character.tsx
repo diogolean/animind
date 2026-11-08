@@ -1,7 +1,7 @@
 "use client";
 
 /* eslint-disable @next/next/no-img-element */
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { LibraryCharacter } from "@/lib/accounts/types";
 import { VISEMES, type Character, type CharacterView, type Viseme } from "@/lib/contract";
 import { AvatarStage } from "@/components/avatar-stage";
@@ -13,6 +13,8 @@ import type { EyeCapability, GazeDirection } from "@/lib/eye-rig";
 import { separableGaze } from "@/lib/eye-rig";
 import { fill, type MessageKey } from "@/lib/i18n";
 import { packVoiceUrls, viewHasMouth } from "@/lib/pack-voice";
+import { capsFromView, emotionTags, hoverTag, initialMap, leaveMap, NEUTRAL, pinTag, shownPose, type EmotionCaps, type MapState } from "@/lib/emotion-map";
+import { sceneryChoice } from "@/lib/library-pair";
 import { controllerSlots, normalizedAnchors, poseAt, visemePresent, type ControllerSlotId } from "@/lib/puppet-controller";
 import { SHEET_CELL, SHEET_GRID, sheetGroups, type SheetCategory, type SheetGroup } from "@/lib/sheet";
 import { hasFullBody, type Framing } from "@/lib/stage-frame";
@@ -32,6 +34,8 @@ const EMOTION_LABEL: Record<string, string> = {
   smug_smile: "Sorriso",
   ironic: "Irônico",
   stressed_grimace: "Tenso",
+  surprised: "Surpreso",
+  thoughtful: "Pensativo",
 };
 
 const EN_EMOTION: Record<string, string> = {
@@ -42,6 +46,8 @@ const EN_EMOTION: Record<string, string> = {
   smug_smile: "Smile",
   ironic: "Ironic",
   stressed_grimace: "Tense",
+  surprised: "Surprised",
+  thoughtful: "Thoughtful",
 };
 
 const CATEGORY_LABEL: Record<SheetCategory, MessageKey> = {
@@ -59,13 +65,13 @@ export function ComposedCharacter({ character, rig }: { character: LibraryCharac
   const selected = SLOT_META.find((slot) => slot.id === active?.id) ?? SLOT_META[0];
   const rigView = active?.rig ? rig?.views[active.rig] : undefined;
   const hasRig = Boolean(rigView && rigView.layers.length > 0);
-  const emotions = Object.keys(rigView?.expressions ?? {});
-  const [emotion, setEmotion] = useState("rest");
+  const [map, setMap] = useState(initialMap);
   const [eyes, setEyes] = useState<"open" | "half" | "closed">("open");
   const [gaze, setGaze] = useState<GazeDirection>("center");
   const [eyeCapability, setEyeCapability] = useState<EyeCapability | "pending">("pending");
   const [framing, setFraming] = useState<Framing>(rigView && hasFullBody(rigView) ? "body" : "close");
   const [sceneryOn, setSceneryOn] = useState(false);
+  const [sceneryId, setSceneryId] = useState<string | null>(null);
   const [sceneryState, setSceneryState] = useState<SceneryState | "pending">("pending");
   const [plate, setPlate] = useState<{ width: number; height: number; kind: PlateKind } | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
@@ -73,6 +79,11 @@ export function ComposedCharacter({ character, rig }: { character: LibraryCharac
   const lids = Boolean(rigView?.layers.some((layer) => layer.name === "eyes_half" || layer.name === "eyes_closed"));
   const brows = Boolean(rigView?.layers.some((layer) => layer.name === "brows" || layer.name === "brow_left"));
   const gazeReady = eyeCapability === "separable" || eyeCapability === "recovered";
+  const caps = capsFromView(rigView, gazeReady);
+  const pose = shownPose(map, caps, { emotion: NEUTRAL, gaze, lids: eyes });
+  const emotion = pose.emotion;
+  const shownGaze = pose.gaze;
+  const shownLids = pose.lids;
   const bodyReady = Boolean(rigView && hasFullBody(rigView));
   const missingSides = !slots.some((slot) => (slot.id === "three_quarter_left" || slot.id === "three_quarter_right") && slot.present);
   const anchors = normalizedAnchors(rigView);
@@ -88,6 +99,7 @@ export function ComposedCharacter({ character, rig }: { character: LibraryCharac
 
   useEffect(() => {
     setSceneryOn(sceneryPreference(window.sessionStorage).read());
+    setSceneryId(sceneryChoice(window.sessionStorage).read());
   }, []);
 
   useEffect(() => {
@@ -105,18 +117,18 @@ export function ComposedCharacter({ character, rig }: { character: LibraryCharac
   }, [sheetOpen]);
 
   useEffect(() => {
-    if (!holding) return;
+    if (!holding || map.hover || map.pinned) return;
     let frame = 0;
     const started = performance.now();
     const tick = (now: number) => {
-      const pose = poseAt((now - started) / 1000);
-      if (lids) setEyes(pose.lids);
-      if (gazeReady) setGaze(pose.gaze);
+      const clock = poseAt((now - started) / 1000);
+      if (lids) setEyes(clock.lids);
+      if (gazeReady) setGaze(clock.gaze);
       frame = requestAnimationFrame(tick);
     };
     frame = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(frame);
-  }, [holding, lids, gazeReady]);
+  }, [holding, lids, gazeReady, map.hover, map.pinned]);
 
   function chooseSlot(id: ControllerSlotId) {
     const slot = slots.find((item) => item.id === id);
@@ -124,9 +136,10 @@ export function ComposedCharacter({ character, rig }: { character: LibraryCharac
     const next = rig?.views[slot.rig];
     setHolding(false);
     setSlotId(id);
-    setEmotion("rest");
+    setMap(initialMap());
     setSpoken(null);
     setGaze("center");
+    setEyes("open");
     setEyeCapability("pending");
     setSceneryState("pending");
     setPlate(null);
@@ -143,14 +156,15 @@ export function ComposedCharacter({ character, rig }: { character: LibraryCharac
       <h2 className="text-sm font-medium">{t("controller")}</h2>
       <div className="mt-3 overflow-hidden rounded-[1.5rem] border border-white/10 bg-black">
         {selected && hasRig && rigView ? (
-          <figure data-testid={selected.testId} data-framing={framing} data-ground="black" className="mx-auto w-full max-w-md bg-black">
+          <figure data-testid={selected.testId} data-framing={framing} data-ground="black" data-fit="contain" data-emotion={emotion} data-pinned={map.pinned ?? ""} className="mx-auto w-full bg-black">
             <AvatarStage
               view={rigView}
               emotion={emotion}
-              lids={eyes}
-              gaze={gaze}
+              lids={shownLids}
+              gaze={shownGaze}
               framing={bodyReady ? framing : "close"}
               scenery={sceneryOn}
+              sceneryId={sceneryId}
               viseme={spoken}
               onCapability={(capability) => setEyeCapability(capability)}
               onScenery={setSceneryState}
@@ -158,7 +172,7 @@ export function ComposedCharacter({ character, rig }: { character: LibraryCharac
             />
           </figure>
         ) : selected && flatUrl ? (
-          <figure data-testid={selected.testId} className="mx-auto flex max-h-[70dvh] w-full max-w-md items-center justify-center bg-black">
+          <figure data-testid={selected.testId} data-ground="black" data-fit="contain" className="mx-auto flex max-h-[70dvh] w-full items-center justify-center bg-black">
             <img src={flatUrl} alt="" className="max-h-[70dvh] w-full bg-black object-contain" />
           </figure>
         ) : (
@@ -247,14 +261,17 @@ export function ComposedCharacter({ character, rig }: { character: LibraryCharac
           </p>
         </div>
       ) : null}
-      {emotions.length ? (
-        <div className="mt-3 flex flex-wrap gap-2">
-          <Choice pressed={emotion === "rest"} onClick={() => setEmotion("rest")} label={t("rest")} />
-          {emotions.map((name) => (
-            <Choice key={name} pressed={emotion === name} onClick={() => setEmotion(name)} label={emotionLabel(name, locale)} />
-          ))}
-        </div>
-      ) : null}
+      <EmotionMap
+        caps={caps}
+        map={map}
+        emotion={emotion}
+        neutralMouth={Boolean(rigView?.expressions?.neutral)}
+        labelFor={(id) => stateLabel("emotion", id, locale, t)}
+        onHover={(id) => setMap((current) => hoverTag(current, id, caps))}
+        onLeave={() => setMap((current) => leaveMap(current))}
+        onPin={(id) => setMap((current) => pinTag(current, id, caps))}
+        t={t}
+      />
       {hasRig && lids ? (
         <div className="mt-3 flex flex-wrap gap-2" role="group" aria-label={t("eyesOpen")}>
           <Choice pressed={eyes === "open"} onClick={() => setEyes("open")} label={t("eyesOpen")} />
@@ -367,6 +384,112 @@ export function ComposedCharacter({ character, rig }: { character: LibraryCharac
   );
 }
 
+function EmotionMap({
+  caps,
+  map,
+  emotion,
+  neutralMouth,
+  labelFor,
+  onHover,
+  onLeave,
+  onPin,
+  t,
+}: {
+  caps: EmotionCaps;
+  map: MapState;
+  emotion: string;
+  neutralMouth: boolean;
+  labelFor: (id: string) => string;
+  onHover: (id: string) => void;
+  onLeave: () => void;
+  onPin: (id: string) => void;
+  t: (key: MessageKey) => string;
+}) {
+  const leaveTimer = useRef<number | null>(null);
+  useEffect(() => () => {
+    if (leaveTimer.current != null) window.clearTimeout(leaveTimer.current);
+  }, []);
+  function cancelLeave() {
+    if (leaveTimer.current != null) window.clearTimeout(leaveTimer.current);
+    leaveTimer.current = null;
+  }
+  function scheduleLeave() {
+    cancelLeave();
+    leaveTimer.current = window.setTimeout(() => onLeave(), 90);
+  }
+  const groups = [
+    { id: "expression", title: t("emotionGroup") },
+    { id: "gaze", title: t("gazeGroup") },
+    { id: "lids", title: t("lidsGroup") },
+  ] as const;
+  const tags = emotionTags(caps);
+  return (
+    <div
+      data-testid="emotion-map"
+      data-emotion={emotion}
+      data-pinned={map.pinned ?? ""}
+      className="mt-3"
+      onPointerEnter={cancelLeave}
+      onPointerLeave={scheduleLeave}
+      onBlur={(event) => {
+        const next = event.relatedTarget;
+        if (next instanceof Node && event.currentTarget.contains(next)) return;
+        scheduleLeave();
+      }}
+    >
+      <h3 className="text-sm font-medium">{t("emotionMap")}</h3>
+      {groups.map((group) => (
+        <div key={group.id} className="mt-2 flex flex-wrap items-center gap-1" data-testid={`emotion-group-${group.id}`}>
+          <span className="mr-1 text-xs uppercase tracking-wide text-white/50">{group.title}</span>
+          {tags.filter((tag) => tag.group === group.id).map((tag) => {
+            const label = tag.group === "expression" ? labelFor(tag.id) : tag.group === "gaze" ? t(GAZE_LABEL[tag.id.slice(5) as GazeDirection]) : tag.id === "lids:half" ? t("eyesHalf") : tag.id === "lids:closed" ? t("eyesClosed") : t("eyesOpen");
+            return (
+              <button
+                key={tag.id}
+                type="button"
+                data-testid={`tag-${tag.id}`}
+                data-supported={tag.supported ? "true" : "false"}
+                aria-disabled={!tag.supported}
+                aria-pressed={map.pinned === tag.id || (map.hover === tag.id)}
+                className={`${controlClass(map.pinned === tag.id || emotion === tag.id || map.hover === tag.id)} ${tag.supported ? "" : "opacity-60"}`}
+                onPointerEnter={() => {
+                  if (!tag.supported) return;
+                  cancelLeave();
+                  onHover(tag.id);
+                }}
+                onFocus={() => {
+                  if (!tag.supported) return;
+                  cancelLeave();
+                  onHover(tag.id);
+                }}
+                onPointerDown={() => {
+                  if (!tag.supported) return;
+                  cancelLeave();
+                  onHover(tag.id);
+                }}
+                onClick={() => {
+                  if (!tag.supported) return;
+                  onPin(tag.id);
+                }}
+                onKeyDown={(event) => {
+                  if (event.key !== "Enter" && event.key !== " ") return;
+                  event.preventDefault();
+                  if (!tag.supported) return;
+                  onPin(tag.id);
+                }}
+              >
+                {label}{tag.supported ? "" : ` · ${t("unsupportedTag")}`}
+              </button>
+            );
+          })}
+        </div>
+      ))}
+      {map.pinned ? <p className="mt-1 text-xs text-white/60">{t("pinEmotion")}</p> : null}
+      {neutralMouth ? null : <p data-testid="neutral-plate" className="mt-1 text-sm text-white/70">{t("neutralPlate")}</p>}
+    </div>
+  );
+}
+
 function SheetRow({
   view,
   viewId,
@@ -405,6 +528,7 @@ function stateLabel(category: SheetCategory, id: string, locale: string, t: (key
     return t("eyesOpen");
   }
   if (id === "rest") return t("rest");
+  if (id === "neutral") return t("neutral");
   return emotionLabel(id, locale);
 }
 
