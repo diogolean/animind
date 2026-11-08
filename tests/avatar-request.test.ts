@@ -232,12 +232,25 @@ describe("avatar core contract", () => {
       name: "Ada",
       found: true,
       owner: "abc123hashowner",
-      quotes: [{ id: "q1", text: "A labeled fixture quote.", source: "labeled fixture", url: "https://pt.wikiquote.org/wiki/Ada", verification: "verified" }],
+      fixture: "labeled",
+      quotes: [{ id: "q1", text: "A labeled fixture quote.", source: "Wikiquote", url: "https://pt.wikiquote.org/wiki/Ada", verification: "verified" }],
     });
     assert.equal(sheet?.source, "core-fixture");
     assert.equal(sheet?.found, true);
     assert.equal(sheet?.quotes[0]?.verification, "verified");
+    assert.equal(sheet?.quotes[0]?.url, "https://pt.wikiquote.org/wiki/Ada");
     assert.equal(JSON.stringify(sheet).includes("abc123hashowner"), false);
+    assert.equal(JSON.stringify(sheet).includes("owner"), false);
+    const pricedNull = mapCoreAvatar({
+      ...blockedPayload,
+      costUsd: null,
+      plan: { resolution: { prices: null, usdPerImage: null } },
+    }, "usr_a");
+    assert.equal(pricedNull?.cost, "unknown");
+    assert.equal(costIsReportedZero(pricedNull?.cost), false);
+    assert.equal(JSON.stringify(pricedNull).includes("usdPerImage"), false);
+    assert.equal(JSON.stringify(pricedNull).includes("$0"), false);
+    assert.equal(JSON.stringify(pricedNull).includes("costUsd"), false);
     const leaked = presentCoreSheet({
       name: "Ada",
       found: true,

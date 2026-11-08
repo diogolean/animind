@@ -142,7 +142,11 @@ export function AvatarRequest({
       });
       if (!response.ok) return null;
       const data = await response.json() as CoreSheet;
-      return data?.source === "core-fixture" && data.found ? data : null;
+      if (!data?.found) return null;
+      const verified = data.quotes.filter((quote) => quote.verification === "verified");
+      if (!verified.length) return null;
+      if (data.source !== "core-fixture" && data.source !== "core") return null;
+      return { ...data, quotes: verified };
     })).then((rows) => {
       if (!controller.signal.aborted) setSheets(rows.filter((row): row is CoreSheet => Boolean(row)));
     }).catch(() => undefined);
@@ -283,14 +287,15 @@ export function AvatarRequest({
       ) : null}
       {sheets.map((sheet) => (
         <article key={sheet.name} data-testid="core-persona-sheet" className="mt-3 max-w-xl rounded-2xl border border-white/10 p-4 text-sm text-white/90">
-          <p className="text-xs uppercase tracking-wide text-amber-300">{t("coreFixtureSheet")}</p>
-          <p className="mt-1 text-white/80">{t("coreFixtureSheetBody")}</p>
+          <p className="text-xs uppercase tracking-wide text-amber-300">{sheet.source === "core-fixture" ? t("coreFixtureSheet") : t("coreVerifiedSheet")}</p>
+          <p className="mt-1 text-white/80">{sheet.source === "core-fixture" ? t("coreFixtureSheetBody") : t("coreVerifiedSheetBody")}</p>
           <h3 className="mt-3 text-sm font-medium">{sheet.name}</h3>
           <ul className="mt-2 space-y-2">
             {sheet.quotes.map((quote) => (
-              <li key={quote.id}>
+              <li key={quote.id} data-testid="core-quote">
                 <p>{quote.text}</p>
-                <p className="text-xs text-white/70">{quote.source}{quote.verification === "verified" ? ` · ${t("coreFixtureVerified")}` : ""}</p>
+                <p className="text-xs text-white/70">{quote.source} · {t("coreFixtureVerified")}</p>
+                <a data-testid="core-quote-url" href={quote.url} className="break-all text-xs text-white/70 underline" target="_blank" rel="noreferrer">{quote.url}</a>
               </li>
             ))}
           </ul>

@@ -189,9 +189,10 @@ export function presentCoreSheet(payload: unknown): {
   quotes: { id: string; text: string; source: string; url: string; verification?: "verified" }[];
 } | null {
   if (!payload || typeof payload !== "object") return null;
-  const body = payload as { name?: unknown; found?: unknown; quotes?: unknown };
+  const body = payload as { name?: unknown; found?: unknown; fixture?: unknown; quotes?: unknown };
   const name = typeof body.name === "string" ? body.name.trim() : "";
   if (!name || name.length > 80 || SHEET_LEAK.test(name)) return null;
+  const fixtureLabeled = body.fixture === "labeled";
   const quotes = (Array.isArray(body.quotes) ? body.quotes : []).slice(0, 8).flatMap((item) => {
     if (!item || typeof item !== "object") return [];
     const quote = item as { id?: unknown; text?: unknown; source?: unknown; url?: unknown; verification?: unknown };
@@ -199,14 +200,14 @@ export function presentCoreSheet(payload: unknown): {
     const source = typeof quote.source === "string" ? quote.source.trim() : "";
     const url = typeof quote.url === "string" ? quote.url.trim() : "";
     const id = typeof quote.id === "string" && /^[A-Za-z0-9_-]{1,40}$/.test(quote.id) ? quote.id : "";
-    if (!id || !text || text.length > 400 || !source || source.length > 80) return [];
+    if (!id || !text || text.length > 500 || !source || source.length > 160) return [];
     if (SHEET_LEAK.test(text) || SHEET_LEAK.test(source) || !SHEET_URL.test(url)) return [];
     const row: { id: string; text: string; source: string; url: string; verification?: "verified" } = { id, text, source, url };
     if (quote.verification === "verified") row.verification = "verified";
     return [row];
   });
-  const labeled = quotes.some((quote) => /labeled fixture|fixture rotulada/i.test(quote.source));
-  return { name, found: body.found === true && quotes.length > 0, source: labeled ? "core-fixture" : "core", quotes };
+  const labeled = fixtureLabeled || quotes.some((quote) => /labeled fixture|fixture rotulada/i.test(quote.source));
+  return { name, found: (body.found === true || fixtureLabeled) && quotes.length > 0, source: labeled ? "core-fixture" : "core", quotes };
 }
 
 /** Offline confirmation. The events are plan and fail only. No image stage is invented. */
