@@ -230,6 +230,29 @@ export interface CreationPlanCharacter {
   voiceId?: string;
 }
 
+/** A quote whose URL is a Wikipedia, Wikiquote, or Wikisource page. */
+export interface PlanPersonaQuote {
+  id: string;
+  text: string;
+  source: string;
+  label: string;
+  url: string;
+  wikisource?: string;
+}
+
+/**
+ * Sheet attached to a local plan.
+ * `source: "fixture"` means the bundled copy, not a live core or model response.
+ */
+export interface PlanPersonaSheet {
+  name: string;
+  found: boolean;
+  source: "fixture";
+  wikiquote?: string;
+  license?: string;
+  quotes: PlanPersonaQuote[];
+}
+
 /** Prompt-to-controls contract, ready for a future POST /v1/plan planner. */
 export interface CreationPlan {
   prompt: string;
@@ -245,6 +268,8 @@ export interface CreationPlan {
   scenarioLabel: string;
   duration: 30 | 60 | 90;
   source: "core" | "local";
+  /** Present when a typed name matches a verified fixture sheet. Absent for every other name. */
+  personaSheets?: PlanPersonaSheet[];
 }
 
 export interface CreationPlanRequest {

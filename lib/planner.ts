@@ -1,5 +1,6 @@
 import type { CreationMode, CreationPlan, CreationPlanCharacter, LanguageCode, VoiceGender } from "./contract";
 import { inferAutoConfig } from "./auto-config";
+import { fixturePersona } from "./persona-sheet";
 
 const fold = (value: string) =>
   value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
@@ -21,7 +22,7 @@ function inferMode(prompt: string): CreationMode {
 
 function namedCharacters(prompt: string, mode: CreationMode): string[] {
   const between = prompt.match(
-    /\bentre\s+(.+?)\s+e\s+(.+?)(?=\s+(?:debatendo|conversando|dialogando|discutindo|falando|sobre|que|numa?|em)\b|[,.!?]|$)/i,
+    /\b(?:entre|between)\s+(.+?)\s+(?:e|and)\s+(.+?)(?=\s+(?:debatendo|conversando|dialogando|discutindo|falando|debating|talking|speaking|sobre|about|que|numa?|em|on|in)\b|[,.!?]|$)/i,
   );
   if (between) return [titleCase(between[1]), titleCase(between[2])].filter(Boolean);
 
@@ -30,7 +31,7 @@ function namedCharacters(prompt: string, mode: CreationMode): string[] {
   );
   if (withPair) return [titleCase(withPair[1]), titleCase(withPair[2])].filter(Boolean);
 
-  const solo = prompt.match(/^(.+?)\s+(?:fala|explica|ensina|conta|reflete)\b/i);
+  const solo = prompt.match(/^(.+?)\s+(?:fala|explica|ensina|conta|reflete|explains|explain|teaches|teach|talks|talk|says|say)\b/i);
   if (solo) return [titleCase(solo[1])];
   return mode === "monologue" ? ["Personagem principal"] : ["Personagem 1", "Personagem 2"];
 }
@@ -70,11 +71,19 @@ export function inferCreationPlan(rawPrompt: string, requestedLanguage?: Languag
   const language = requestedLanguage ?? inferLanguage(prompt);
   const mode = inferMode(prompt);
   const names = namedCharacters(prompt, mode);
-  const characters: CreationPlanCharacter[] = names.map((name) => ({
-    name,
-    prompt: `${name}, coerente com esta criação: ${prompt}`.slice(0, 600),
-    gender: inferGender(name, prompt),
-  }));
+  const sheets = names.map((name) => fixturePersona(name));
+  const personaSheets = sheets.filter((sheet) => sheet.found);
+  const characters: CreationPlanCharacter[] = names.map((name, index) => {
+    const sheet = sheets[index];
+    const directed = sheet?.found && sheet.wikiquote
+      ? `${sheet.name}. Use only the verified quotes at ${sheet.wikiquote}. Scene: ${prompt}`
+      : `${name}, coerente com esta criação: ${prompt}`;
+    return {
+      name,
+      prompt: directed.slice(0, 600),
+      gender: inferGender(name, prompt),
+    };
+  });
   const topic = inferTopic(prompt);
   const automatic = inferAutoConfig({
     mode: mode === "monologue" ? "monologue" : "dialogue",
@@ -97,5 +106,6 @@ export function inferCreationPlan(rawPrompt: string, requestedLanguage?: Languag
     scenarioLabel: automatic.scenarioLabel,
     duration: automatic.duration,
     source: "local",
+    ...(personaSheets.length ? { personaSheets } : {}),
   };
 }
