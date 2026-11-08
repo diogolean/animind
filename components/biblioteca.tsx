@@ -20,6 +20,18 @@ export function Biblioteca() {
   const [errorCode, setErrorCode] = useState("");
 
   useEffect(() => {
+    const apply = () => {
+      const next = `${t("library")} · Animindly`;
+      if (document.title !== next) document.title = `${t("library")} · Animindly`;
+    };
+    apply();
+    const title = document.querySelector("title");
+    const observer = title ? new MutationObserver(apply) : null;
+    if (title && observer) observer.observe(title, { childList: true, subtree: true, characterData: true });
+    return () => observer?.disconnect();
+  }, [locale, t]);
+
+  useEffect(() => {
     let cancelled = false;
     const query = kind ? `?kind=${encodeURIComponent(kind)}` : "";
     fetch(`/api/library/catalog${query}`, { cache: "no-store" })

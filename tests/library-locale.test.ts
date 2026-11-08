@@ -4,6 +4,7 @@ import { describe, it } from "node:test";
 import { assetLabel, statusLabel, translate } from "../lib/i18n";
 
 const library = readFileSync(new URL("../components/biblioteca.tsx", import.meta.url), "utf8");
+const libraryPage = readFileSync(new URL("../app/biblioteca/page.tsx", import.meta.url), "utf8");
 const characters = readFileSync(new URL("../components/my-characters.tsx", import.meta.url), "utf8");
 const detail = readFileSync(new URL("../components/character-detail.tsx", import.meta.url), "utf8");
 const composer = readFileSync(new URL("../components/composer.tsx", import.meta.url), "utf8");
@@ -35,6 +36,15 @@ describe("library chrome follows the locale", () => {
     assert.match(library, /t\("libraryAll"\)/);
     assert.match(library, /t\("libraryEmpty"\)/);
     assert.match(library, /assetLabel\(locale/);
+  });
+
+  it("does not pin the browser tab to one language", () => {
+    assert.equal(libraryPage.includes('"Library"'), false);
+    assert.equal(libraryPage.includes('"Biblioteca"'), false);
+    assert.match(libraryPage, /absolute:\s*"Animindly"/);
+    assert.equal(library.includes('document.title = "Library"'), false);
+    assert.equal(library.includes('document.title = "Biblioteca"'), false);
+    assert.match(library, /document\.title = `\$\{t\("library"\)\} · Animindly`/);
   });
 });
 
