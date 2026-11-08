@@ -23,6 +23,18 @@ describe("avatar plan", () => {
     assert.equal(portuguese.participants[0]?.name, "Marie Curie");
   });
 
+  it("names both people when the prompt says who debates whom", () => {
+    const english = inferAvatarPlan("Socrates and Nietzsche debate wonder");
+    assert.equal(english.language, "en-US");
+    assert.deepEqual(english.participants.map((person) => person.name), ["Socrates", "Nietzsche"]);
+    assert.deepEqual(avatarIssues(english), []);
+    const portuguese = inferAvatarPlan("Sócrates e Nietzsche debatem sobre a verdade");
+    assert.equal(portuguese.language, "pt-BR");
+    assert.equal(portuguese.context, "a verdade");
+    assert.deepEqual(portuguese.participants.map((person) => person.name), ["Sócrates", "Nietzsche"]);
+    assert.deepEqual(avatarIssues(portuguese), []);
+  });
+
   it("keeps a debate at two people and does not invent the missing one", () => {
     const missing = inferAvatarPlan("A debate with Ada", "en-US");
     assert.equal(missing.defaultCount, 2);

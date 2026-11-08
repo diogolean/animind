@@ -88,6 +88,8 @@ function namesFrom(prompt: string): string[] {
   if (versus) return splitCast(`${versus[1]}, ${versus[2]}`);
   const withName = body.match(/\b(?:debate|monologo|monologue|apresentacao|apresentação|presentation|discurso|speech|palestra)\s+(?:de|do|da|of|by|com|with)\s+(.+)$/i);
   if (withName) return splitCast(withName[1]);
+  const pair = body.match(/^(.+?)\s+(?:and|e)\s+(.+?)\s+(?:debate|debates|debatem|debatendo)\b/i);
+  if (pair) return splitCast(`${pair[1]}, ${pair[2]}`);
   const debates = body.match(/^(.+?)\s+(?:debates|debate|debatem)\s+(.+)$/i);
   if (debates) return splitCast(`${debates[1]}, ${debates[2]}`);
   const subject = body.match(/^(.+?)\s+(?:fala|explica|ensina|apresenta|discursa|presents|speaks|explains|teaches)\b/i);
