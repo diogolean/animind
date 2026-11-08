@@ -14,10 +14,12 @@ export function SiteHeader() {
   const [mode, setMode] = useState<{ label: string; tone: string; note?: string } | null>(null);
   const [user, setUser] = useState<PublicUser | null>(null);
   useEffect(() => {
+    let current = true;
     const load = () =>
       fetch("/api/health", { cache: "no-store" })
         .then((r) => r.json())
-        .then((h: { mode: string; core?: { ok?: boolean; generator?: string; generatorNote?: string } }) =>
+        .then((h: { mode: string; core?: { ok?: boolean; generator?: string; generatorNote?: string } }) => {
+          if (!current) return;
           setMode(
             h.mode === "core"
               ? h.core?.ok
@@ -30,12 +32,15 @@ export function SiteHeader() {
               : h.mode === "mock"
                 ? { label: translate(locale, "coreDevMock"), tone: "text-amber-600 dark:text-amber-400" }
                 : { label: translate(locale, "coreUnconfigured"), tone: "text-red-600 dark:text-red-400" },
-          ),
-        )
+          );
+        })
         .catch(() => {});
     load();
     window.addEventListener(HEALTH_EVENT, load);
-    return () => window.removeEventListener(HEALTH_EVENT, load);
+    return () => {
+      current = false;
+      window.removeEventListener(HEALTH_EVENT, load);
+    };
   }, [locale]);
   useEffect(() => {
     let cancelled = false;
