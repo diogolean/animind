@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 export async function GET(req: Request) {
   const actor = await requireUser();
   if (!isUser(actor)) return actor;
-  if (actor.role !== "super_admin") return json({ error: "Sem permissão" }, 403);
+  if (actor.role !== "super_admin") return json({ error: "Sem permissão", code: "forbidden" }, 403);
   const limits = readSpendLimits();
   const timeoutMs = limits.ok ? limits.limits.timeoutMs : 30_000;
   let ledger = true;

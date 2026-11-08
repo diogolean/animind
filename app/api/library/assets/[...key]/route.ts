@@ -25,7 +25,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ key: st
   try {
     bytes = await readObject(key);
   } catch (error) {
-    if (error instanceof StoreConfigError) return json({ error: error.message }, error.status);
+    if (error instanceof StoreConfigError) return json({ error: error.message, code: error.code }, error.status);
     throw error;
   }
   if (!bytes) return json({ error: "Arquivo não encontrado" }, 404);

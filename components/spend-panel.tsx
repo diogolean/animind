@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { SPEND_PATHS } from "@/lib/spend/catalog";
 import { useI18n } from "@/components/locale";
+import { apiErrorMessage } from "@/lib/i18n";
 
 interface Row {
   id: string;
@@ -61,7 +62,7 @@ const money = (minor: number | null, currency: string | null, missing: string) =
 
 export function SpendPanel() {
   const [data, setData] = useState<Payload | null>(null);
-  const [error, setError] = useState("");
+  const [errorCode, setErrorCode] = useState("");
   const [query, setQuery] = useState({ provider: "", model: "", user: "", operation: "", status: "" });
   const { t, locale } = useI18n();
   const en = locale === "en";
@@ -73,18 +74,21 @@ export function SpendPanel() {
       for (const [key, value] of Object.entries(query)) if (value) params.set(key, value);
       fetch(`/api/admin/spend?${params}`, { cache: "no-store" })
         .then(async (response) => {
-          const body = (await response.json()) as Payload;
-          if (!response.ok) throw new Error(body.error ?? "Sem permissão");
+          const body = (await response.json()) as Payload & { code?: string };
+          if (!response.ok) {
+            if (!cancelled) setErrorCode(body.code || "forbidden");
+            return null;
+          }
           return body;
         })
         .then((body) => {
-          if (!cancelled) {
+          if (!cancelled && body) {
             setData(body);
-            setError("");
+            setErrorCode("");
           }
         })
-        .catch((cause: Error) => {
-          if (!cancelled) setError(cause.message);
+        .catch(() => {
+          if (!cancelled) setErrorCode("request_failed");
         });
     };
     load();
@@ -104,7 +108,7 @@ export function SpendPanel() {
           {t("testBanner")}
         </p>
       ) : null}
-      {error ? <p className="mt-4 text-sm text-red-400">{error}</p> : null}
+      {errorCode ? <p className="mt-4 text-sm text-red-400">{apiErrorMessage(locale, { code: errorCode })}</p> : null}
       {data ? (
         <>
           <p data-testid="spend-lag" className="mt-4 text-xs text-muted-foreground">

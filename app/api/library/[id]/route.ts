@@ -34,7 +34,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   const actor = await requireUser();
   if (!isUser(actor)) return actor;
   const character = await characterFor(actor, id);
-  if (!character) return json({ error: "Personagem não encontrado" }, 404);
+  if (!character) return json({ error: "Personagem não encontrado", code: "character_missing" }, 404);
   const demos = ownedDemos(character, await assetsFor(actor));
   const key = keyFromAssetUrl(character.puppetUrl);
   let bytes: Buffer | null = null;
@@ -42,7 +42,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     bytes = key ? await readObject(key) : null;
   } catch (error) {
     if (!(error instanceof StoreConfigError)) throw error;
-    return json({ error: error.message }, error.status);
+    return json({ error: error.message, code: error.code }, error.status);
   }
   let rig = null;
   if (bytes) {
@@ -63,11 +63,11 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   try {
     body = (await req.json()) as { status?: unknown };
   } catch {
-    return json({ error: "JSON inválido" }, 400);
+    return json({ error: "JSON inválido", code: "invalid_json" }, 400);
   }
-  if (!isLibraryStatus(body.status)) return json({ error: "Status inválido" }, 400);
+  if (!isLibraryStatus(body.status)) return json({ error: "Status inválido", code: "invalid_status" }, 400);
   const character = await updateCharacterStatus(actor, id, body.status);
-  if (!character) return json({ error: "Personagem não encontrado" }, 404);
+  if (!character) return json({ error: "Personagem não encontrado", code: "character_missing" }, 404);
   return json({ character });
 }
 
@@ -76,6 +76,6 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ id: 
   const actor = await requireUser();
   if (!isUser(actor)) return actor;
   const removed = await deleteCharacterFor(actor, id);
-  if (!removed) return json({ error: "Personagem não encontrado" }, 404);
+  if (!removed) return json({ error: "Personagem não encontrado", code: "character_missing" }, 404);
   return json({ ok: true });
 }

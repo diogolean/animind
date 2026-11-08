@@ -18,10 +18,10 @@ export async function POST(req: Request) {
   try {
     form = await req.formData();
   } catch {
-    return json({ error: "Envie a pasta como multipart (puppet.json e as camadas PNG)" }, 400);
+    return json({ error: "Envie a pasta como multipart (puppet.json e as camadas PNG)", code: "import_rejected" }, 400);
   }
   const owner = await resolveOwner(actor, textField(form.get("ownerEmail")) || undefined);
-  if (!owner.ok) return json({ error: owner.error }, owner.status);
+  if (!owner.ok) return json({ error: owner.error, code: "import_rejected" }, owner.status);
   const files: { path: string; bytes: Buffer }[] = [];
   for (const entry of form.getAll("file")) {
     if (!(entry instanceof File) || !entry.name) continue;
@@ -37,7 +37,8 @@ export async function POST(req: Request) {
     });
     return json({ character }, 201);
   } catch (error) {
-    if (error instanceof ImportError || error instanceof StoreConfigError) return json({ error: error.message }, error.status);
+    if (error instanceof ImportError) return json({ error: error.message, code: "import_rejected" }, error.status);
+    if (error instanceof StoreConfigError) return json({ error: error.message, code: error.code }, error.status);
     throw error;
   }
 }

@@ -10,15 +10,16 @@ import type { LibraryCharacter, LibraryDemo, LibraryStatus } from "@/lib/account
 import type { Character } from "@/lib/contract";
 import { ComposedCharacter } from "@/components/composed-character";
 import { useI18n } from "@/components/locale";
+import { apiErrorMessage } from "@/lib/i18n";
 
 export function CharacterDetail() {
   const router = useRouter();
   const params = useParams<{ id: string }>();
   const id = params.id;
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const [character, setCharacter] = useState<LibraryCharacter | null>(null);
   const [rig, setRig] = useState<Character | null>(null);
-  const [error, setError] = useState("");
+  const [errorCode, setErrorCode] = useState("");
   const [pending, setPending] = useState(false);
 
   useEffect(() => {
@@ -29,8 +30,11 @@ export function CharacterDetail() {
           router.replace(`/login?next=/characters/${id}`);
           return null;
         }
-        const data = (await response.json().catch(() => ({}))) as { error?: string; character?: LibraryCharacter; rig?: Character | null };
-        if (!response.ok) throw new Error(data.error ?? "Personagem não encontrado");
+        const data = (await response.json().catch(() => ({}))) as { code?: string; character?: LibraryCharacter; rig?: Character | null };
+        if (!response.ok) {
+          if (!cancelled) setErrorCode(data.code || "character_missing");
+          return null;
+        }
         return { character: data.character ?? null, rig: data.rig ?? null };
       })
       .then((next) => {
@@ -39,8 +43,8 @@ export function CharacterDetail() {
           setRig(next.rig);
         }
       })
-      .catch((cause) => {
-        if (!cancelled) setError((cause as Error).message);
+      .catch(() => {
+        if (!cancelled) setErrorCode("library_load_failed");
       });
     return () => {
       cancelled = true;
@@ -55,11 +59,14 @@ export function CharacterDetail() {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ status }),
       });
-      const data = (await response.json().catch(() => ({}))) as { error?: string; character?: LibraryCharacter };
-      if (!response.ok) throw new Error(data.error ?? "Não foi possível atualizar");
+      const data = (await response.json().catch(() => ({}))) as { code?: string; character?: LibraryCharacter };
+      if (!response.ok) {
+        setErrorCode(data.code || "invalid_status");
+        return;
+      }
       if (data.character) setCharacter(data.character);
-    } catch (cause) {
-      setError((cause as Error).message);
+    } catch {
+      setErrorCode("invalid_status");
     } finally {
       setPending(false);
     }
@@ -70,20 +77,22 @@ export function CharacterDetail() {
     try {
       const response = await fetch(`/api/library/${encodeURIComponent(id)}`, { method: "DELETE" });
       if (!response.ok) {
-        const data = (await response.json().catch(() => ({}))) as { error?: string };
-        throw new Error(data.error ?? "Não foi possível apagar");
+        const data = (await response.json().catch(() => ({}))) as { code?: string };
+        setErrorCode(data.code || "character_missing");
+        return;
       }
       router.push("/characters");
-    } catch (cause) {
-      setError((cause as Error).message);
+    } catch {
+      setErrorCode("character_missing");
+    } finally {
       setPending(false);
     }
   }
 
-  if (error && !character) {
+  if (errorCode && !character) {
     return (
       <div className="mx-auto w-full max-w-5xl px-5 py-16">
-        <p className="text-sm text-red-400">{error}</p>
+        <p className="text-sm text-red-400">{apiErrorMessage(locale, { code: errorCode })}</p>
         <Link href="/characters" className="mt-4 inline-block text-sm underline">
           Voltar
         </Link>
@@ -150,7 +159,7 @@ export function CharacterDetail() {
       {character.layers.length && !character.catalog ? (
         <p className="mt-4 text-xs text-muted-foreground">{character.layers.length} camadas no armazenamento de objetos.</p>
       ) : null}
-      {error ? <p className="mt-4 text-sm text-red-400">{error}</p> : null}
+      {errorCode ? <p className="mt-4 text-sm text-red-400">{apiErrorMessage(locale, { code: errorCode })}</p> : null}
 
       <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
         {ready ? (

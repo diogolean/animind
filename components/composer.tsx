@@ -20,6 +20,8 @@ import type {
   VideoFormat,
 } from "@/lib/contract";
 import { HEALTH_EVENT, createCharacter, getTones, resolveScenario, startRender, waitJob } from "@/lib/api";
+import { apiErrorMessage } from "@/lib/i18n";
+import { useI18n } from "@/components/locale";
 import { inferAutoConfig, type AutoConfig } from "@/lib/auto-config";
 import { normalizeToneCatalog } from "@/lib/tones";
 import { Player } from "@/components/player";
@@ -92,6 +94,7 @@ function AutoSummary({ config, tones }: { config: AutoConfig; tones: ToneOption[
 }
 
 export function Composer() {
+  const { locale } = useI18n();
   const [step, setStep] = useState(0);
   const [maxStep, setMaxStep] = useState(0);
   const [mode, setMode] = useState<CreationMode>("monologue");
@@ -163,7 +166,7 @@ export function Composer() {
       if (character.generator === "mock" && character.generatorNote) window.dispatchEvent(new Event(HEALTH_EVENT));
       if (advance) go(1);
     } catch (error) {
-      toast.error((error as Error).message);
+      toast.error(apiErrorMessage(locale, error));
     } finally {
       setBusyCharacter(false);
     }
@@ -205,7 +208,7 @@ export function Composer() {
       setResult(done.result!);
       window.dispatchEvent(new Event(HEALTH_EVENT));
     } catch (error) {
-      toast.error((error as Error).message);
+      toast.error(apiErrorMessage(locale, error));
     } finally {
       setRendering(false);
     }

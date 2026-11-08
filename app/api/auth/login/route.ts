@@ -9,21 +9,21 @@ export const dynamic = "force-dynamic";
 
 export async function POST(req: Request) {
   const secret = authSecret();
-  if (!secret) return json({ error: "Defina ANIMINDLY_AUTH_SECRET (mínimo de 16 caracteres)" }, 503);
+  if (!secret) return json({ error: "Defina ANIMINDLY_AUTH_SECRET (mínimo de 16 caracteres)", code: "auth_unconfigured" }, 503);
   let body: { email?: string; password?: string };
   try {
     body = (await req.json()) as { email?: string; password?: string };
   } catch {
-    return json({ error: "JSON inválido" }, 400);
+    return json({ error: "JSON inválido", code: "invalid_json" }, 400);
   }
   let user;
   try {
     user = await verifyLogin(typeof body.email === "string" ? body.email : "", typeof body.password === "string" ? body.password : "");
   } catch (error) {
-    if (error instanceof StoreConfigError) return json({ error: error.message }, error.status);
+    if (error instanceof StoreConfigError) return json({ error: error.message, code: error.code }, error.status);
     throw error;
   }
-  if (!user) return json({ error: "E-mail ou senha incorretos" }, 401);
+  if (!user) return json({ error: "E-mail ou senha incorretos", code: "auth_invalid" }, 401);
   const res = NextResponse.json({ user });
   res.cookies.set(SESSION_COOKIE, signSession(user.id, secret), {
     httpOnly: true,

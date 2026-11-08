@@ -4,45 +4,43 @@ import { useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Loader2 } from "lucide-react";
 import { useI18n } from "@/components/locale";
+import { apiErrorMessage } from "@/lib/i18n";
 
 function nextPath(value: string | null): string {
   if (!value || !value.startsWith("/") || value.startsWith("//") || value.includes("\\") || value.includes("://")) return "/characters";
   return value;
 }
 
-const GOOGLE_ERRORS: Record<string, string> = {
-  google_unconfigured: "O login com Google ainda não está configurado.",
-  google_denied: "O Google não autorizou a entrada.",
-  google_unverified: "O Google não confirmou esse e-mail.",
-  google_state: "A entrada com Google expirou. Tente de novo.",
-};
-
 export function LoginForm() {
   const router = useRouter();
   const params = useSearchParams();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [error, setError] = useState(GOOGLE_ERRORS[params.get("error") ?? ""] ?? "");
+  const [authCode, setAuthCode] = useState(params.get("error") ?? "");
   const [pending, setPending] = useState(false);
   const { t, locale } = useI18n();
+  const error = authCode ? apiErrorMessage(locale, { code: authCode }) : "";
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
     setPending(true);
-    setError("");
+    setAuthCode("");
     try {
       const response = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ email, password }),
       });
-      const data = (await response.json().catch(() => ({}))) as { error?: string };
-      if (!response.ok) throw new Error(data.error ?? "Não foi possível entrar");
+      const data = (await response.json().catch(() => ({}))) as { code?: string };
+      if (!response.ok) {
+        setAuthCode(data.code || "request_failed");
+        return;
+      }
       window.sessionStorage.setItem("animindly-login", "password");
       router.push(nextPath(params.get("next")));
       router.refresh();
-    } catch (cause) {
-      setError((cause as Error).message);
+    } catch {
+      setAuthCode("request_failed");
     } finally {
       setPending(false);
     }

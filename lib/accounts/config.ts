@@ -4,6 +4,11 @@ import { productEnv } from "../product-env";
 
 export class StoreConfigError extends Error {
   status = 503;
+  readonly code: "accounts_unavailable" | "files_unavailable";
+  constructor(message: string, code: "accounts_unavailable" | "files_unavailable") {
+    super(message);
+    this.code = code;
+  }
 }
 
 /** Pooled Neon / Vercel Postgres URL. `POSTGRES_URL` is the legacy Vercel Postgres name. */
@@ -29,11 +34,13 @@ export function onVercel(): boolean {
 export function accountsConfigError(): StoreConfigError {
   return new StoreConfigError(
     "Neste deploy da Vercel a biblioteca não usa disco. Conecte a integração Neon e deixe DATABASE_URL no ambiente Preview.",
+    "accounts_unavailable",
   );
 }
 
 export function blobConfigError(): StoreConfigError {
   return new StoreConfigError(
     "Neste deploy da Vercel os arquivos do personagem não usam disco. Conecte a integração Vercel Blob (BLOB_STORE_ID na preview; BLOB_READ_WRITE_TOKEN para os scripts).",
+    "files_unavailable",
   );
 }

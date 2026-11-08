@@ -80,21 +80,25 @@ export async function proxyJson(path: string, init?: RequestInit): Promise<Respo
     if (!r.ok) {
       // FastAPI errors come as {detail}; the UI reads {error}.
       try {
-        const d = JSON.parse(text) as { error?: string; detail?: unknown };
-        if (!d.error) text = JSON.stringify({ error: typeof d.detail === "string" ? d.detail : `Erro do núcleo ${r.status}` });
+        const d = JSON.parse(text) as { error?: string; detail?: unknown; code?: string };
+        if (typeof d.code !== "string" || !d.code) {
+          if (!d.error) d.error = typeof d.detail === "string" ? d.detail : `Erro do núcleo ${r.status}`;
+          d.code = "core_error";
+          text = JSON.stringify(d);
+        }
       } catch {
-        text = JSON.stringify({ error: `Erro do núcleo ${r.status}` });
+        text = JSON.stringify({ error: `Erro do núcleo ${r.status}`, code: "core_error" });
       }
     }
     return new Response(text, { status: r.status, headers: { "content-type": "application/json" } });
   } catch (e) {
     const name = (e as Error).name;
-    if (name === "TimeoutError" || name === "AbortError") return json({ error: "Tempo esgotado" }, 504);
-    return json({ error: `Núcleo indisponível: ${(e as Error).message}` }, 502);
+    if (name === "TimeoutError" || name === "AbortError") return json({ error: "Tempo esgotado", code: "core_timed_out" }, 504);
+    return json({ error: "Núcleo indisponível", code: "core_unavailable" }, 502);
   }
 }
 
 export const json = (data: unknown, status = 200) => Response.json(data, { status });
 
 export const coreOff = () =>
-  json({ error: "Núcleo não configurado: defina ANIMINDLY_CORE_URL (ou ANIMINDLY_CORE_MOCK=1 em dev)" }, 503);
+  json({ error: "Núcleo não configurado: defina ANIMINDLY_CORE_URL (ou ANIMINDLY_CORE_MOCK=1 em dev)", code: "core_unconfigured" }, 503);

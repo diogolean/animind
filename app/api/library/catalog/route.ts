@@ -32,11 +32,11 @@ export async function GET(req: Request) {
   const actor = await requireUser();
   if (!isUser(actor)) return actor;
   const kind = new URL(req.url).searchParams.get("kind");
-  if (kind && !isAssetKind(kind)) return json({ error: "Tipo inválido" }, 400);
+  if (kind && !isAssetKind(kind)) return json({ error: "Tipo inválido", code: "invalid_kind" }, 400);
   try {
     return json({ assets: await assetsFor(actor, kind ? (kind as AssetKind) : undefined), viewer: actor });
   } catch (error) {
-    if (error instanceof StoreConfigError) return json({ error: error.message }, error.status);
+    if (error instanceof StoreConfigError) return json({ error: error.message, code: error.code }, error.status);
     throw error;
   }
 }
@@ -48,13 +48,13 @@ export async function POST(req: Request) {
   try {
     body = (await req.json()) as { items?: unknown };
   } catch {
-    return json({ error: "JSON inválido" }, 400);
+    return json({ error: "JSON inválido", code: "invalid_json" }, 400);
   }
   if (!Array.isArray(body.items) || body.items.length === 0 || body.items.length > 12) {
-    return json({ error: "Envie de 1 a 12 arquivos" }, 400);
+    return json({ error: "Envie de 1 a 12 arquivos", code: "invalid_json" }, 400);
   }
   const items = body.items.map(cleanItem);
-  if (items.some((item) => !item)) return json({ error: "Arquivo inválido" }, 400);
+  if (items.some((item) => !item)) return json({ error: "Arquivo inválido", code: "invalid_json" }, 400);
   try {
     const assets = [];
     for (const item of items) {
@@ -63,7 +63,7 @@ export async function POST(req: Request) {
     }
     return json({ assets }, 201);
   } catch (error) {
-    if (error instanceof StoreConfigError) return json({ error: error.message }, error.status);
+    if (error instanceof StoreConfigError) return json({ error: error.message, code: error.code }, error.status);
     throw error;
   }
 }

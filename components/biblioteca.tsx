@@ -5,6 +5,8 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
+import { useI18n } from "@/components/locale";
+import { apiErrorMessage } from "@/lib/i18n";
 import { ASSET_LABEL } from "@/lib/accounts/labels";
 import { ASSET_KINDS, type AssetKind, type LibraryAsset, type PublicUser } from "@/lib/accounts/types";
 
@@ -12,10 +14,11 @@ const VISUAL = new Set<AssetKind>(["character", "view", "emotion_sheet", "image"
 
 export function Biblioteca() {
   const router = useRouter();
+  const { locale } = useI18n();
   const [viewer, setViewer] = useState<PublicUser | null>(null);
   const [assets, setAssets] = useState<LibraryAsset[] | null>(null);
   const [kind, setKind] = useState<AssetKind | "">("");
-  const [error, setError] = useState("");
+  const [errorCode, setErrorCode] = useState("");
 
   useEffect(() => {
     let cancelled = false;
@@ -27,17 +30,18 @@ export function Biblioteca() {
           router.replace("/login?next=/biblioteca");
           return;
         }
-        const data = (await response.json().catch(() => ({}))) as { error?: string; assets?: LibraryAsset[]; viewer?: PublicUser };
+        const data = (await response.json().catch(() => ({}))) as { code?: string; assets?: LibraryAsset[]; viewer?: PublicUser };
         if (!response.ok) {
-          setError(data.error ?? "Não foi possível carregar a biblioteca");
+          setErrorCode(data.code || "library_load_failed");
           setAssets([]);
           return;
         }
+        setErrorCode("");
         setViewer(data.viewer ?? null);
         setAssets(data.assets ?? []);
       })
-      .catch((cause) => {
-        if (!cancelled) setError((cause as Error).message);
+      .catch(() => {
+        if (!cancelled) setErrorCode("library_load_failed");
       });
     return () => {
       cancelled = true;
@@ -68,7 +72,7 @@ export function Biblioteca() {
           </button>
         ))}
       </div>
-      {error ? <p className="mt-6 text-sm text-red-400">{error}</p> : null}
+      {errorCode ? <p className="mt-6 text-sm text-red-400">{apiErrorMessage(locale, { code: errorCode })}</p> : null}
       {assets === null ? (
         <p className="mt-10 flex items-center gap-2 text-sm text-muted-foreground">
           <Loader2 className="size-4 animate-spin" /> Carregando

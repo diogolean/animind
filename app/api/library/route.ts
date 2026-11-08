@@ -14,7 +14,7 @@ export async function GET() {
     await ensurePrivatePacks(actor);
     return json({ characters: await charactersFor(actor), viewer: actor });
   } catch (error) {
-    if (error instanceof StoreConfigError) return json({ error: error.message }, error.status);
+    if (error instanceof StoreConfigError) return json({ error: error.message, code: error.code }, error.status);
     throw error;
   }
 }

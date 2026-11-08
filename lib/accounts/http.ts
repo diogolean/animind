@@ -17,13 +17,13 @@ export async function currentUser(): Promise<PublicUser | null> {
 }
 
 export async function requireUser(): Promise<PublicUser | Response> {
-  if (!authSecret()) return json({ error: "Defina ANIMINDLY_AUTH_SECRET (mínimo de 16 caracteres)" }, 503);
+  if (!authSecret()) return json({ error: "Defina ANIMINDLY_AUTH_SECRET (mínimo de 16 caracteres)", code: "auth_unconfigured" }, 503);
   try {
     const user = await currentUser();
-    if (!user) return json({ error: "Entre para continuar" }, 401);
+    if (!user) return json({ error: "Entre para continuar", code: "auth_required" }, 401);
     return user;
   } catch (error) {
-    if (error instanceof StoreConfigError) return json({ error: error.message }, error.status);
+    if (error instanceof StoreConfigError) return json({ error: error.message, code: error.code }, error.status);
     throw error;
   }
 }

@@ -4,30 +4,28 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useI18n } from "@/components/locale";
+import { apiErrorMessage } from "@/lib/i18n";
 import { Loader2 } from "lucide-react";
 import { STATUS_LABEL } from "@/lib/accounts/labels";
 import type { LibraryCharacter, PublicUser } from "@/lib/accounts/types";
 
-async function readLibrary(): Promise<{ characters: LibraryCharacter[]; viewer: PublicUser | null; error: string; notice: string }> {
+async function readLibrary(): Promise<{ characters: LibraryCharacter[]; viewer: PublicUser | null; errorCode: string }> {
   const libraryResponse = await fetch("/api/library", { cache: "no-store" });
   if (libraryResponse.status === 401) {
-    return { characters: [], viewer: null, error: "", notice: "" };
+    return { characters: [], viewer: null, errorCode: "" };
   }
-  if (libraryResponse.status === 503) {
-    return { characters: [], viewer: null, error: "A biblioteca da conta não está disponível neste deploy.", notice: "" };
-  }
-  const data = (await libraryResponse.json().catch(() => ({}))) as { error?: string; characters?: LibraryCharacter[]; viewer?: PublicUser };
+  const data = (await libraryResponse.json().catch(() => ({}))) as { code?: string; characters?: LibraryCharacter[]; viewer?: PublicUser };
   if (!libraryResponse.ok) {
-    return { characters: [], viewer: null, error: data.error ?? "Não foi possível carregar a biblioteca", notice: "" };
+    return { characters: [], viewer: null, errorCode: data.code || (libraryResponse.status === 503 ? "accounts_unavailable" : "library_load_failed") };
   }
-  return { characters: data.characters ?? [], viewer: data.viewer ?? null, error: "", notice: "" };
+  return { characters: data.characters ?? [], viewer: data.viewer ?? null, errorCode: "" };
 }
 
 export function MyCharacters() {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const [viewer, setViewer] = useState<PublicUser | null>(null);
   const [characters, setCharacters] = useState<LibraryCharacter[] | null>(null);
-  const [error, setError] = useState("");
+  const [errorCode, setErrorCode] = useState("");
   const [importing, setImporting] = useState(false);
   const [notice, setNotice] = useState("");
   const folderRef = useRef<HTMLInputElement>(null);
@@ -41,8 +39,7 @@ export function MyCharacters() {
     const next = await readLibrary();
     setCharacters(next.characters);
     setViewer(next.viewer);
-    setError(next.error);
-    setNotice(next.notice);
+    setErrorCode(next.errorCode);
   }, []);
 
   useEffect(() => {
@@ -52,11 +49,10 @@ export function MyCharacters() {
         if (cancelled) return;
         setCharacters(next.characters);
         setViewer(next.viewer);
-        setError(next.error);
-        setNotice(next.notice);
+        setErrorCode(next.errorCode);
       })
-      .catch((cause) => {
-        if (!cancelled) setError((cause as Error).message);
+      .catch(() => {
+        if (!cancelled) setErrorCode("library_load_failed");
       });
     return () => {
       cancelled = true;
@@ -82,13 +78,16 @@ export function MyCharacters() {
     setNotice("");
     try {
       const response = await fetch("/api/library/import", { method: "POST", body });
-      const data = (await response.json().catch(() => ({}))) as { error?: string; character?: { name: string } };
-      if (!response.ok) throw new Error(data.error ?? "Falha na importação");
+      const data = (await response.json().catch(() => ({}))) as { code?: string; character?: { name: string } };
+      if (!response.ok) {
+        setNotice(apiErrorMessage(locale, { code: data.code || "import_rejected" }));
+        return;
+      }
       setNotice(`${data.character?.name ?? "Personagem"} entrou na biblioteca.`);
       form.reset();
       await load();
-    } catch (cause) {
-      setNotice((cause as Error).message);
+    } catch {
+      setNotice(apiErrorMessage(locale, { code: "import_rejected" }));
     } finally {
       setImporting(false);
     }
@@ -115,9 +114,9 @@ export function MyCharacters() {
       </div>
 
       {notice ? <p className="mt-6 text-sm text-muted-foreground">{notice}</p> : null}
-      {error ? (
+      {errorCode ? (
         <p data-testid="characters-error" className="mt-6 text-sm text-red-400">
-          {error}
+          {apiErrorMessage(locale, { code: errorCode })}
         </p>
       ) : null}
 
