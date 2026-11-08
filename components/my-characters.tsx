@@ -122,7 +122,7 @@ export function MyCharacters() {
 
       {characters === null ? (
         <p className="mt-10 flex items-center gap-2 text-sm text-muted-foreground">
-          <Loader2 className="size-4 animate-spin" /> Carregando
+          <Loader2 className="size-4 animate-spin" /> {t("loading")}
         </p>
       ) : !viewer ? null : characters.length === 0 ? (
         <p data-testid="characters-empty" className="mt-10 text-sm text-muted-foreground">

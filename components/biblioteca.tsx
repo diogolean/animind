@@ -14,7 +14,7 @@ const VISUAL = new Set<AssetKind>(["character", "view", "emotion_sheet", "image"
 
 export function Biblioteca() {
   const router = useRouter();
-  const { locale } = useI18n();
+  const { locale, t } = useI18n();
   const [viewer, setViewer] = useState<PublicUser | null>(null);
   const [assets, setAssets] = useState<LibraryAsset[] | null>(null);
   const [kind, setKind] = useState<AssetKind | "">("");
@@ -75,7 +75,7 @@ export function Biblioteca() {
       {errorCode ? <p className="mt-6 text-sm text-red-400">{apiErrorMessage(locale, { code: errorCode })}</p> : null}
       {assets === null ? (
         <p className="mt-10 flex items-center gap-2 text-sm text-muted-foreground">
-          <Loader2 className="size-4 animate-spin" /> Carregando
+          <Loader2 className="size-4 animate-spin" /> {t("loading")}
         </p>
       ) : assets.length === 0 ? (
         <p data-testid="biblioteca-empty" className="mt-10 text-sm text-muted-foreground">
