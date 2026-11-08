@@ -12,33 +12,46 @@ import {
   type GazeDirection,
   type RecoveredEyes,
 } from "@/lib/eye-rig";
+import { visemeSitsOnMouth } from "@/lib/mouth-place";
 import type { Raster } from "@/lib/png-rgba";
+import { sceneryMatte } from "@/lib/scenery";
+import { stageFrame, type Framing, type StageFrame } from "@/lib/stage-frame";
 
 export function AvatarStage({
   view,
   emotion,
   lids,
   gaze,
+  framing = "close",
+  scenery = false,
   onCapability,
+  onScenery,
 }: {
   view: CharacterView;
   emotion: string;
   lids: "open" | "half" | "closed";
   gaze: GazeDirection;
-  onCapability: (capability: EyeCapability | "unavailable", reason?: string) => void;
+  framing?: Framing;
+  scenery?: boolean;
+  onCapability?: (capability: EyeCapability | "unavailable", reason?: string) => void;
+  onScenery?: (available: boolean) => void;
 }) {
   const [failed, setFailed] = useState(false);
+  const [frame, setFrame] = useState<StageFrame>(() => stageFrame(view, framing));
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const onCapabilityRef = useRef(onCapability);
+  const onSceneryRef = useRef(onScenery);
   onCapabilityRef.current = onCapability;
-  const frame = faceFrame(view);
+  onSceneryRef.current = onScenery;
   useEffect(() => {
     let cancel = false;
     setFailed(false);
-    void paint(view, emotion, lids, gaze, frame)
+    void paint(view, emotion, lids, gaze, framing, scenery)
       .then((result) => {
         if (cancel) return;
-        onCapabilityRef.current(result.capability, result.reason);
+        setFrame(result.frame);
+        onCapabilityRef.current?.(result.capability, result.reason);
+        onSceneryRef.current?.(result.scenery);
         const target = canvasRef.current;
         const context = target?.getContext("2d");
         if (!target || !context) return;
@@ -50,13 +63,14 @@ export function AvatarStage({
       .catch(() => {
         if (!cancel) {
           setFailed(true);
-          onCapabilityRef.current("unavailable", "the view images could not be read");
+          onCapabilityRef.current?.("unavailable", "the view images could not be read");
+          onSceneryRef.current?.(false);
         }
       });
     return () => {
       cancel = true;
     };
-  }, [view, emotion, lids, gaze, frame.x, frame.y, frame.w, frame.h]);
+  }, [view, emotion, lids, gaze, framing, scenery]);
   if (failed) return null;
   return (
     <canvas
@@ -68,51 +82,35 @@ export function AvatarStage({
   );
 }
 
-function faceFrame(view: CharacterView): { x: number; y: number; w: number; h: number } {
-  const head = view.layers.find((layer) => layer.name === "head");
-  if (!head) return { x: 0, y: 0, w: view.canvas.w, h: view.canvas.h };
-  const padX = Math.round(head.w * 0.06);
-  const padY = Math.round(head.h * 0.06);
-  const x = Math.max(0, head.x - padX);
-  const y = Math.max(0, head.y - padY);
-  return {
-    x,
-    y,
-    w: Math.min(view.canvas.w - x, head.w + padX * 2),
-    h: Math.min(view.canvas.h - y, head.h + padY * 2),
-  };
-}
-
 async function paint(
   view: CharacterView,
   emotion: string,
   lids: "open" | "half" | "closed",
   gaze: GazeDirection,
-  frame: { x: number; y: number; w: number; h: number },
-): Promise<{ canvas: HTMLCanvasElement; capability: EyeCapability; reason?: string }> {
+  framing: Framing,
+  scenery: boolean,
+): Promise<{ canvas: HTMLCanvasElement; capability: EyeCapability; reason?: string; scenery: boolean; frame: StageFrame }> {
   const expression = emotion !== "rest" ? view.expressions?.[emotion] : undefined;
   const mouth = expression ?? view.visemes.X;
   const separable = view.layers.some((layer) => layer.name === "iris") && view.layers.some((layer) => layer.name === "eye_socket") && view.layers.some((layer) => layer.name === "eye_white" || layer.name === "eyes");
-  const parts = [
-    ...view.layers.filter((layer) => keep(layer, lids, separable)),
-    ...(mouth ? [{ ...mouth, name: expression ? "expression" : "mouth" }] : []),
-  ].sort((a, b) => a.z - b.z);
-  const images = new Map<string, HTMLImageElement>();
-  await Promise.all(
-    parts.map(async (layer) => {
-      if (!images.has(layer.url)) images.set(layer.url, await loadImage(layer.url));
-    }),
-  );
   const plateLayer = view.layers.find((layer) => layer.name === "eye_white") ?? view.layers.find((layer) => layer.name === "eyes");
   const irisLayer = view.layers.find((layer) => layer.name === "iris");
   const socketLayer = view.layers.find((layer) => layer.name === "eye_socket");
+  const body = view.layers.find((layer) => layer.name === "body");
+  const images = new Map<string, HTMLImageElement>();
+  const urls = new Set<string>();
+  for (const layer of view.layers) if (keep(layer, lids, separable)) urls.add(layer.url);
+  if (mouth) urls.add(mouth.url);
+  await Promise.all([...urls].map(async (url) => images.set(url, await loadImage(url))));
+
   if (separable && lids === "open" && plateLayer && irisLayer && socketLayer) {
     const [plateIm, irisIm, socketIm] = await Promise.all([loadImage(plateLayer.url), loadImage(irisLayer.url), loadImage(socketLayer.url)]);
     const plate = rasterOf(plateIm);
     const iris = rasterOf(irisIm);
     const socket = rasterOf(socketIm);
     const travel = fitTravel(socket, iris, irisLayer.x - socketLayer.x, irisLayer.y - socketLayer.y, [8, 4]);
-    if (!travel) return finish(parts, images, frame, null, "unavailable", "the socket cannot hold a visible iris shift");
+    const frame = stageFrame(view, framing);
+    if (!travel) return finish(partsOf(view, lids, separable, mouth), images, frame, null, "unavailable", false, "the socket cannot hold a visible iris shift");
     const [vx, vy] = gazeVector(gaze);
     const composed = composeSeparable({
       plate,
@@ -121,47 +119,64 @@ async function paint(
       plateOrigin: [plateLayer.x, plateLayer.y],
       irisOrigin: [irisLayer.x, irisLayer.y],
       socketOrigin: [socketLayer.x, socketLayer.y],
-      offset: [Math.round(vx * travel[0]), Math.round(vy * travel[1])],
+      offset: [vx * travel[0], vy * travel[1]],
     });
-    return finish(parts, images, frame, { raster: composed, x: socketLayer.x, y: socketLayer.y }, "separable");
+    return finish(partsOf(view, lids, separable, mouth), images, frame, { raster: composed, x: socketLayer.x, y: socketLayer.y }, "separable", false);
   }
-  const body = view.layers.find((layer) => layer.name === "body");
+
   if (!separable && lids === "open" && body && view.layers.length === 1) {
-    const bodyIm = await loadImage(body.url);
+    const bodyIm = images.get(body.url) ?? (await loadImage(body.url));
     const plate = rasterOf(bodyIm);
     const eyes = recoverPaintedEyes(plate);
-    if (!eyes) return finish(view.layers, images, frame, null, "unavailable", "the painted plate has no separable pupil pair");
-    return finish(parts.filter((layer) => layer.name !== "body"), images, frame, { raster: composeRecovered(plate, eyes, gaze), x: body.x, y: body.y, replace: eyes }, "recovered");
+    const mouthOnFace = !mouth || Boolean(expression) || !eyes || visemeSitsOnMouth(mouth, eyes.sockets, body.y);
+    const frame = stageFrame(view, framing, eyes?.sockets);
+    if (!eyes) return finish(partsOf(view, lids, false, mouthOnFace ? mouth : undefined), images, frame, null, "unavailable", false, "the painted plate has no separable pupil pair");
+    const composed = composeRecovered(plate, eyes, gaze);
+    const matte = sceneryMatte(plate);
+    const shown = !scenery && matte ? applyMatte(composed, plate, matte) : composed;
+    return finish(partsOf(view, lids, false, mouthOnFace ? mouth : undefined).filter((layer) => layer.name !== "body"), images, frame, { raster: shown, x: body.x, y: body.y, replace: eyes }, "recovered", Boolean(matte));
   }
-  return finish(parts, images, frame, null, "unavailable", "this view has no separate iris and socket");
+
+  return finish(partsOf(view, lids, separable, mouth), images, stageFrame(view, framing), null, "unavailable", false, "this view has no separate iris and socket");
+}
+
+function partsOf(view: CharacterView, lids: "open" | "half" | "closed", separable: boolean, mouth: Layer | undefined): Layer[] {
+  return [
+    ...view.layers.filter((layer) => keep(layer, lids, separable)),
+    ...(mouth ? [{ ...mouth, name: mouth.name || "mouth" }] : []),
+  ].sort((a, b) => a.z - b.z);
+}
+
+function applyMatte(composed: Raster, plate: Raster, matte: Raster): Raster {
+  const out: Raster = { width: composed.width, height: composed.height, data: new Uint8ClampedArray(composed.data) };
+  const count = Math.min(out.data.length, matte.data.length, plate.data.length);
+  for (let i = 3; i < count; i += 4) if (matte.data[i] === 0 && plate.data[i] > 0) out.data[i] = 0;
+  return out;
 }
 
 function finish(
   parts: Layer[],
   images: Map<string, HTMLImageElement>,
-  frame: { x: number; y: number; w: number; h: number },
+  frame: StageFrame,
   eyes: { raster: Raster; x: number; y: number; replace?: RecoveredEyes } | null,
   capability: EyeCapability,
+  scenery: boolean,
   reason?: string,
-): { canvas: HTMLCanvasElement; capability: EyeCapability; reason?: string } {
+): { canvas: HTMLCanvasElement; capability: EyeCapability; reason?: string; scenery: boolean; frame: StageFrame } {
   const canvas = document.createElement("canvas");
   canvas.width = Math.max(1, frame.w);
   canvas.height = Math.max(1, frame.h);
   const context = canvas.getContext("2d");
-  if (!context) return { canvas, capability: "unavailable", reason: "canvas is unavailable" };
+  if (!context) return { canvas, capability: "unavailable", scenery: false, frame, reason: "canvas is unavailable" };
   context.clearRect(0, 0, canvas.width, canvas.height);
-  if (eyes?.replace) {
-    context.drawImage(canvasFromRaster(eyes.raster), eyes.x - frame.x, eyes.y - frame.y);
-  }
+  if (eyes?.replace) context.drawImage(canvasFromRaster(eyes.raster), eyes.x - frame.x, eyes.y - frame.y);
   for (const layer of parts) {
     const image = images.get(layer.url);
     if (!image) continue;
     context.drawImage(image, layer.x - frame.x, layer.y - frame.y, layer.w, layer.h);
   }
-  if (eyes && !eyes.replace) {
-    context.drawImage(canvasFromRaster(eyes.raster), eyes.x - frame.x, eyes.y - frame.y);
-  }
-  return { canvas, capability, reason };
+  if (eyes && !eyes.replace) context.drawImage(canvasFromRaster(eyes.raster), eyes.x - frame.x, eyes.y - frame.y);
+  return { canvas, capability, scenery, frame, reason };
 }
 
 function keep(layer: Layer, lids: "open" | "half" | "closed", separable: boolean): boolean {

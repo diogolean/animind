@@ -20,21 +20,6 @@ export function CharacterDetail() {
   const [rig, setRig] = useState<Character | null>(null);
   const [error, setError] = useState("");
   const [pending, setPending] = useState(false);
-  const [sheetOpen, setSheetOpen] = useState(false);
-
-  useEffect(() => {
-    if (!sheetOpen) return;
-    function onKey(event: KeyboardEvent) {
-      if (event.key === "Escape") setSheetOpen(false);
-    }
-    const previous = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    window.addEventListener("keydown", onKey);
-    return () => {
-      document.body.style.overflow = previous;
-      window.removeEventListener("keydown", onKey);
-    };
-  }, [sheetOpen]);
 
   useEffect(() => {
     let cancelled = false;
@@ -161,43 +146,6 @@ export function CharacterDetail() {
       </div>
 
       <ComposedCharacter character={character} rig={rig} />
-
-      <section className="mt-8">
-        <h2 className="text-sm font-medium">{t("emotionSheet")}</h2>
-        <div data-testid="emotion-sheet" className="mt-3 overflow-hidden rounded-[1.5rem] border border-white/10 bg-black/30">
-          {character.emotionSheetUrl ? (
-            <button type="button" data-testid="emotion-sheet-zoom" onClick={() => setSheetOpen(true)} className="block min-h-11 w-full cursor-zoom-in text-left">
-              <img src={character.emotionSheetUrl} alt="Ficha de emoções" className="w-full" />
-              <span className="block px-4 py-3 text-sm text-muted-foreground">{t("zoom")}</span>
-            </button>
-          ) : (
-            <p className="px-4 py-10 text-sm text-muted-foreground">{t("noSheet")}</p>
-          )}
-        </div>
-      </section>
-      {sheetOpen && character.emotionSheetUrl ? (
-        <div
-          role="dialog"
-          aria-modal="true"
-          aria-label="Ficha de emoções em tamanho real"
-          data-testid="emotion-sheet-lightbox"
-          className="fixed inset-0 z-50 overflow-auto overscroll-contain bg-black/95 px-[max(0.75rem,env(safe-area-inset-left))] pt-[max(0.75rem,env(safe-area-inset-top))] pr-[max(0.75rem,env(safe-area-inset-right))] pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:p-8"
-          onClick={() => setSheetOpen(false)}
-        >
-          <div className="sticky top-0 z-10 mb-3 flex justify-end">
-            <button type="button" onClick={() => setSheetOpen(false)} className="inline-flex min-h-11 items-center rounded-full border border-white/20 bg-black/80 px-4 text-sm">
-              {t("close")}
-            </button>
-          </div>
-          <img
-            data-testid="emotion-sheet-full"
-            src={character.emotionSheetUrl}
-            alt="Ficha de emoções em tamanho real"
-            className="mx-auto h-auto w-max min-w-full max-w-none"
-            onClick={(event) => event.stopPropagation()}
-          />
-        </div>
-      ) : null}
 
       {character.layers.length && !character.catalog ? (
         <p className="mt-4 text-xs text-muted-foreground">{character.layers.length} camadas no armazenamento de objetos.</p>

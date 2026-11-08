@@ -48,5 +48,29 @@ Applying a paid redraw to the existing packs was not approved and was not run.
 - `lib/accounts/import-character.ts` — holds a new folder at `draft` when the proof fails
 - `app/api/characters/route.ts` — holds an unproven one-click rig at `placeholder`
 - `lib/engine.ts` — preview render uses the same compose
-- `components/avatar-stage.tsx` and `components/composed-character.tsx` — the shared viewer
+- `components/avatar-stage.tsx` and `components/composed-character.tsx` — the shared viewer and the movement sheet
+- `lib/stage-frame.ts` — full-body frame when a torso or a full plate exists, otherwise the head
+- `lib/scenery.ts` — flat-background matte; a failed proof leaves the painted plate
+- `lib/sheet.ts` — view, then category, then the states that exist
 - `tests/eye-rig.test.ts` — the centroid proof on the existing Einstein files
+- `tests/stage.test.ts` — framing, sheet contents, scenery proof, and the control class
+
+## Iris margin
+
+`iris.png` on the realistic pack is a disc on an opaque black rectangle. `composeSeparable` clears only the black that touches the sprite border, then redraws the disc. The pupil stays because the brown iris encloses it. A fractional offset is sampled. The original PNG is not rewritten. Vertical travel on this pack stays 2px because the socket cannot hold more at the coverage limit.
+
+## Framing, sheet, scenery, mouth
+
+The interactive view is first. Full body is the canvas when a torso or a single full plate is already there. Close-up is the head layer, or the eye pair on a plate that has no head layer. Neither framing draws a limb the folder does not contain.
+
+The sheet under the controls uses the same composer. Five gaze cells appear only after the pupils are proved. Emotions and lids appear only when those layers exist. The caricature has no 3/4 views, so the sheet does not show them. Cells share one size, one black ground, and wrap with no empty track.
+
+A scenery control is drawn only when `sceneryMatte` clears a flat border without touching the center. The caricature room does not pass: the shelves are not the wall color, and the suit is close to that wall. The plate stays as painted and the file stays in the pack. The sheet never turns scenery on.
+
+The caricature rest viseme is a dark shape placed below the painted mustache. It is not composited. The smile in `body.png` stays. The viseme files stay.
+
+## Editing one detail
+
+No edit panel is shipped. Deterministic controls already cover gaze, eyelids, emotion, framing, and a scenery toggle when the matte proof passes. They preview in the viewer and do not write a PNG.
+
+A real correction of one region would be a copy of one layer of one view, owned by the account, with the original bytes kept, an in-memory undo, and a save that happens only when the owner asks. The route would have to check that owner the way the library already does. A paid redraw (an image model repairing the mustache, the room, or a side view) is not authorized. It must not run from the preview, and it must not run because a control was opened.

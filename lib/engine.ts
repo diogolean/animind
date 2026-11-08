@@ -6,6 +6,7 @@ import { PARODY_DISCLAIMER, type Character, type Layer, type RenderResult, type 
 import { ACCENT, BOARD, BUST_BOTTOM, BUST_H, camera, contactShadow, depthTransform, drawPlate, ease, FACE_Y, FADE_IN_S, FADE_OUT_S, grade, H, lectern, LECTERN_BASE, LECTERN_TOP, LECTERN_W, lightFor, litLayer, PLACES, planShots, plates, soft, blurNow, W, VW, VH, handheld, type Cut, type Light, type Shot } from "./cinema";
 import { blink, gaze, type Lids } from "./eyes";
 import { composeRecoveredOffset, composeSeparable, fitTravel, recoverPaintedEyes, type RecoveredEyes } from "./eye-rig";
+import { visemeSitsOnMouth } from "./mouth-place";
 import type { Raster } from "./png-rgba";
 
 export { H, VH, VW, W };
@@ -230,28 +231,28 @@ function drawProvedEyes(g: CanvasRenderingContext2D, img: Images, plateLayer: La
     plateOrigin: [plateLayer.x, plateLayer.y],
     irisOrigin: [irisLayer.x, irisLayer.y],
     socketOrigin: [socket.x, socket.y],
-    offset: [Math.round(gx * travel[0]), Math.round(gy * travel[1])],
+    offset: [gx * travel[0], gy * travel[1]],
   });
   const dy = breathe * (BREATH_SHARE[irisLayer.name] ?? 1);
   g.drawImage(canvasFromRaster(composed), socket.x, socket.y + dy);
   return true;
 }
 
-function drawRecoveredEyes(g: CanvasRenderingContext2D, img: Images, body: Layer, eye: EyeState, breathe: number): boolean {
+function drawRecoveredEyes(g: CanvasRenderingContext2D, img: Images, body: Layer, eye: EyeState, breathe: number): RecoveredEyes | null {
   const image = img.get(body.url);
-  if (!image) return false;
+  if (!image) return null;
   let eyes = recoveredCache.get(image);
   if (eyes === undefined) {
     eyes = recoverPaintedEyes(rasterOf(image));
     recoveredCache.set(image, eyes);
   }
-  if (!eyes) return false;
+  if (!eyes) return null;
   const gx = Math.max(-1, Math.min(1, eye.gaze[0]));
   const gy = Math.max(-1, Math.min(1, eye.gaze[1]));
   const composed = composeRecoveredOffset(rasterOf(image), eyes, [gx * eyes.travel[0], gy * eyes.travel[1]]);
   const dy = breathe * (BREATH_SHARE[body.name] ?? 1);
   g.drawImage(canvasFromRaster(composed), body.x, body.y + dy);
-  return true;
+  return eyes;
 }
 
 /** Where character idx looks (mirrors Scene.gaze in the core). */
@@ -310,10 +311,11 @@ function drawCharacter(g: CanvasRenderingContext2D, c: Character, img: Images, c
   const movable = !!socket && !!irisLayer && !!plateLayer && lids === "open";
   const proved = movable && socket && plateLayer && irisLayer ? drawProvedEyes(g, img, plateLayer, irisLayer, socket, eye, breathe, v.eyeRig?.maxShift ?? [0, 0]) : false;
   const body = v.layers.find((l) => l.name === "body");
-  const recovered = !movable && lids === "open" && body ? drawRecoveredEyes(g, img, body, eye, breathe) : false;
+  const recovered = !movable && lids === "open" && body ? drawRecoveredEyes(g, img, body, eye, breathe) : null;
   for (const l of parts) {
     if (l.name === "eye_socket" || (proved && (l.name === "eyes" || l.name === "eye_white" || l.name === "iris"))) continue;
     if (recovered && l.name === "body") continue;
+    if (recovered && l.name === "mouth" && mouth && !visemeSitsOnMouth(mouth, recovered.sockets, body?.y ?? 0)) continue;
     if ((l.name === "eyes" && lids === "closed") || (l.name === "eyes_closed" && lids !== "closed") || (l.name === "eyes_half" && lids !== "half")) continue;
     const im = img.get(l.url);
     if (!im) continue;

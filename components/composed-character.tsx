@@ -1,13 +1,17 @@
 "use client";
 
 /* eslint-disable @next/next/no-img-element */
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { LibraryCharacter, LibraryViewName } from "@/lib/accounts/types";
-import type { Character, ViewName } from "@/lib/contract";
+import type { Character, CharacterView, ViewName } from "@/lib/contract";
 import { AvatarStage } from "@/components/avatar-stage";
 import { useI18n } from "@/components/locale";
+import { controlClass } from "@/lib/control-class";
 import type { EyeCapability, GazeDirection } from "@/lib/eye-rig";
+import { separableGaze } from "@/lib/eye-rig";
 import type { MessageKey } from "@/lib/i18n";
+import { SHEET_CELL, SHEET_GRID, sheetGroups, type SheetCategory, type SheetGroup } from "@/lib/sheet";
+import { hasFullBody, type Framing } from "@/lib/stage-frame";
 
 const VIEWS: { id: LibraryViewName; label: MessageKey; testId: string; rig: ViewName }[] = [
   { id: "front", label: "front", testId: "view-front", rig: "front" },
@@ -37,6 +41,12 @@ const EN_EMOTION: Record<string, string> = {
   stressed_grimace: "Tense",
 };
 
+const CATEGORY_LABEL: Record<SheetCategory, MessageKey> = {
+  gaze: "gaze",
+  emotion: "sheetEmotion",
+  lids: "sheetLids",
+};
+
 export function ComposedCharacter({ character, rig }: { character: LibraryCharacter; rig: Character | null }) {
   const { t, locale } = useI18n();
   const views = VIEWS.filter((view) => character.views[view.id]).filter((view) => view.id !== "three_quarter" || !character.views.three_quarter_left);
@@ -49,55 +59,97 @@ export function ComposedCharacter({ character, rig }: { character: LibraryCharac
   const [eyes, setEyes] = useState<"open" | "half" | "closed">("open");
   const [gaze, setGaze] = useState<GazeDirection>("center");
   const [eyeCapability, setEyeCapability] = useState<EyeCapability | "pending">("pending");
+  const [framing, setFraming] = useState<Framing>(rigView && hasFullBody(rigView) ? "body" : "close");
+  const [scenery, setScenery] = useState(false);
+  const [sceneryAvailable, setSceneryAvailable] = useState(false);
+  const [sheetOpen, setSheetOpen] = useState(false);
   const lids = Boolean(rigView?.layers.some((layer) => layer.name === "eyes_half" || layer.name === "eyes_closed"));
   const brows = Boolean(rigView?.layers.some((layer) => layer.name === "brows" || layer.name === "brow_left"));
   const gazeReady = eyeCapability === "separable" || eyeCapability === "recovered";
+  const bodyReady = Boolean(rigView && hasFullBody(rigView));
   const missingSides = Boolean(character.views.front) && !character.views.three_quarter_left && !character.views.three_quarter && !character.views.three_quarter_right;
+  const sheet = views.flatMap((view) => {
+    const source = rig?.views[view.rig];
+    if (!source || source.layers.length === 0) return [];
+    const capability = separableGaze(source.layers) ? "separable" : view.id === selected?.id ? eyeCapability : "unavailable";
+    return sheetGroups(source, capability).map((group) => ({ view, group }));
+  });
+  const waiting = hasRig && eyeCapability === "pending" && sheet.length === 0;
+
+  useEffect(() => {
+    if (!sheetOpen) return;
+    function onKey(event: KeyboardEvent) {
+      if (event.key === "Escape") setSheetOpen(false);
+    }
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", onKey);
+    return () => {
+      document.body.style.overflow = previous;
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [sheetOpen]);
+
   return (
     <section className="mt-6" data-testid="composed-character">
-      <div className="overflow-hidden rounded-[1.5rem] border border-white/10 bg-black/30">
+      <div className="overflow-hidden rounded-[1.5rem] border border-white/10 bg-black">
         {selected && hasRig && rigView ? (
-          <figure data-testid={selected.testId} className="mx-auto w-full max-w-md bg-black">
+          <figure data-testid={selected.testId} data-framing={framing} className="mx-auto w-full max-w-md bg-black">
             <AvatarStage
               view={rigView}
               emotion={emotion}
               lids={eyes}
               gaze={gaze}
+              framing={bodyReady ? framing : "close"}
+              scenery={sceneryAvailable && scenery}
               onCapability={(capability) => setEyeCapability(capability)}
+              onScenery={setSceneryAvailable}
             />
           </figure>
         ) : selected && character.views[selected.id] ? (
-          <figure data-testid={selected.testId} className="mx-auto flex max-h-[70dvh] w-full max-w-md items-center justify-center">
-            <img src={character.views[selected.id]} alt="" className="max-h-[70dvh] w-full object-contain" />
+          <figure data-testid={selected.testId} className="mx-auto flex max-h-[70dvh] w-full max-w-md items-center justify-center bg-black">
+            <img src={character.views[selected.id]} alt="" className="max-h-[70dvh] w-full bg-black object-contain" />
           </figure>
         ) : (
           <p className="px-4 py-10 text-sm text-muted-foreground">Sem vista para compor.</p>
         )}
       </div>
-      <div className="mt-4 flex flex-wrap gap-2">
+      <div className="mt-4 flex flex-wrap gap-2" data-testid="view-controls">
         {views.map((view) => (
-          <button
+          <Choice
             key={view.id}
-            type="button"
-            data-testid={`choose-${view.testId}`}
-            aria-pressed={selected?.id === view.id}
+            pressed={selected?.id === view.id}
+            testId={`choose-${view.testId}`}
             onClick={() => {
+              const next = rig?.views[view.rig];
               setViewId(view.id);
               setEmotion("rest");
               setGaze("center");
               setEyeCapability("pending");
+              setSceneryAvailable(false);
+              setFraming(next && hasFullBody(next) ? "body" : "close");
             }}
-            className={chip(selected?.id === view.id)}
-          >
-            {t(view.label)}
-          </button>
+            label={t(view.label)}
+          />
         ))}
       </div>
+      {hasRig && bodyReady ? (
+        <div className="mt-3 flex flex-wrap gap-2" role="group" aria-label={t("framingBody")} data-testid="framing-controls">
+          <Choice pressed={framing === "body"} onClick={() => setFraming("body")} label={t("framingBody")} testId="framing-body" />
+          <Choice pressed={framing === "close"} onClick={() => setFraming("close")} label={t("framingClose")} testId="framing-close" />
+        </div>
+      ) : null}
+      {hasRig && sceneryAvailable ? (
+        <div className="mt-3 flex flex-wrap gap-2" role="group" aria-label={t("sceneryOn")} data-testid="scenery-controls">
+          <Choice pressed={!scenery} onClick={() => setScenery(false)} label={t("sceneryOff")} testId="scenery-off" />
+          <Choice pressed={scenery} onClick={() => setScenery(true)} label={t("sceneryOn")} testId="scenery-on" />
+        </div>
+      ) : null}
       {emotions.length ? (
         <div className="mt-3 flex flex-wrap gap-2">
           <Choice pressed={emotion === "rest"} onClick={() => setEmotion("rest")} label={t("rest")} />
           {emotions.map((name) => (
-            <Choice key={name} pressed={emotion === name} onClick={() => setEmotion(name)} label={(locale === "en" ? EN_EMOTION : EMOTION_LABEL)[name] ?? name.replaceAll("_", " ")} />
+            <Choice key={name} pressed={emotion === name} onClick={() => setEmotion(name)} label={emotionLabel(name, locale)} />
           ))}
         </div>
       ) : null}
@@ -118,11 +170,104 @@ export function ComposedCharacter({ character, rig }: { character: LibraryCharac
       ) : hasRig && eyeCapability === "unavailable" ? (
         <p className="mt-3 text-sm text-muted-foreground" data-testid="gaze-unavailable">{t("gazeUnavailable")}</p>
       ) : null}
-      {missingSides ? (
-        <p className="mt-3 text-sm text-muted-foreground">{t("missingSides")}</p>
+      {missingSides ? <p className="mt-3 text-sm text-muted-foreground">{t("missingSides")}</p> : null}
+      {sheet.length ? (
+        <section className="mt-8" data-testid="emotion-sheet">
+          <h2 className="text-sm font-medium">{t("emotionSheet")}</h2>
+          {views.map((view) => {
+            const groups = sheet.filter((entry) => entry.view.id === view.id);
+            if (!groups.length) return null;
+            const source = rig?.views[view.rig];
+            if (!source) return null;
+            return (
+              <div key={view.id} className="mt-4" data-testid={`sheet-${view.testId}`}>
+                <h3 className="text-sm text-white/80">{t(view.label)}</h3>
+                {groups.map(({ group }) => (
+                  <SheetRow key={group.category} view={source} viewId={view.testId} group={group} title={t(CATEGORY_LABEL[group.category])} labelFor={(id) => stateLabel(group.category, id, locale, t)} />
+                ))}
+              </div>
+            );
+          })}
+        </section>
+      ) : waiting ? null : (
+        <section className="mt-8">
+          <h2 className="text-sm font-medium">{t("emotionSheet")}</h2>
+          <div data-testid="emotion-sheet" className="mt-3 overflow-hidden rounded-[1.5rem] border border-white/10 bg-black">
+            {character.emotionSheetUrl ? (
+              <button type="button" data-testid="emotion-sheet-zoom" onClick={() => setSheetOpen(true)} className="block min-h-11 w-full cursor-zoom-in text-left">
+                <img src={character.emotionSheetUrl} alt="" className="w-full bg-black" />
+                <span className="block px-4 py-3 text-sm text-muted-foreground">{t("zoom")}</span>
+              </button>
+            ) : (
+              <p className="px-4 py-10 text-sm text-muted-foreground">{t("noSheet")}</p>
+            )}
+          </div>
+        </section>
+      )}
+      {sheetOpen && character.emotionSheetUrl ? (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label={t("emotionSheet")}
+          data-testid="emotion-sheet-lightbox"
+          className="fixed inset-0 z-50 overflow-auto overscroll-contain bg-black px-[max(0.75rem,env(safe-area-inset-left))] pt-[max(0.75rem,env(safe-area-inset-top))] pr-[max(0.75rem,env(safe-area-inset-right))] pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:p-8"
+          onClick={() => setSheetOpen(false)}
+        >
+          <div className="sticky top-0 z-10 mb-3 flex justify-end">
+            <button type="button" onClick={() => setSheetOpen(false)} className={controlClass(false)}>
+              {t("close")}
+            </button>
+          </div>
+          <img data-testid="emotion-sheet-full" src={character.emotionSheetUrl} alt="" className="mx-auto h-auto w-max min-w-full max-w-none bg-black" onClick={(event) => event.stopPropagation()} />
+        </div>
       ) : null}
     </section>
   );
+}
+
+function SheetRow({
+  view,
+  viewId,
+  group,
+  title,
+  labelFor,
+}: {
+  view: CharacterView;
+  viewId: string;
+  group: SheetGroup;
+  title: string;
+  labelFor: (id: string) => string;
+}) {
+  return (
+    <div className="mt-3" data-testid={`sheet-${viewId}-${group.category}`}>
+      <h4 className="text-xs uppercase tracking-wide text-white/50">{title}</h4>
+      <ul className={`mt-2 ${SHEET_GRID}`}>
+        {group.states.map((state) => (
+          <li key={state.id} data-testid={`sheet-${viewId}-${group.category}-${state.id}`} className={`${SHEET_CELL} overflow-hidden rounded-2xl bg-black`}>
+            <div className="bg-black">
+              <AvatarStage view={view} emotion={state.emotion} lids={state.lids} gaze={state.gaze} framing="close" scenery={false} />
+            </div>
+            <p className="px-2 py-2 text-center text-xs text-white/70">{labelFor(state.id)}</p>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function stateLabel(category: SheetCategory, id: string, locale: string, t: (key: MessageKey) => string): string {
+  if (category === "gaze") return t(GAZE_LABEL[id as GazeDirection]);
+  if (category === "lids") {
+    if (id === "half") return t("eyesHalf");
+    if (id === "closed") return t("eyesClosed");
+    return t("eyesOpen");
+  }
+  if (id === "rest") return t("rest");
+  return emotionLabel(id, locale);
+}
+
+function emotionLabel(name: string, locale: string): string {
+  return (locale === "en" ? EN_EMOTION : EMOTION_LABEL)[name] ?? name.replaceAll("_", " ");
 }
 
 const GAZE_LABEL: Record<GazeDirection, MessageKey> = {
@@ -133,17 +278,10 @@ const GAZE_LABEL: Record<GazeDirection, MessageKey> = {
   down: "gazeDown",
 };
 
-function chip(pressed: boolean): string {
-  return pressed
-    ? "inline-flex min-h-11 items-center rounded-full border border-white bg-white px-4 text-sm text-black outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white motion-reduce:transition-none"
-    : "inline-flex min-h-11 items-center rounded-full border border-white/15 px-4 text-sm outline-none hover:border-white/50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white motion-reduce:transition-none";
-}
-
 function Choice({ pressed, onClick, label, testId }: { pressed: boolean; onClick?: () => void; label: string; testId?: string }) {
   return (
-    <button type="button" data-testid={testId} aria-pressed={pressed} onClick={onClick} className={chip(pressed)}>
+    <button type="button" data-testid={testId} aria-pressed={pressed} onClick={onClick} className={controlClass(pressed)}>
       {label}
     </button>
   );
 }
-
