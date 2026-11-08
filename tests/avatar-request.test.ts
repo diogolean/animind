@@ -5,7 +5,7 @@ import { addAvatarParticipant, avatarAttemptKey, avatarIssues, inferAvatarPlan, 
 import { avatarJobReady, cancelAvatarAttempt, decideAvatarRequest, memoryAvatarStore } from "../lib/avatar-batch";
 import { AVATAR_PAID_CALLS_AUTHORIZED } from "../lib/avatar-provider";
 import { abortAvatarProgress, applyAvatarEvent, avatarBatchShape, avatarJobFeedback, avatarRunning, costIsReportedZero, emptyAvatarProgress, foldAvatarEvents } from "../lib/avatar-progress";
-import { avatarReconnect, avatarTransport, labelOfflineAttempt, mapCoreAvatar, mapCoreStage, presentCorePayload, presentCoreSheet, promptForCore, rememberAvatarPoll, rememberedAvatarPoll, sanitizeAvatarError } from "../lib/avatar-core";
+import { avatarReconnect, avatarTransport, labelOfflineAttempt, mapCoreAvatar, mapCoreStage, presentCoreDebate, presentCorePayload, presentCoreSheet, presentCoreUsage, presentDebateCreated, presentDebateResponse, presentPlanUsage, promptForCore, rememberAvatarPoll, rememberedAvatarPoll, sanitizeAvatarError } from "../lib/avatar-core";
 import { fill, translate } from "../lib/i18n";
 
 describe("avatar plan", () => {
@@ -261,6 +261,7 @@ describe("avatar core contract", () => {
     assert.equal(mapped?.cost, "unknown");
     assert.equal(costIsReportedZero(mapped?.cost), false);
     assert.equal(mapped?.providerCalls, 0);
+    assert.equal(mapped?.usage, null);
     assert.equal(mapped?.providerFunction, null);
     assert.equal(mapped?.keepsDraft, true);
     assert.equal("progress" in (mapped ?? {}), false);
@@ -410,5 +411,138 @@ describe("avatar routes", () => {
     assert.match(studio, /AvatarRequest/);
     assert.match(studio, /setAwaitingSignIn\(true\)/);
     assert.ok(files.indexOf("ownsResource") < files.indexOf("coreFetch"));
+  });
+});
+
+describe("core usage and fixture debate", () => {
+  const quote = "A admiração é o sentimento de um filósofo, e a filosofia começa pela admiração.";
+
+  it("shows attempts and provider calls and keeps a null or zero price unknown", () => {
+    const job = presentCoreUsage({
+      providerCalls: 0,
+      usage: {
+        schema: "animind.usage.v1",
+        userRef: "aaaaaaaaaaaaaaaaaaaaaaaa",
+        calls: [{ attempt: 1, provider: "together", model: "Qwen/Qwen-Image", status: "blocked", cost: { currency: "USD", estimatedMicro: null, reportedMicro: null } }],
+        totals: { calls: 1, blocked: 1, estimatedMicro: null, reportedMicro: null, holdCents: 0 },
+      },
+    });
+    assert.deepEqual(job, { attempts: 1, providerCalls: 0, cost: "unknown" });
+    const text = JSON.stringify(job);
+    assert.equal(text.includes("together"), false);
+    assert.equal(text.includes("Qwen"), false);
+    assert.equal(text.includes("USD"), false);
+    assert.equal(text.includes("$0"), false);
+    assert.equal(text.includes("aaaaaaaa"), false);
+    assert.equal(text.includes("estimatedMicro"), false);
+    const zero = presentCoreUsage({
+      usage: { schema: "animind.usage.v1", calls: [], totals: { calls: 0, estimatedMicro: 0, reportedMicro: 0 } },
+    });
+    assert.deepEqual(zero, { attempts: 0, providerCalls: 0, cost: "unknown" });
+    assert.equal(JSON.stringify(zero).includes("$0"), false);
+    assert.equal(costIsReportedZero(zero?.cost), false);
+    assert.equal(presentCoreUsage({
+      providerCalls: 0,
+      usage: { schema: "animind.usage.v1", calls: [{}], totals: { calls: 1, estimatedMicro: 842, reportedMicro: null } },
+    }), null);
+    const plan = presentPlanUsage(200, {
+      personas: ["Ada"],
+      usage: { schema: "animind.usage.v1", userRef: "bbbbbbbbbbbbbbbbbbbbbbbb", calls: [], totals: { calls: 0, estimatedMicro: null, reportedMicro: null } },
+    });
+    assert.deepEqual(plan.body, { usage: { attempts: 0, providerCalls: 0, cost: "unknown" } });
+    assert.equal(JSON.stringify(plan.body).includes("bbbbbbbb"), false);
+    const hidden = presentPlanUsage(404, { detail: "users/secret usdPerImage 0" });
+    assert.equal(hidden.status, 502);
+    assert.equal(JSON.stringify(hidden.body).includes("users/"), false);
+    assert.equal(JSON.stringify(hidden.body).includes("usdPerImage"), false);
+  });
+
+  it("keeps a verified debate quote and leaves a null line empty", () => {
+    const script = presentCoreDebate({
+      id: "abc123def456",
+      theme: "a admiração",
+      language: "pt",
+      writer: "fixture",
+      llm: { provider: "fixture", model: "fixture", live: false },
+      _owner: "aaaaaaaaaaaaaaaaaaaaaaaa",
+      _engine: { spoken: ["fixture.", "fixture."], path: "users/aaaaaaaaaaaaaaaaaaaaaaaa/debates/abc123def456.json" },
+      lines: [
+        {
+          speaker: 0,
+          name: "Sócrates",
+          text: quote,
+          kind: "quote",
+          quote: { id: "q3", text: quote, source: "Platão · Teeteto 150c", url: "https://pt.wikiquote.org/wiki/S%C3%B3crates", verification: "verified" },
+        },
+        {
+          speaker: 1,
+          name: "Ada",
+          text: null,
+          kind: "fixture",
+          quote: { text: "A labeled fixture quote.", source: "fixture rotulada", url: "https://pt.wikiquote.org/wiki/Ada" },
+        },
+      ],
+    });
+    assert.equal(script?.writer, "fixture");
+    assert.equal(script?.live, false);
+    assert.equal(script?.lines[0]?.text, quote);
+    assert.equal(script?.lines[0]?.source, "Platão · Teeteto 150c");
+    assert.equal(script?.lines[0]?.url, "https://pt.wikiquote.org/wiki/S%C3%B3crates");
+    assert.equal(script?.lines[0]?.verification, "verified");
+    assert.equal(script?.lines[1]?.text, null);
+    assert.equal(script?.lines[1]?.source, null);
+    assert.equal(script?.lines[1]?.url, null);
+    const saved = JSON.stringify(script);
+    assert.equal(saved.includes("A labeled fixture quote."), false);
+    assert.equal(saved.includes("users/"), false);
+    assert.equal(saved.includes("fixture."), false);
+    assert.equal(saved.includes("_owner"), false);
+    assert.equal(presentCoreDebate({
+      id: "abc123def456", theme: "mar", language: "en", writer: "fixture",
+      llm: { provider: "fixture", model: "fixture", live: true }, lines: [],
+    }), null);
+    const denied = presentDebateResponse(404, {
+      detail: "debate not found",
+      name: "Sócrates",
+      text: quote,
+      path: "users/aaaaaaaaaaaaaaaaaaaaaaaa/debates/abc123def456.json",
+    });
+    assert.equal(denied.status, 404);
+    const deniedText = JSON.stringify(denied.body);
+    assert.equal(deniedText.includes("Sócrates"), false);
+    assert.equal(deniedText.includes(quote.slice(0, 24)), false);
+    assert.equal(deniedText.includes("users/"), false);
+    const created = presentDebateCreated(200, {
+      id: "abc123def456", theme: "a admiração", language: "pt", writer: "fixture",
+      llm: { live: false }, lines: [{ speaker: 0, name: "Sócrates", text: quote, kind: "quote", quote: { text: quote, source: "Platão", url: "https://pt.wikiquote.org/wiki/S%C3%B3crates", verification: "verified" } }],
+    });
+    assert.deepEqual(created.body, { id: "abc123def456" });
+    assert.equal(JSON.stringify(created.body).includes(quote.slice(0, 12)), false);
+  });
+
+  it("keeps the fixture debate off the video render control", () => {
+    const screen = readFileSync(new URL("../components/fixture-debate.tsx", import.meta.url), "utf8");
+    const route = readFileSync(new URL("../app/api/debates/route.ts", import.meta.url), "utf8");
+    const plan = readFileSync(new URL("../app/api/avatars/plan/route.ts", import.meta.url), "utf8");
+    const button = readFileSync(new URL("../components/avatar-request.tsx", import.meta.url), "utf8");
+    const core = readFileSync(new URL("../lib/core.ts", import.meta.url), "utf8");
+    assert.match(screen, /debateFixtureLabel/);
+    assert.match(screen, /debateFixtureEmpty/);
+    assert.match(screen, /fixture-debate-text/);
+    assert.match(screen, /fixture-debate-url/);
+    assert.equal(screen.includes("startRender"), false);
+    assert.equal(screen.includes("createCharacter"), false);
+    assert.equal(screen.includes("$0"), false);
+    assert.match(route, /writer: "fixture"/);
+    assert.match(route, /live: false/);
+    assert.match(route, /presentDebateResponse/);
+    assert.equal(route.includes("startRender"), false);
+    assert.equal(route.includes("guardedGeneration"), false);
+    assert.match(plan, /presentPlanUsage/);
+    assert.equal(plan.includes("guardedGeneration"), false);
+    assert.match(button, /unknownCost/);
+    assert.match(button, /FixtureDebate/);
+    assert.equal(button.includes("$0"), false);
+    assert.match(core, /debates/);
   });
 });

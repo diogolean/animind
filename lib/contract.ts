@@ -468,6 +468,13 @@ export interface AvatarEventRecord {
   fixture: boolean;
 }
 
+/** Public slice of a core usage document. Null money is unknown, never a zero price. */
+export interface CoreUsageView {
+  attempts: number;
+  providerCalls: number;
+  cost: "unknown";
+}
+
 export interface AvatarJobState {
   id: string;
   index: number;
@@ -499,6 +506,8 @@ export interface AvatarAttempt {
   fixture: boolean;
   providerCalls: number;
   providerFunction: null;
+  /** Core `animind.usage.v1` reduced to counts. A null price stays unknown. */
+  usage?: CoreUsageView | null;
   jobs: AvatarJobState[];
   events?: AvatarEventRecord[];
   /** A failed or partial attempt does not clear the prompt. */

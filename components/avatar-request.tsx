@@ -2,11 +2,12 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Check } from "lucide-react";
-import type { AvatarAttempt, AvatarIntent, AvatarPlan, AvatarProgressStage } from "@/lib/contract";
+import type { AvatarAttempt, AvatarIntent, AvatarPlan, AvatarProgressStage, CoreUsageView } from "@/lib/contract";
 import { addAvatarParticipant, avatarIssues, inferAvatarPlan, pinAvatarParticipant, toggleAvatarParticipant, type AvatarIssue } from "@/lib/avatar-plan";
 import { avatarReconnect, rememberedAvatarPoll, rememberAvatarPoll } from "@/lib/avatar-core";
 import { avatarJobFeedback, avatarRunning, emptyAvatarProgress, foldAvatarEvents, type AvatarProgressView } from "@/lib/avatar-progress";
 import { readAvatarAttempt, requestAvatarBatch } from "@/lib/api";
+import { FixtureDebate } from "@/components/fixture-debate";
 import { useI18n } from "@/components/locale";
 import { artStyleLabel, fill, type MessageKey } from "@/lib/i18n";
 import { track } from "@/lib/analytics-client";
@@ -62,6 +63,7 @@ export function AvatarRequest({
   const [view, setView] = useState<AvatarProgressView>(emptyAvatarProgress());
   const [pollNonce, setPollNonce] = useState(0);
   const [sheets, setSheets] = useState<CoreSheet[]>([]);
+  const [planUsage, setPlanUsage] = useState<CoreUsageView | null>(null);
   const [tracked, setTracked] = useState(`${prompt}\n${pinnedName ?? ""}`);
   const ticket = useRef(0);
   const abortRef = useRef<AbortController | null>(null);
@@ -74,6 +76,7 @@ export function AvatarRequest({
     setAdded([]);
     setPicked(null);
     setAttempt(null);
+    setPlanUsage(null);
   }
 
   useEffect(() => {
@@ -152,6 +155,34 @@ export function AvatarRequest({
     }).catch(() => undefined);
     return () => controller.abort();
   }, [viewer, sheetKey]);
+  const usagePrompt = shown?.prompt ?? "";
+  const usageLanguage = shown?.language ?? "";
+  const usageResolution = shown?.requestedResolution ?? "1k";
+
+  useEffect(() => {
+    if (!viewer || !usagePrompt || !usageLanguage) return;
+    const controller = new AbortController();
+    const body = { prompt: usagePrompt, language: usageLanguage, requestedResolution: usageResolution };
+    void fetch("/api/avatars/plan", {
+      method: "POST",
+      signal: controller.signal,
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+    }).then(async (response) => {
+      if (!response.ok) return null;
+      const data = await response.json() as { usage?: CoreUsageView };
+      const usage = data.usage;
+      if (!usage || usage.cost !== "unknown") return null;
+      if (!Number.isInteger(usage.attempts) || !Number.isInteger(usage.providerCalls)) return null;
+      return usage;
+    }).then((usage) => {
+      if (!controller.signal.aborted) setPlanUsage(usage);
+    }).catch(() => {
+      if (!controller.signal.aborted) setPlanUsage(null);
+    });
+    return () => controller.abort();
+  }, [viewer, usagePrompt, usageLanguage, usageResolution]);
+
   const issues = shown ? avatarIssues(shown) : [];
   const included = avatarRunning(automaticStages, "automatic");
   const state = !shown ? "incomplete" : included ? "included" : issues.length ? "incomplete" : !viewer ? "sign-in" : !viewer.generationEnabled ? "blocked" : "ready";
@@ -263,6 +294,15 @@ export function AvatarRequest({
               );
             })}
           </ul>
+          {planUsage ? (
+            <p data-testid="avatar-usage" className="mt-2 text-white/85">
+              {fill(t("usageAttempts"), { count: planUsage.attempts })}
+              {" · "}
+              {fill(t("usageProviderCalls"), { count: planUsage.providerCalls })}
+              {" · "}
+              {t("unknownCost")}
+            </p>
+          ) : null}
           {issues.map((issue) => (
             <p key={issue} data-testid={`avatar-issue-${issue}`} className="mt-2 text-white/85">
               {fill(t(ISSUE_KEY[issue]), { count: shown.defaultCount, value: shown.requestedResolution.toUpperCase() })}
@@ -301,6 +341,13 @@ export function AvatarRequest({
           </ul>
         </article>
       ))}
+      {sheets[0] && sheets[1] && shown ? (
+        <FixtureDebate
+          names={[sheets[0].name, sheets[1].name]}
+          theme={(shown.context || shown.prompt).slice(0, 200)}
+          language={shown.language}
+        />
+      ) : null}
       {attempt ? (
         <ul data-testid="avatar-progress" role="status" className="mt-3 max-w-xl space-y-1 text-sm text-white/90">
           {attempt.outcome === "partial" ? (
@@ -312,6 +359,15 @@ export function AvatarRequest({
                 <li key={`${event.index}-${event.stage}`} data-testid={`avatar-core-${event.stage}`}>{fill(t("avatarCoreStage"), { stage: event.stage })}</li>
               ))}
               <li data-testid="avatar-core-block">{attempt.code === "price_unavailable" ? t("priceUnavailable") : t("avatarProviderOff")}</li>
+              {attempt.usage?.cost === "unknown" ? (
+                <li data-testid="avatar-job-usage">
+                  {fill(t("usageAttempts"), { count: attempt.usage.attempts })}
+                  {" · "}
+                  {fill(t("usageProviderCalls"), { count: attempt.usage.providerCalls })}
+                  {" · "}
+                  {t("unknownCost")}
+                </li>
+              ) : null}
               <li>{t("avatarCoreNote")}</li>
             </>
           ) : attempt.jobs.map((job) => {

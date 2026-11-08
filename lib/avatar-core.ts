@@ -1,4 +1,4 @@
-import type { AvatarAttempt, AvatarEventRecord, AvatarJobState, AvatarOutcome, AvatarProgressStage } from "./contract";
+import type { AvatarAttempt, AvatarEventRecord, AvatarJobState, AvatarOutcome, AvatarProgressStage, CoreUsageView } from "./contract";
 import { AVATAR_PROGRESS_STAGES } from "./contract";
 
 /** Browser key for the poll id. It does not start a job and it is not a generate flag. */
@@ -158,10 +158,36 @@ export function mapCoreAvatar(payload: unknown, ownerId: string): AvatarAttempt 
     transport: "core",
     providerCalls: reportedCalls,
     providerFunction: null,
+    usage: presentCoreUsage(body),
     jobs,
     events,
     keepsDraft: true,
   };
+}
+
+const COUNT = (value: unknown, max: number): number | null => (
+  typeof value === "number" && Number.isInteger(value) && value >= 0 && value <= max ? value : null
+);
+
+function microIsUnknown(value: unknown): boolean {
+  return value == null || value === 0;
+}
+
+/** Counts from `animind.usage.v1`. Model names, hashes, and money amounts stay on the server. */
+export function presentCoreUsage(payload: unknown): CoreUsageView | null {
+  if (!payload || typeof payload !== "object") return null;
+  const body = payload as { providerCalls?: unknown; usage?: unknown };
+  if (!body.usage || typeof body.usage !== "object") return null;
+  const usage = body.usage as { schema?: unknown; calls?: unknown; totals?: unknown };
+  if (usage.schema !== "animind.usage.v1") return null;
+  const totals = usage.totals && typeof usage.totals === "object"
+    ? usage.totals as { calls?: unknown; estimatedMicro?: unknown; reportedMicro?: unknown }
+    : {};
+  if (!microIsUnknown(totals.estimatedMicro) || !microIsUnknown(totals.reportedMicro)) return null;
+  const calls = Array.isArray(usage.calls) ? usage.calls : [];
+  const attempts = COUNT(totals.calls, 100) ?? Math.min(calls.length, 100);
+  const providerCalls = COUNT(body.providerCalls, 100) ?? 0;
+  return { attempts, providerCalls, cost: "unknown" };
 }
 
 export function coreNeedsChoice(payload: unknown): boolean {
@@ -208,6 +234,98 @@ export function presentCoreSheet(payload: unknown): {
   });
   const labeled = fixtureLabeled || quotes.some((quote) => /labeled fixture|fixture rotulada/i.test(quote.source));
   return { name, found: (body.found === true || fixtureLabeled) && quotes.length > 0, source: labeled ? "core-fixture" : "core", quotes };
+}
+
+export type CoreDebateLine = {
+  speaker: number;
+  name: string;
+  kind: "quote" | "fixture";
+  text: string | null;
+  source: string | null;
+  url: string | null;
+  verification: "verified" | null;
+};
+
+export type CoreDebate = {
+  id: string;
+  theme: string;
+  language: "en" | "pt";
+  writer: "fixture";
+  live: false;
+  lines: CoreDebateLine[];
+};
+
+const DEBATE_ID = /^[a-f0-9]{8,32}$/;
+
+function debateLine(item: unknown): CoreDebateLine | null {
+  if (!item || typeof item !== "object") return null;
+  const row = item as { speaker?: unknown; name?: unknown; text?: unknown; kind?: unknown; quote?: unknown };
+  const speaker = COUNT(row.speaker, 5);
+  const name = typeof row.name === "string" ? row.name.trim() : "";
+  if (speaker == null || !name || name.length > 80 || SHEET_LEAK.test(name)) return null;
+  if (row.kind !== "quote" && row.kind !== "fixture") return null;
+  const rawText = row.text;
+  if (rawText != null && typeof rawText !== "string") return null;
+  const text = typeof rawText === "string" ? rawText.trim() : "";
+  if (!text || text === "fixture." || text.length > 500 || SHEET_LEAK.test(text)) {
+    return { speaker, name, kind: row.kind, text: null, source: null, url: null, verification: null };
+  }
+  const quote = row.quote && typeof row.quote === "object" ? row.quote as { source?: unknown; url?: unknown; verification?: unknown; text?: unknown } : null;
+  const source = quote && typeof quote.source === "string" ? quote.source.trim() : "";
+  const url = quote && typeof quote.url === "string" ? quote.url.trim() : "";
+  const safeSource = source && source.length <= 160 && !SHEET_LEAK.test(source) ? source : null;
+  const safeUrl = url && SHEET_URL.test(url) ? url : null;
+  if (quote && typeof quote.text === "string" && quote.text.trim() && quote.text.trim() !== text) return null;
+  return {
+    speaker,
+    name,
+    kind: row.kind,
+    text,
+    source: safeSource,
+    url: safeUrl,
+    verification: quote?.verification === "verified" ? "verified" : null,
+  };
+}
+
+/** A fixture debate for the owner. A null line stays empty. A live model is not shown. */
+export function presentCoreDebate(payload: unknown): CoreDebate | null {
+  if (!payload || typeof payload !== "object") return null;
+  const body = payload as { id?: unknown; theme?: unknown; language?: unknown; writer?: unknown; llm?: unknown; lines?: unknown };
+  const id = typeof body.id === "string" ? body.id : "";
+  if (!DEBATE_ID.test(id) || body.writer !== "fixture") return null;
+  const llm = body.llm && typeof body.llm === "object" ? body.llm as { live?: unknown } : null;
+  if (!llm || llm.live !== false) return null;
+  if (body.language !== "en" && body.language !== "pt") return null;
+  const theme = typeof body.theme === "string" ? body.theme.trim() : "";
+  if (!theme || theme.length > 200 || SHEET_LEAK.test(theme)) return null;
+  if (!Array.isArray(body.lines) || body.lines.length > 6) return null;
+  const lines: CoreDebateLine[] = [];
+  for (const item of body.lines) {
+    const line = debateLine(item);
+    if (!line) return null;
+    lines.push(line);
+  }
+  return { id, theme, language: body.language, writer: "fixture", live: false, lines };
+}
+
+export function presentDebateResponse(status: number, payload: unknown): { status: number; body: CoreDebate | { error: string } } {
+  if (status !== 200) return { status: status === 404 || status === 400 ? status : 502, body: avatarMissBody() };
+  const debate = presentCoreDebate(payload);
+  if (!debate) return { status: 502, body: avatarMissBody() };
+  return { status: 200, body: debate };
+}
+
+export function presentDebateCreated(status: number, payload: unknown): { status: number; body: { id: string } | { error: string } } {
+  const presented = presentDebateResponse(status, payload);
+  if (!("id" in presented.body)) return presented;
+  return { status: 200, body: { id: presented.body.id } };
+}
+
+export function presentPlanUsage(status: number, payload: unknown): { status: number; body: { usage: CoreUsageView } | { error: string } } {
+  if (status !== 200) return { status: 502, body: avatarMissBody() };
+  const usage = presentCoreUsage(payload);
+  if (!usage) return { status: 502, body: avatarMissBody() };
+  return { status: 200, body: { usage } };
 }
 
 /** Offline confirmation. The events are plan and fail only. No image stage is invented. */
