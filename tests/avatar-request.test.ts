@@ -6,7 +6,7 @@ import { avatarJobReady, cancelAvatarAttempt, decideAvatarRequest, memoryAvatarS
 import { AVATAR_PAID_CALLS_AUTHORIZED } from "../lib/avatar-provider";
 import { realAvatarCall } from "../lib/accounts/generation-policy";
 import { abortAvatarProgress, applyAvatarEvent, avatarBatchShape, avatarJobFeedback, avatarRunning, costIsReportedZero, emptyAvatarProgress, foldAvatarEvents } from "../lib/avatar-progress";
-import { avatarReconnect, avatarTransport, labelOfflineAttempt, mapCoreAvatar, mapCoreStage, presentCoreDebate, presentCorePayload, presentCoreSheet, presentCoreUsage, presentDebateCreated, presentDebateResponse, presentPlanUsage, promptForCore, rememberAvatarPoll, rememberedAvatarPoll, sanitizeAvatarError } from "../lib/avatar-core";
+import { avatarReconnect, avatarTransport, coreSpendMicro, labelOfflineAttempt, mapCoreAvatar, mapCoreStage, mapPuppetAvatar, presentCoreDebate, presentCorePayload, presentCoreSheet, presentCoreUsage, presentDebateCreated, presentDebateResponse, presentPlanUsage, promptForCore, rememberAvatarPoll, rememberedAvatarPoll, sanitizeAvatarError } from "../lib/avatar-core";
 import { fill, translate } from "../lib/i18n";
 
 describe("avatar plan", () => {
@@ -426,9 +426,12 @@ describe("avatar routes", () => {
     assert.ok(files.indexOf("ownsResource") < files.indexOf("coreFetch"));
     const post = route.slice(route.indexOf("export async function POST"));
     const gateAt = post.indexOf("realAvatarCall");
-    const reserveAt = post.indexOf("beginGeneration");
     const proxyAt = post.indexOf('proxyJson("/avatars"');
-    assert.ok(gateAt >= 0 && reserveAt > gateAt && proxyAt > reserveAt);
+    assert.equal(post.includes("beginGeneration"), false);
+    assert.equal(route.includes("beginGeneration"), false);
+    assert.ok(gateAt >= 0 && proxyAt > gateAt);
+    assert.match(post, /generate:\s*true/);
+    assert.match(post, /existing\?\.transport === "core"/);
     assert.equal(post.includes("generate_character_image"), false);
     assert.equal(post.includes("create_puppet"), false);
     assert.equal(post.includes("generate_view"), false);
@@ -452,6 +455,101 @@ describe("avatar routes", () => {
     assert.deepEqual(realAvatarCall({ role: "admin", mode: "core", generationOn: true, priceMinor: null }), { allow: false, code: "price_unavailable" });
     assert.deepEqual(realAvatarCall({ role: "admin", mode: "core", generationOn: true, priceMinor: 1 }), { allow: true });
     assert.deepEqual(realAvatarCall({ role: "super_admin", mode: "core", generationOn: true, priceMinor: 0 }), { allow: true });
+  });
+});
+
+const PNG = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
+
+function puppetFixture(over: Record<string, unknown> = {}) {
+  const layer = (name: string, x: number, y: number) => ({ name, url: PNG, x, y, w: 8, h: 8, z: 1 });
+  return {
+    id: "avmock01",
+    schema: "animind.puppet.v3",
+    name: "Ada",
+    status: "review_required",
+    ready: false,
+    defects: ["view_profile_missing", "provider_fixture"],
+    views: {
+      front: {
+        canvas: { w: 80, h: 100 },
+        layers: [layer("head", 10, 8), layer("torso", 16, 70)],
+        visemes: { X: layer("mouth_X", 30, 48) },
+        expressions: { neutral: layer("expression_neutral", 30, 48) },
+        eyeRig: { maxShift: [4, 3], irises: [[28, 36, 3], [48, 36, 3]] },
+        mouthQA: { anchor: { x: 38, y: 52, nose: [40, 30], chin: [40, 70], view: "front", along: 0.5, moustacheBottom: 58 } },
+      },
+      left: {
+        canvas: { w: 80, h: 100 },
+        layers: [layer("head", 12, 8)],
+        visemes: { X: layer("mouth_X", 20, 48) },
+      },
+    },
+    scenario: { embedded: false, control: "shared", states: ["on", "off"] },
+    qa: { costUsd: null },
+    provenance: { realImage: false },
+    usage: { schema: "animind.usage.v1", calls: [], totals: { calls: 0, estimatedMicro: null, reportedMicro: null } },
+    ...over,
+  };
+}
+
+describe("puppet v3 avatar", () => {
+  it("keeps review_required, defects, views, layers, anchors, and separate scenery", () => {
+    const mapped = mapPuppetAvatar(puppetFixture(), "usr_admin");
+    assert.ok(mapped);
+    assert.equal(mapped.review?.status, "review_required");
+    assert.equal(mapped.review?.ready, false);
+    assert.equal(mapped.code, "review_required");
+    assert.deepEqual(mapped.review?.defects, ["provider_fixture", "view_profile_missing"]);
+    assert.deepEqual(Object.keys(mapped.views ?? {}), ["front", "left"]);
+    assert.equal(mapped.views?.front.layers.length, 2);
+    assert.equal(mapped.views?.front.eyeRig?.maxShift[0], 4);
+    assert.equal(mapped.anchors?.find((item) => item.view === "front")?.mouth, true);
+    assert.equal(mapped.anchors?.find((item) => item.view === "front")?.eyes, true);
+    assert.equal(mapped.anchors?.find((item) => item.view === "front")?.mouthAnchor?.x, 38);
+    assert.equal(mapped.scenery?.embedded, false);
+    assert.equal(mapped.scenery?.separate, true);
+    assert.deepEqual(mapped.scenery?.states, ["on", "off"]);
+    assert.equal(mapped.cost, "unknown");
+    assert.equal(mapped.coreMicro, null);
+    assert.equal(mapped.jobs[0]?.stage, "qa");
+    assert.equal(JSON.stringify(mapped).includes("\"ready\":true"), false);
+    assert.equal(JSON.stringify(mapped).includes("$0"), false);
+    assert.equal(JSON.stringify(mapped).includes("costUsd"), false);
+    const presented = presentCorePayload(200, puppetFixture(), "usr_admin");
+    assert.equal(presented.status, 200);
+    assert.equal("review" in presented.body && presented.body.review?.ready, false);
+  });
+
+  it("does not turn a ready flag with defects, or a zero cost, into a finished avatar", () => {
+    const lying = mapPuppetAvatar(puppetFixture({ status: "ready", ready: true, defects: ["view_profile_missing"] }), "usr_admin");
+    assert.equal(lying?.review?.ready, false);
+    assert.equal(lying?.review?.status, "review_required");
+    assert.equal(lying?.jobs[0]?.stage, "qa");
+    const zero = mapPuppetAvatar(puppetFixture({
+      usage: { schema: "animind.usage.v1", calls: [], totals: { calls: 0, estimatedMicro: 0, reportedMicro: 0 } },
+    }), "usr_admin");
+    assert.equal(zero?.coreMicro, null);
+    assert.equal(zero?.cost, "unknown");
+    assert.equal(coreSpendMicro({ usage: { schema: "animind.usage.v1", totals: { reportedMicro: 39000, estimatedMicro: null } } }), 39000);
+    const honest = mapPuppetAvatar(puppetFixture({
+      status: "ready",
+      ready: true,
+      defects: [],
+      provenance: { realImage: true },
+      usage: { schema: "animind.usage.v1", calls: [], totals: { calls: 1, estimatedMicro: null, reportedMicro: 39000 } },
+    }), "usr_admin");
+    assert.equal(honest?.review?.ready, true);
+    assert.equal(honest?.review?.status, "ready");
+    assert.equal(honest?.coreMicro, 39000);
+    assert.equal(honest?.cost, "unknown");
+    assert.equal(JSON.stringify(honest).includes("$0"), false);
+    assert.equal(translate("en", "unknownCost").includes("$0"), false);
+    assert.equal(translate("pt-BR", "unknownCost"), "Custo desconhecido");
+    assert.match(translate("en", "avatarReviewRequired"), /not ready/);
+    assert.match(translate("pt-BR", "avatarReviewRequired"), /Não está pronto/);
+    assert.match(translate("en", "avatarScenerySeparate"), /separate control/);
+    assert.match(translate("pt-BR", "avatarScenerySeparate"), /controle separado/);
+    assert.equal(translate("en", "avatarScenerySeparate").toLowerCase().includes("background off"), false);
   });
 });
 

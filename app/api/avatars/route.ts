@@ -1,32 +1,26 @@
-import { beginGeneration } from "@/lib/accounts/generation";
 import { generationSwitch, realAvatarCall } from "@/lib/accounts/generation-policy";
 import { newId } from "@/lib/accounts/paths";
 import { isUser, requireUser } from "@/lib/accounts/http";
 import { charactersFor } from "@/lib/accounts/store";
 import { cancelAvatarAttempt, decideAvatarRequest, fileAvatarStore } from "@/lib/avatar-batch";
 import { avatarMissBody, avatarReconnect, avatarTransport, labelOfflineAttempt, presentCorePayload, promptForCore } from "@/lib/avatar-core";
+import { avatarAttemptKey, inferAvatarPlan } from "@/lib/avatar-plan";
 import { coreMode, coreUserHeader, json, proxyJson } from "@/lib/core";
-import { inferAvatarPlan } from "@/lib/avatar-plan";
+import { productEnv } from "@/lib/product-env";
 import { providerForMode, quoteCall, readSpendLimits } from "@/lib/spend/policy";
 import type { AvatarAttempt, LanguageCode } from "@/lib/contract";
 
 /**
- * Confirms an avatar for the signed-in owner. A real proxy to the existing
- * core contract is only for admin or super_admin, and only after the generation
- * switch, a published price, and a ledger reservation. Everyone else, and every
- * core-off request, stays on the labeled fixture. The factory functions stay
- * on the core process.
+ * Confirms an avatar for the signed-in owner. A real proxy is only for admin
+ * or super_admin, and only after the generation switch and a published price.
+ * Core mode does not reserve a local spend row: the core ledger is the only
+ * charge. A retry of the same request returns the stored attempt. Everyone
+ * else, and every core-off request, stays on the labeled fixture.
  */
 
 function strings(value: unknown, limit: number): string[] {
   if (!Array.isArray(value)) return [];
   return value.filter((item): item is string => typeof item === "string").slice(0, limit);
-}
-
-async function presentProxied(response: Response, ownerId: string): Promise<Response> {
-  const payload = await response.json().catch(() => null);
-  const presented = presentCorePayload(response.status, payload, ownerId);
-  return json(presented.body, presented.status);
 }
 
 export async function GET(req: Request) {
@@ -40,7 +34,16 @@ export async function GET(req: Request) {
       method: "GET",
       headers: coreUserHeader(actor.id),
     });
-    return presentProxied(proxied, actor.id);
+    const payload = await proxied.json().catch(() => null);
+    const presented = presentCorePayload(proxied.status, payload, actor.id);
+    if (presented.status === 200 && "requestId" in presented.body && presented.body.ownerId === actor.id) {
+      const store = fileAvatarStore();
+      if (store.find(actor.id, presented.body.requestId)) store.update(actor.id, presented.body.requestId, presented.body);
+      return json(presented.body);
+    }
+    const local = fileAvatarStore().find(actor.id, requestId);
+    if (local && local.ownerId === actor.id) return json(local);
+    return json(presented.body, presented.status);
   }
   const found = fileAvatarStore().find(actor.id, requestId);
   if (!found || found.ownerId !== actor.id) return json(avatarMissBody(), 404);
@@ -77,24 +80,32 @@ export async function POST(req: Request) {
     priceMinor: price ? price.minor : null,
   });
   if (gate.allow) {
-    const ticket = await beginGeneration(req, "avatar");
-    if (ticket instanceof Response) return ticket;
-    try {
-      const plan = inferAvatarPlan(prompt, language);
-      const names = plan.participants.filter((item) => plan.selectedIds.includes(item.id)).map((item) => item.name);
-      const proxied = await proxyJson("/avatars", {
-        method: "POST",
-        headers: coreUserHeader(actor.id),
-        body: JSON.stringify({
-          prompt: promptForCore(prompt, names),
-          language: language ?? plan.language,
-          requestedResolution: plan.requestedResolution,
-        }),
-      });
-      return presentProxied(proxied, actor.id);
-    } finally {
-      ticket.release();
+    const plan = inferAvatarPlan(prompt, language);
+    const names = plan.participants.filter((item) => plan.selectedIds.includes(item.id)).map((item) => item.name);
+    const store = fileAvatarStore();
+    const key = `core:${avatarAttemptKey(`${plan.prompt}\n${plan.language}\n${plan.requestedResolution}`, names)}`;
+    const existing = store.read(actor.id, key);
+    if (existing?.transport === "core" && existing.ownerId === actor.id) return json(existing);
+    const headers: Record<string, string> = { ...coreUserHeader(actor.id) };
+    const adminToken = productEnv("ADMIN_TOKEN");
+    if (adminToken) headers["x-animind-admin"] = adminToken;
+    const proxied = await proxyJson("/avatars", {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        prompt: promptForCore(prompt, names),
+        name: (names[0] ?? "person").slice(0, 40),
+        language: language ?? plan.language,
+        requestedResolution: plan.requestedResolution,
+        generate: true,
+      }),
+    });
+    const payload = await proxied.json().catch(() => null);
+    const presented = presentCorePayload(proxied.status, payload, actor.id);
+    if (presented.status === 200 && "requestId" in presented.body && presented.body.ownerId === actor.id) {
+      return json(store.save(actor.id, key, presented.body));
     }
+    return json(presented.body, presented.status);
   }
   if (gate.code !== "core_off") {
     const error = gate.code === "disabled" ? "Geração desligada" : "Preço desta chamada não está publicado";

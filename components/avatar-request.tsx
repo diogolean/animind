@@ -2,11 +2,12 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Check } from "lucide-react";
-import type { AvatarAttempt, AvatarIntent, AvatarPlan, AvatarProgressStage, CoreUsageView } from "@/lib/contract";
+import type { AvatarAttempt, AvatarIntent, AvatarPlan, AvatarProgressStage, CharacterView, CoreUsageView } from "@/lib/contract";
 import { addAvatarParticipant, avatarIssues, inferAvatarPlan, pinAvatarParticipant, toggleAvatarParticipant, type AvatarIssue } from "@/lib/avatar-plan";
 import { avatarReconnect, rememberedAvatarPoll, rememberAvatarPoll } from "@/lib/avatar-core";
 import { avatarJobFeedback, avatarRunning, emptyAvatarProgress, foldAvatarEvents, type AvatarProgressView } from "@/lib/avatar-progress";
 import { readAvatarAttempt, requestAvatarBatch } from "@/lib/api";
+import { AvatarStage } from "@/components/avatar-stage";
 import { FixtureDebate } from "@/components/fixture-debate";
 import { useI18n } from "@/components/locale";
 import { artStyleLabel, fill, type MessageKey } from "@/lib/i18n";
@@ -63,6 +64,7 @@ export function AvatarRequest({
   const [view, setView] = useState<AvatarProgressView>(emptyAvatarProgress());
   const [pollNonce, setPollNonce] = useState(0);
   const [sheets, setSheets] = useState<CoreSheet[]>([]);
+  const [coreView, setCoreView] = useState("front");
   const [planUsage, setPlanUsage] = useState<CoreUsageView | null>(null);
   const [coreLive, setCoreLive] = useState(false);
   const [tracked, setTracked] = useState(`${prompt}\n${pinnedName ?? ""}`);
@@ -134,7 +136,7 @@ export function AvatarRequest({
         if (!data) return;
         setAttempt(data);
         setView((current) => foldAvatarEvents(current, data, false));
-        const terminal = data.jobs.every((job) => job.stage === "fail" || job.stage === "ready" || job.disposition === "cancelled");
+        const terminal = data.review != null || data.jobs.every((job) => job.stage === "fail" || job.stage === "ready" || job.disposition === "cancelled");
         if (!terminal) timer = window.setTimeout(pull, 2000);
       }).catch(() => {
         if (!controller.signal.aborted) timer = window.setTimeout(pull, 2000);
@@ -376,7 +378,25 @@ export function AvatarRequest({
           {attempt.outcome === "partial" ? (
             <li data-testid="avatar-partial">{attempt.jobs.some((job) => job.disposition === "reused") ? t("avatarPartial") : t("avatarPartialKept")}</li>
           ) : null}
-          {attempt.transport === "core" ? (
+          {attempt.review ? (
+            <>
+              <li data-testid="avatar-review" data-status={attempt.review.status} data-ready={attempt.review.ready ? "true" : "false"}>
+                {attempt.review.ready ? t("avatarCoreReady") : t("avatarReviewRequired")}
+              </li>
+              {attempt.review.defects.map((code) => (
+                <li key={code} data-testid="avatar-defect">{fill(t("avatarDefect"), { code })}</li>
+              ))}
+              {attempt.scenery ? (
+                <li data-testid="avatar-scenery" data-separate={attempt.scenery.separate ? "true" : "false"}>
+                  {attempt.scenery.separate ? t("avatarScenerySeparate") : t("avatarSceneryEmbedded")}
+                </li>
+              ) : null}
+              <li data-testid="avatar-core-cost">
+                {attempt.coreMicro == null ? t("unknownCost") : fill(t("coreReportedMicro"), { micro: attempt.coreMicro })}
+              </li>
+            </>
+          ) : null}
+          {attempt.transport === "core" && !attempt.review ? (
             <>
               {(attempt.events ?? []).filter((event) => event.index === 0).map((event) => (
                 <li key={`${event.index}-${event.stage}`} data-testid={`avatar-core-${event.stage}`}>{fill(t("avatarCoreStage"), { stage: event.stage })}</li>
@@ -393,7 +413,7 @@ export function AvatarRequest({
               ) : null}
               <li>{t("avatarCoreNote")}</li>
             </>
-          ) : attempt.jobs.map((job) => {
+          ) : attempt.review ? null : attempt.jobs.map((job) => {
             const stage = view.stages[job.index] ?? job.stage;
             const feedback = avatarJobFeedback({ ...job, stage });
             return <li key={job.id} data-testid={`avatar-job-${job.index}`}>{fill(t(feedback.key), feedback.values)}</li>;
@@ -401,7 +421,52 @@ export function AvatarRequest({
           {attempt.transport !== "core" && attempt.outcome !== "partial" && attempt.jobs.some((job) => job.disposition === "blocked") ? <li>{t("avatarProviderOff")}</li> : null}
         </ul>
       ) : null}
+      {attempt?.views && Object.keys(attempt.views).length ? (
+        <CorePuppet attempt={attempt} viewId={coreView} onView={setCoreView} />
+      ) : null}
     </section>
+  );
+}
+
+function CorePuppet({
+  attempt,
+  viewId,
+  onView,
+}: {
+  attempt: AvatarAttempt;
+  viewId: string;
+  onView: (id: string) => void;
+}) {
+  const { t } = useI18n();
+  const order = ["front", "left", "right", "profile"];
+  const sorted = Object.keys(attempt.views ?? {}).sort((a, b) => {
+    const ai = order.indexOf(a);
+    const bi = order.indexOf(b);
+    return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi);
+  });
+  const selected = sorted.includes(viewId) ? viewId : sorted[0];
+  const view: CharacterView | undefined = selected ? attempt.views?.[selected] : undefined;
+  if (!view) return null;
+  return (
+    <div data-testid="avatar-core-views" className="mt-3 max-w-md">
+      <div className="flex flex-wrap gap-2">
+        {sorted.map((key) => (
+          <button
+            key={key}
+            type="button"
+            data-testid={`avatar-view-${key}`}
+            data-selected={key === selected ? "true" : "false"}
+            onClick={() => onView(key)}
+            className="min-h-11 rounded-full border border-white/40 px-3 text-sm text-white"
+          >
+            {fill(t("avatarViewLabel"), { view: key })}
+          </button>
+        ))}
+      </div>
+      <figure data-testid="avatar-core-stage" data-template="face" data-scenery={attempt.scenery?.separate ? "separate" : "embedded"} className="mx-auto mt-3 w-full max-w-md bg-black">
+        <AvatarStage view={view} emotion="neutral" lids="open" gaze="center" framing="close" scenery={false} />
+      </figure>
+    </div>
   );
 }
 

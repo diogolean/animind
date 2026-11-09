@@ -1,4 +1,5 @@
-import type { AvatarAttempt, AvatarEventRecord, AvatarJobState, AvatarOutcome, AvatarProgressStage, CoreUsageView } from "./contract";
+import type { AvatarAnchorReport, AvatarAttempt, AvatarEventRecord, AvatarJobState, AvatarOutcome, AvatarProgressStage, AvatarReview, AvatarSceneryReport, CharacterView, CoreUsageView, Layer, Viseme } from "./contract";
+import { VISEMES } from "./contract";
 import { AVATAR_PROGRESS_STAGES } from "./contract";
 
 /** Browser key for the poll id. It does not start a job and it is not a generate flag. */
@@ -194,10 +195,217 @@ export function coreNeedsChoice(payload: unknown): boolean {
   return Boolean(payload && typeof payload === "object" && (payload as { status?: unknown }).status === "needs_choice");
 }
 
+const DEFECT = /^[a-z0-9_]{1,80}$/;
+const VIEW_KEY = /^[a-z0-9_]{1,40}$/;
+const LAYER_URL = /^\/api\/files\/[A-Za-z0-9_./%-]{1,240}$/;
+const DATA_URL = /^data:image\/png;base64,[A-Za-z0-9+/=]{8,180000}$/;
+
+function boxInt(value: unknown, min: number, max: number): number | null {
+  return typeof value === "number" && Number.isInteger(value) && value >= min && value <= max ? value : null;
+}
+
+function pair(value: unknown): [number, number] | undefined {
+  if (!Array.isArray(value) || value.length !== 2) return undefined;
+  const x = typeof value[0] === "number" && Number.isFinite(value[0]) ? value[0] : null;
+  const y = typeof value[1] === "number" && Number.isFinite(value[1]) ? value[1] : null;
+  if (x == null || y == null) return undefined;
+  return [x, y];
+}
+
+function safeLayerUrl(url: string): boolean {
+  if (/secret|api[_-]?key/i.test(url)) return false;
+  if (DATA_URL.test(url)) return !/users\//i.test(url);
+  return LAYER_URL.test(url) && !url.includes("..");
+}
+
+function coreLayer(value: unknown): Layer | null {
+  if (!value || typeof value !== "object") return null;
+  const row = value as { name?: unknown; url?: unknown; x?: unknown; y?: unknown; w?: unknown; h?: unknown; z?: unknown };
+  const name = typeof row.name === "string" && VIEW_KEY.test(row.name) ? row.name : "";
+  const url = typeof row.url === "string" ? row.url : "";
+  const x = boxInt(row.x, -8192, 8192);
+  const y = boxInt(row.y, -8192, 8192);
+  const w = boxInt(row.w, 1, 8192);
+  const h = boxInt(row.h, 1, 8192);
+  const z = boxInt(row.z, 0, 100);
+  if (!name || !safeLayerUrl(url) || x == null || y == null || w == null || h == null || z == null) return null;
+  return { name, url, x, y, w, h, z };
+}
+
+function coreView(value: unknown): { view: CharacterView; anchor: Omit<AvatarAnchorReport, "view"> } | null {
+  if (!value || typeof value !== "object") return null;
+  const row = value as { canvas?: unknown; layers?: unknown; visemes?: unknown; expressions?: unknown; eyeRig?: unknown; mouthQA?: unknown };
+  const canvas = row.canvas && typeof row.canvas === "object" ? row.canvas as { w?: unknown; h?: unknown } : null;
+  const w = boxInt(canvas?.w, 1, 8192);
+  const h = boxInt(canvas?.h, 1, 8192);
+  if (w == null || h == null || !Array.isArray(row.layers)) return null;
+  const layers = row.layers.slice(0, 24).map(coreLayer).filter((layer): layer is Layer => Boolean(layer));
+  if (!layers.length) return null;
+  const visemes: CharacterView["visemes"] = {};
+  if (row.visemes && typeof row.visemes === "object") {
+    for (const key of VISEMES) {
+      const layer = coreLayer((row.visemes as Record<string, unknown>)[key]);
+      if (layer) visemes[key as Viseme] = layer;
+    }
+  }
+  const expressions: Record<string, Layer> = {};
+  if (row.expressions && typeof row.expressions === "object") {
+    for (const [key, item] of Object.entries(row.expressions as Record<string, unknown>).slice(0, 12)) {
+      if (!VIEW_KEY.test(key)) continue;
+      const layer = coreLayer(item);
+      if (layer) expressions[key] = layer;
+    }
+  }
+  const eye = row.eyeRig && typeof row.eyeRig === "object" ? row.eyeRig as { maxShift?: unknown; irises?: unknown } : null;
+  const shift = pair(eye?.maxShift);
+  const irises = Array.isArray(eye?.irises)
+    ? eye.irises.slice(0, 4).flatMap((item) => {
+      if (!Array.isArray(item) || item.length !== 3) return [];
+      const circle = item.filter((part): part is number => typeof part === "number" && Number.isFinite(part));
+      return circle.length === 3 ? [circle as [number, number, number]] : [];
+    })
+    : [];
+  const mouth = row.mouthQA && typeof row.mouthQA === "object" ? (row.mouthQA as { anchor?: unknown }).anchor : null;
+  const mouthAnchor = mouth && typeof mouth === "object" ? mouth as { x?: unknown; y?: unknown; nose?: unknown; chin?: unknown; view?: unknown; along?: unknown; moustacheBottom?: unknown } : null;
+  const mouthX = typeof mouthAnchor?.x === "number" && Number.isFinite(mouthAnchor.x) ? mouthAnchor.x : null;
+  const mouthY = typeof mouthAnchor?.y === "number" && Number.isFinite(mouthAnchor.y) ? mouthAnchor.y : null;
+  const nose = pair(mouthAnchor?.nose);
+  const chin = pair(mouthAnchor?.chin);
+  const view: CharacterView = {
+    canvas: { w, h },
+    layers,
+    visemes,
+    ...(Object.keys(expressions).length ? { expressions } : {}),
+    ...(shift && irises.length ? { eyeRig: { maxShift: shift, irises } } : {}),
+  };
+  return {
+    view,
+    anchor: {
+      mouth: mouthX != null && mouthY != null,
+      eyes: Boolean(shift && irises.length),
+      ...(mouthX != null && mouthY != null ? {
+        mouthAnchor: {
+          x: mouthX,
+          y: mouthY,
+          ...(nose ? { nose } : {}),
+          ...(chin ? { chin } : {}),
+          ...(typeof mouthAnchor?.view === "string" && VIEW_KEY.test(mouthAnchor.view) ? { view: mouthAnchor.view } : {}),
+          ...(typeof mouthAnchor?.along === "number" && Number.isFinite(mouthAnchor.along) ? { along: mouthAnchor.along } : {}),
+          ...(typeof mouthAnchor?.moustacheBottom === "number" && Number.isFinite(mouthAnchor.moustacheBottom) ? { moustacheBottom: mouthAnchor.moustacheBottom } : {}),
+        },
+      } : {}),
+    },
+  };
+}
+
+function reportedMicro(value: unknown): number | null {
+  return typeof value === "number" && Number.isInteger(value) && value > 0 && value <= 1_000_000_000 ? value : null;
+}
+
+/** A null, missing, or zero core total stays unknown. A positive micro-USD is the core's figure. */
+export function coreSpendMicro(payload: unknown): number | null {
+  if (!payload || typeof payload !== "object") return null;
+  const usage = (payload as { usage?: unknown }).usage;
+  if (!usage || typeof usage !== "object") return null;
+  const body = usage as { schema?: unknown; totals?: unknown };
+  if (body.schema !== "animind.usage.v1" || !body.totals || typeof body.totals !== "object") return null;
+  const totals = body.totals as { reportedMicro?: unknown; estimatedMicro?: unknown };
+  return reportedMicro(totals.reportedMicro) ?? reportedMicro(totals.estimatedMicro);
+}
+
+/**
+ * `animind.puppet.v3` from Omni-Engine 1e57762.
+ * `review_required`, a defect, or `ready: false` never becomes a ready avatar.
+ */
+export function mapPuppetAvatar(payload: unknown, ownerId: string): AvatarAttempt | null {
+  if (!payload || typeof payload !== "object") return null;
+  const body = payload as Record<string, unknown>;
+  if (body.schema !== "animind.puppet.v3") return null;
+  const requestId = typeof body.id === "string" ? body.id : "";
+  if (!ID.test(requestId) || !ID.test(ownerId)) return null;
+  const defects = Array.isArray(body.defects)
+    ? [...new Set(body.defects.filter((item): item is string => typeof item === "string" && DEFECT.test(item)))].sort()
+    : [];
+  const coreSaysReady = body.status === "ready" && body.ready === true && defects.length === 0;
+  const review: AvatarReview = {
+    status: coreSaysReady ? "ready" : "review_required",
+    ready: coreSaysReady,
+    defects,
+  };
+  const views: Record<string, CharacterView> = {};
+  const anchors: AvatarAnchorReport[] = [];
+  if (body.views && typeof body.views === "object") {
+    for (const [key, item] of Object.entries(body.views as Record<string, unknown>)) {
+      if (!VIEW_KEY.test(key)) continue;
+      const mapped = coreView(item);
+      if (!mapped) continue;
+      views[key] = mapped.view;
+      anchors.push({ view: key, ...mapped.anchor });
+    }
+  }
+  const scenario = body.scenario && typeof body.scenario === "object"
+    ? body.scenario as { embedded?: unknown; control?: unknown; states?: unknown }
+    : {};
+  const embedded = scenario.embedded === true;
+  const states = Array.isArray(scenario.states)
+    ? scenario.states.filter((item): item is "on" | "off" => item === "on" || item === "off")
+    : [];
+  const scenery: AvatarSceneryReport = {
+    embedded,
+    separate: scenario.embedded === false,
+    control: typeof scenario.control === "string" && /^[a-z-]{1,24}$/.test(scenario.control) ? scenario.control : null,
+    states,
+  };
+  const name = safeName(body.name) || "person";
+  const fixture = !(body.provenance && typeof body.provenance === "object" && (body.provenance as { realImage?: unknown }).realImage === true);
+  const jobs: AvatarJobState[] = [{
+    id: requestId,
+    index: 0,
+    name,
+    stage: review.ready ? "ready" : "qa",
+    disposition: "blocked",
+    fixture,
+    actual: null,
+    qa: null,
+    rig: null,
+  }];
+  const outcome: AvatarOutcome = "blocked";
+  return {
+    requestId,
+    ownerId,
+    outcome,
+    code: review.ready ? "core_ready" : "review_required",
+    transport: "core",
+    cost: "unknown",
+    fixture,
+    providerCalls: 0,
+    providerFunction: null,
+    usage: presentCoreUsage(body),
+    coreMicro: coreSpendMicro(body),
+    review,
+    views,
+    anchors,
+    scenery,
+    jobs,
+    events: [{ index: 0, stage: review.ready ? "ready" : "qa", fixture }],
+    keepsDraft: !review.ready,
+  };
+}
+
 /** A core status that is not the owner's job becomes a fixed 404. The payload is not copied. */
 export function presentCorePayload(status: number, payload: unknown, ownerId: string): { status: number; body: AvatarAttempt | { error: string; code?: string } } {
   if (status === 404 || payload == null) return { status: 404, body: avatarMissBody() };
-  if (status !== 200) return { status: status === 403 ? 403 : 502, body: avatarMissBody() };
+  if (status !== 200) {
+    const error = payload && typeof payload === "object" && typeof (payload as { error?: unknown }).error === "string"
+      ? (payload as { error: string }).error
+      : "";
+    if (error === "admin" || error === "login") return { status: 403, body: { error: "Esta conta ainda não pode gerar", code: "unapproved" } };
+    if (error === "spend:price_unavailable") return { status: 403, body: { error: "Preço desta chamada não está publicado", code: "price_unavailable" } };
+    if (error === "spend:credential" || error === "spend:over_cap") return { status: 503, body: { error: "Geração indisponível", code: "unavailable" } };
+    return { status: status === 403 ? 403 : 502, body: avatarMissBody() };
+  }
+  const puppet = mapPuppetAvatar(payload, ownerId);
+  if (puppet) return { status: 200, body: puppet };
   if (coreNeedsChoice(payload)) return { status: 400, body: { error: "O plano do avatar está incompleto", code: "avatar_incomplete" } };
   const mapped = mapCoreAvatar(payload, ownerId);
   if (!mapped) return { status: 502, body: avatarMissBody() };

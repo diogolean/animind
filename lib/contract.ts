@@ -431,10 +431,10 @@ export interface RenderJob {
  * Avatar progress shared with the core writer.
  * The app shows a stage only when an event arrives. It does not fill the
  * gaps with a timer, and it does not treat an offline adapter as image generation.
- * The factory still has no generate_avatar. The core draft exposes
- * POST /v1/avatars and GET /v1/avatars/{id}. This app proxies those routes
- * after a confirmed login. It does not call generate_character_image,
- * create_puppet, or generate_view.
+ * Omni-Engine 1e57762 exposes POST /v1/avatars and GET /v1/avatars/{id}.
+ * generate:true returns schema animind.puppet.v3 (status, defects, views,
+ * layers, mouthQA.anchor, eyeRig, scenario). This app proxies that document.
+ * It does not call generate_character_image, create_puppet, or generate_view.
  */
 export const AVATAR_PROGRESS_STAGES = ["plan", "login", "queued", "image", "cutout", "rig", "qa", "save", "ready", "fail", "retry"] as const;
 export type AvatarProgressStage = (typeof AVATAR_PROGRESS_STAGES)[number];
@@ -477,6 +477,36 @@ export interface CoreUsageView {
   cost: "unknown";
 }
 
+export interface AvatarReview {
+  status: "review_required" | "ready";
+  ready: boolean;
+  defects: string[];
+}
+
+/** Mouth anchor from `mouthQA.anchor`, plus whether the view has an eye rig. */
+export interface AvatarAnchorReport {
+  view: string;
+  mouth: boolean;
+  eyes: boolean;
+  mouthAnchor?: {
+    x: number;
+    y: number;
+    nose?: [number, number];
+    chin?: [number, number];
+    view?: string;
+    along?: number;
+    moustacheBottom?: number;
+  };
+}
+
+/** `scenario.embedded: false` is a separate scenery control, not a cutout. */
+export interface AvatarSceneryReport {
+  embedded: boolean;
+  separate: boolean;
+  control: string | null;
+  states: ("on" | "off")[];
+}
+
 export interface AvatarJobState {
   id: string;
   index: number;
@@ -500,11 +530,19 @@ export interface AvatarAttempt {
   requestId: string;
   ownerId: string;
   outcome: AvatarOutcome;
-  code: "avatar_provider_unavailable" | "reused" | "cancelled" | "generation_not_authorized" | "price_unavailable";
+  code: "avatar_provider_unavailable" | "reused" | "cancelled" | "generation_not_authorized" | "price_unavailable" | "review_required" | "core_ready";
   /** Set when the events came from the core poll, not the offline fixture. */
   transport?: "core";
   /** Absent or unknown is not zero. */
   cost: "unknown";
+  /** Puppet v3 review. `ready` is true only when the core said ready and listed no defects. */
+  review?: AvatarReview;
+  /** Views the core actually returned. A missing profile is not invented. */
+  views?: Record<string, CharacterView>;
+  anchors?: AvatarAnchorReport[];
+  scenery?: AvatarSceneryReport;
+  /** Core usage micro-USD. Null is unknown, never a displayed zero. */
+  coreMicro?: number | null;
   fixture: boolean;
   providerCalls: number;
   providerFunction: null;

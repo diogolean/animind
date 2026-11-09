@@ -19,6 +19,9 @@ const testEmails = [
   "iso-admin-%@example.com",
   "owned-owner-%@example.com",
   "owned-user-%@example.com",
+  "avatar-owner-%@example.com",
+  "avatar-user-%@example.com",
+  "avatar-admin-%@example.com",
 ];
 
 const root = process.cwd();
@@ -306,6 +309,159 @@ describe("postgres account isolation", { skip: url ? false : "isolated DATABASE_
       await new Promise<void>((resolve) => core.close(() => resolve()));
     }
     } finally {
+      await removeTestAccounts(ids);
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("lets an admin call the core mock once and does not write a web spend row", { timeout: 180_000 }, async () => {
+    const posts: { user: string | undefined; generate: boolean }[] = [];
+    let ownerHeader = "";
+    const png = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
+    const layer = (name: string, x: number, y: number) => ({ name, url: png, x, y, w: 8, h: 8, z: 1 });
+    const puppet = {
+      id: "avmock01",
+      schema: "animind.puppet.v3",
+      name: "Ada",
+      status: "review_required",
+      ready: false,
+      defects: ["provider_fixture", "view_profile_missing"],
+      views: {
+        front: {
+          canvas: { w: 80, h: 100 },
+          layers: [layer("head", 10, 8), layer("torso", 16, 70)],
+          visemes: { X: layer("mouth_X", 30, 48) },
+          expressions: { neutral: layer("expression_neutral", 30, 48) },
+          eyeRig: { maxShift: [4, 3], irises: [[28, 36, 3], [48, 36, 3]] },
+          mouthQA: { anchor: { x: 38, y: 52, nose: [40, 30], chin: [40, 70], view: "front", along: 0.5, moustacheBottom: 58 } },
+        },
+        left: { canvas: { w: 80, h: 100 }, layers: [layer("head", 12, 8)], visemes: { X: layer("mouth_X", 20, 48) } },
+      },
+      scenario: { embedded: false, control: "shared", states: ["on", "off"] },
+      qa: { costUsd: null },
+      provenance: { realImage: false },
+      usage: { schema: "animind.usage.v1", calls: [], totals: { calls: 0, estimatedMicro: null, reportedMicro: null } },
+    };
+    const core = createServer((request, response) => {
+      const chunks: Buffer[] = [];
+      request.on("data", (chunk) => chunks.push(chunk));
+      request.on("end", () => {
+        const user = request.headers["x-animind-user"];
+        const header = Array.isArray(user) ? user[0] : user;
+        if (request.method === "POST" && request.url === "/v1/avatars") {
+          const body = JSON.parse(Buffer.concat(chunks).toString("utf8") || "{}") as { generate?: unknown };
+          posts.push({ user: header, generate: body.generate === true });
+          ownerHeader = header ?? "";
+          response.writeHead(200, { "content-type": "application/json" });
+          response.end(JSON.stringify(puppet));
+          return;
+        }
+        if (request.method === "GET" && request.url === "/v1/avatars/avmock01" && header && header === ownerHeader) {
+          response.writeHead(200, { "content-type": "application/json" });
+          response.end(JSON.stringify(puppet));
+          return;
+        }
+        response.writeHead(404, { "content-type": "application/json" });
+        response.end(JSON.stringify({ detail: "avatar not found" }));
+      });
+    });
+    const corePort = await new Promise<number>((resolve) => {
+      core.listen(0, "127.0.0.1", () => {
+        const address = core.address();
+        resolve(typeof address === "object" && address ? address.port : 0);
+      });
+    });
+    const dir = await mkdtemp(path.join(os.tmpdir(), "animind-iso-avatar-"));
+    process.env.ANIMINDLY_DATA_DIR = dir;
+    process.env.ANIMINDLY_SKIP_ENV_FILE = "1";
+    process.env.ANIMINDLY_AUTH_SECRET = randomBytes(24).toString("base64url");
+    process.env.ANIMINDLY_SKIP_CHARACTER_IMPORT = "1";
+    delete process.env.BLOB_READ_WRITE_TOKEN;
+    delete process.env.BLOB_STORE_ID;
+    delete process.env.VERCEL;
+    const password = randomBytes(18).toString("base64url");
+    const owner = await upsertPilotSuperAdmin(`avatar-owner-${randomBytes(3).toString("hex")}@example.com`, password);
+    const ids = [owner.id];
+    const price = ownerPriceTable().replace(
+      '"entries":[',
+      '"entries":[{"operation":"avatar","provider":"core","model":"unspecified","currency":"USD","minor":1,"unit":"call","source":"fixture, not an official rate","sourceDate":"2026-11-07"},',
+    );
+    try {
+      const user = await createAccount(owner, {
+        email: `avatar-user-${randomBytes(3).toString("hex")}@example.com`,
+        name: "Visitor",
+        password,
+        role: "user",
+      });
+      const admin = await createAccount(owner, {
+        email: `avatar-admin-${randomBytes(3).toString("hex")}@example.com`,
+        name: "Admin",
+        password,
+        role: "admin",
+      });
+      assert.equal(user.ok && admin.ok, true);
+      if (!user.ok || !admin.ok) return;
+      ids.push(user.value.id, admin.value.id);
+      const app = await startApp(dir, {
+        ANIMINDLY_CORE_URL: `http://127.0.0.1:${corePort}`,
+        ANIMINDLY_PRICE_TABLE_JSON: price,
+      });
+      try {
+        const body = { prompt: "A speech by Ada", language: "en-US" };
+        const anon = await hit(app.base, "/api/avatars", undefined, "POST", body);
+        assert.equal(anon.status, 401);
+        const userLogin = await login(app.base, user.value.email, password);
+        const adminLogin = await login(app.base, admin.value.email, password);
+        const visitor = await hit(app.base, "/api/avatars", userLogin.cookie, "POST", body);
+        assert.equal(visitor.status, 403);
+        assert.equal(JSON.parse(visitor.text).code, "unapproved");
+        assert.equal(posts.length, 0);
+        const first = await hit(app.base, "/api/avatars", adminLogin.cookie, "POST", body);
+        assert.equal(first.status, 200, first.text);
+        const made = JSON.parse(first.text) as {
+          requestId: string;
+          cost: string;
+          coreMicro: number | null;
+          review: { status: string; ready: boolean; defects: string[] };
+          views: Record<string, { layers: unknown[] }>;
+          scenery: { separate: boolean; embedded: boolean };
+          anchors: { view: string; mouth: boolean; eyes: boolean }[];
+        };
+        assert.equal(made.requestId, "avmock01");
+        assert.equal(made.review.status, "review_required");
+        assert.equal(made.review.ready, false);
+        assert.equal(made.review.defects.includes("provider_fixture"), true);
+        assert.equal("profile" in made.views, false);
+        assert.equal(made.views.front.layers.length, 2);
+        assert.equal(made.scenery.separate, true);
+        assert.equal(made.scenery.embedded, false);
+        assert.equal(made.anchors.some((item) => item.view === "front" && item.mouth && item.eyes), true);
+        assert.equal(made.cost, "unknown");
+        assert.equal(made.coreMicro, null);
+        assert.equal(first.text.includes("$0"), false);
+        assert.equal(first.text.includes("\"ready\":true"), false);
+        const again = await hit(app.base, "/api/avatars", adminLogin.cookie, "POST", body);
+        assert.equal(again.status, 200, again.text);
+        assert.equal(JSON.parse(again.text).requestId, "avmock01");
+        assert.equal(posts.length, 1);
+        assert.equal(posts[0]?.generate, true);
+        const seen = await hit(app.base, "/api/avatars?requestId=avmock01", adminLogin.cookie);
+        assert.equal(seen.status, 200, seen.text);
+        assert.equal(JSON.parse(seen.text).review.ready, false);
+        const hidden = await hit(app.base, "/api/avatars?requestId=avmock01", userLogin.cookie);
+        assert.equal(hidden.status, 404);
+        assert.equal(hidden.text.includes("provider_fixture"), false);
+        assert.equal((await hit(app.base, "/api/admin/spend", adminLogin.cookie)).status, 403);
+        assert.equal((await hit(app.base, "/api/admin/spend", userLogin.cookie)).status, 403);
+        const rows = (await listEntries()).entries.filter((entry) => (
+          (entry.userId === admin.value.id || entry.userId === user.value.id) && entry.operation === "avatar"
+        ));
+        assert.equal(rows.length, 0);
+      } finally {
+        await app.stop();
+      }
+    } finally {
+      await new Promise<void>((resolve) => core.close(() => resolve()));
       await removeTestAccounts(ids);
       await rm(dir, { recursive: true, force: true });
     }
