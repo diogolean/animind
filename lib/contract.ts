@@ -431,9 +431,9 @@ export interface RenderJob {
  * Avatar progress shared with the core writer.
  * The app shows a stage only when an event arrives. It does not fill the
  * gaps with a timer, and it does not treat an offline adapter as image generation.
- * Omni-Engine 1e57762 exposes POST /v1/avatars and GET /v1/avatars/{id}.
+ * Omni-Engine 14dcc109 exposes POST /v1/avatars and GET /v1/avatars/{id}.
  * generate:true returns schema animind.puppet.v3 (status, defects, views,
- * layers, mouthQA.anchor, eyeRig, scenario). This app proxies that document.
+ * layers, per-view anchors, eyeRig, scenario). This app proxies that document.
  * It does not call generate_character_image, create_puppet, or generate_view.
  */
 export const AVATAR_PROGRESS_STAGES = ["plan", "login", "queued", "image", "cutout", "rig", "qa", "save", "ready", "fail", "retry"] as const;
@@ -483,11 +483,15 @@ export interface AvatarReview {
   defects: string[];
 }
 
-/** Mouth anchor from `mouthQA.anchor`, plus whether the view has an eye rig. */
+/** Mouth and feature centers from `views.*.anchors` (`canvas_px`) or `mouthQA.anchor`. */
 export interface AvatarAnchorReport {
   view: string;
   mouth: boolean;
   eyes: boolean;
+  /** Present only when the core published that center in canvas pixels. */
+  neck?: [number, number];
+  head?: [number, number];
+  torso?: [number, number];
   mouthAnchor?: {
     x: number;
     y: number;

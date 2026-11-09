@@ -3,7 +3,7 @@ import { newId } from "@/lib/accounts/paths";
 import { isUser, requireUser } from "@/lib/accounts/http";
 import { charactersFor } from "@/lib/accounts/store";
 import { cancelAvatarAttempt, decideAvatarRequest, fileAvatarStore } from "@/lib/avatar-batch";
-import { avatarMissBody, avatarReconnect, avatarTransport, labelOfflineAttempt, presentCorePayload, promptForCore } from "@/lib/avatar-core";
+import { avatarMissBody, avatarReconnect, avatarTransport, coreAvatarIdentity, labelOfflineAttempt, presentCorePayload, promptForCore } from "@/lib/avatar-core";
 import { avatarAttemptKey, inferAvatarPlan } from "@/lib/avatar-plan";
 import { coreMode, coreUserHeader, json, proxyJson } from "@/lib/core";
 import { productEnv } from "@/lib/product-env";
@@ -89,16 +89,18 @@ export async function POST(req: Request) {
     const headers: Record<string, string> = { ...coreUserHeader(actor.id) };
     const adminToken = productEnv("ADMIN_TOKEN");
     if (adminToken) headers["x-animind-admin"] = adminToken;
+    const coreBody = JSON.stringify({
+      prompt: promptForCore(prompt, names),
+      name: (names[0] ?? "person").slice(0, 40),
+      language: language ?? plan.language,
+      reuse: false,
+      generate: true,
+    });
+    Object.assign(headers, coreAvatarIdentity(coreBody));
     const proxied = await proxyJson("/avatars", {
       method: "POST",
       headers,
-      body: JSON.stringify({
-        prompt: promptForCore(prompt, names),
-        name: (names[0] ?? "person").slice(0, 40),
-        language: language ?? plan.language,
-        requestedResolution: plan.requestedResolution,
-        generate: true,
-      }),
+      body: coreBody,
     });
     const payload = await proxied.json().catch(() => null);
     const presented = presentCorePayload(proxied.status, payload, actor.id);

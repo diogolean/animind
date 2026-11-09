@@ -315,7 +315,7 @@ describe("postgres account isolation", { skip: url ? false : "isolated DATABASE_
   });
 
   it("lets an admin call the core mock once and does not write a web spend row", { timeout: 180_000 }, async () => {
-    const posts: { user: string | undefined; generate: boolean }[] = [];
+    const posts: { user: string | undefined; generate: boolean; idempotency: string; requestId: string; reuse: boolean }[] = [];
     let ownerHeader = "";
     const png = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
     const layer = (name: string, x: number, y: number) => ({ name, url: png, x, y, w: 8, h: 8, z: 1 });
@@ -349,8 +349,16 @@ describe("postgres account isolation", { skip: url ? false : "isolated DATABASE_
         const user = request.headers["x-animind-user"];
         const header = Array.isArray(user) ? user[0] : user;
         if (request.method === "POST" && request.url === "/v1/avatars") {
-          const body = JSON.parse(Buffer.concat(chunks).toString("utf8") || "{}") as { generate?: unknown };
-          posts.push({ user: header, generate: body.generate === true });
+          const body = JSON.parse(Buffer.concat(chunks).toString("utf8") || "{}") as { generate?: unknown; reuse?: unknown; requestedResolution?: unknown };
+          const idempotency = request.headers["idempotency-key"];
+          const requestId = request.headers["x-request-id"];
+          posts.push({
+            user: header,
+            generate: body.generate === true,
+            reuse: body.reuse === false && !("requestedResolution" in body),
+            idempotency: typeof idempotency === "string" ? idempotency : "",
+            requestId: typeof requestId === "string" ? requestId : "",
+          });
           ownerHeader = header ?? "";
           response.writeHead(200, { "content-type": "application/json" });
           response.end(JSON.stringify(puppet));
@@ -445,6 +453,9 @@ describe("postgres account isolation", { skip: url ? false : "isolated DATABASE_
         assert.equal(JSON.parse(again.text).requestId, "avmock01");
         assert.equal(posts.length, 1);
         assert.equal(posts[0]?.generate, true);
+        assert.equal(posts[0]?.reuse, true);
+        assert.match(posts[0]?.idempotency ?? "", /^[A-Za-z0-9_-]{8,80}$/);
+        assert.match(posts[0]?.requestId ?? "", /^[A-Za-z0-9_-]{8,80}$/);
         const seen = await hit(app.base, "/api/avatars?requestId=avmock01", adminLogin.cookie);
         assert.equal(seen.status, 200, seen.text);
         assert.equal(JSON.parse(seen.text).review.ready, false);

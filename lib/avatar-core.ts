@@ -6,6 +6,7 @@ import { AVATAR_PROGRESS_STAGES } from "./contract";
 export const AVATAR_POLL_KEY = "animindly-avatar-poll";
 
 const ID = /^[A-Za-z0-9_-]{1,80}$/;
+const CORE_IDENTITY = /^[A-Za-z0-9_-]{8,80}$/;
 const ALLOWED_ERROR = new Set(["generation_not_authorized", "price_unavailable", "qa_rejected", "avatar_not_found", "login"]);
 const LEAK = /@|\/|\\|gemini|deepseek|openai|birefnet|api[_-]?key|secret|users\/|provider|costUsd|token/i;
 
@@ -45,6 +46,20 @@ export function sanitizeAvatarError(error: unknown): { code: string; recoverable
 
 export function avatarMissBody(): { error: "Pedido não encontrado" } {
   return { error: "Pedido não encontrado" };
+}
+
+/**
+ * Identity the core requires on a paid `POST /v1/avatars`.
+ * Both values are 8–80 URL-safe characters and stay the same for the same body.
+ */
+export function coreAvatarIdentity(body: string): { "idempotency-key": string; "x-request-id": string } {
+  let hash = 5381;
+  for (let i = 0; i < body.length; i += 1) hash = ((hash << 5) + hash + body.charCodeAt(i)) >>> 0;
+  const hex = hash.toString(16).padStart(8, "0");
+  const key = `coreav_${hex}`;
+  const requestId = `corereq_${hex}`;
+  if (!CORE_IDENTITY.test(key) || !CORE_IDENTITY.test(requestId)) throw new Error("core identity");
+  return { "idempotency-key": key, "x-request-id": requestId };
 }
 
 export function promptForCore(prompt: string, names: string[]): string {
@@ -234,7 +249,7 @@ function coreLayer(value: unknown): Layer | null {
 
 function coreView(value: unknown): { view: CharacterView; anchor: Omit<AvatarAnchorReport, "view"> } | null {
   if (!value || typeof value !== "object") return null;
-  const row = value as { canvas?: unknown; layers?: unknown; visemes?: unknown; expressions?: unknown; eyeRig?: unknown; mouthQA?: unknown };
+  const row = value as { canvas?: unknown; layers?: unknown; visemes?: unknown; expressions?: unknown; eyeRig?: unknown; mouthQA?: unknown; anchors?: unknown };
   const canvas = row.canvas && typeof row.canvas === "object" ? row.canvas as { w?: unknown; h?: unknown } : null;
   const w = boxInt(canvas?.w, 1, 8192);
   const h = boxInt(canvas?.h, 1, 8192);
@@ -267,8 +282,16 @@ function coreView(value: unknown): { view: CharacterView; anchor: Omit<AvatarAnc
     : [];
   const mouth = row.mouthQA && typeof row.mouthQA === "object" ? (row.mouthQA as { anchor?: unknown }).anchor : null;
   const mouthAnchor = mouth && typeof mouth === "object" ? mouth as { x?: unknown; y?: unknown; nose?: unknown; chin?: unknown; view?: unknown; along?: unknown; moustacheBottom?: unknown } : null;
-  const mouthX = typeof mouthAnchor?.x === "number" && Number.isFinite(mouthAnchor.x) ? mouthAnchor.x : null;
-  const mouthY = typeof mouthAnchor?.y === "number" && Number.isFinite(mouthAnchor.y) ? mouthAnchor.y : null;
+  const published = row.anchors && typeof row.anchors === "object" && (row.anchors as { coordinateSpace?: unknown }).coordinateSpace === "canvas_px"
+    ? row.anchors as { mouth?: unknown; eyes?: unknown; neck?: unknown; head?: unknown; torso?: unknown }
+    : null;
+  const mouthPoint = pair(published?.mouth);
+  const eyePoints = Array.isArray(published?.eyes) ? published.eyes.flatMap((item) => pair(item) ? [item] : []) : [];
+  const neck = pair(published?.neck);
+  const head = pair(published?.head);
+  const torso = pair(published?.torso);
+  const mouthX = typeof mouthAnchor?.x === "number" && Number.isFinite(mouthAnchor.x) ? mouthAnchor.x : mouthPoint?.[0] ?? null;
+  const mouthY = typeof mouthAnchor?.y === "number" && Number.isFinite(mouthAnchor.y) ? mouthAnchor.y : mouthPoint?.[1] ?? null;
   const nose = pair(mouthAnchor?.nose);
   const chin = pair(mouthAnchor?.chin);
   const view: CharacterView = {
@@ -282,7 +305,10 @@ function coreView(value: unknown): { view: CharacterView; anchor: Omit<AvatarAnc
     view,
     anchor: {
       mouth: mouthX != null && mouthY != null,
-      eyes: Boolean(shift && irises.length),
+      eyes: Boolean(shift && irises.length) || eyePoints.length > 0,
+      ...(neck ? { neck } : {}),
+      ...(head ? { head } : {}),
+      ...(torso ? { torso } : {}),
       ...(mouthX != null && mouthY != null ? {
         mouthAnchor: {
           x: mouthX,
@@ -314,7 +340,7 @@ export function coreSpendMicro(payload: unknown): number | null {
 }
 
 /**
- * `animind.puppet.v3` from Omni-Engine 1e57762.
+ * `animind.puppet.v3` from Omni-Engine 14dcc109.
  * `review_required`, a defect, or `ready: false` never becomes a ready avatar.
  */
 export function mapPuppetAvatar(payload: unknown, ownerId: string): AvatarAttempt | null {
@@ -326,7 +352,7 @@ export function mapPuppetAvatar(payload: unknown, ownerId: string): AvatarAttemp
   const defects = Array.isArray(body.defects)
     ? [...new Set(body.defects.filter((item): item is string => typeof item === "string" && DEFECT.test(item)))].sort()
     : [];
-  const coreSaysReady = body.status === "ready" && body.ready === true && defects.length === 0;
+  const coreSaysReady = body.status === "ready" && body.ready === true && body.review_required !== true && defects.length === 0;
   const review: AvatarReview = {
     status: coreSaysReady ? "ready" : "review_required",
     ready: coreSaysReady,
@@ -400,6 +426,7 @@ export function presentCorePayload(status: number, payload: unknown, ownerId: st
       ? (payload as { error: string }).error
       : "";
     if (error === "admin" || error === "login") return { status: 403, body: { error: "Esta conta ainda não pode gerar", code: "unapproved" } };
+    if (error === "spend:approval") return { status: 403, body: { error: "O núcleo não aprovou este gasto", code: "approval" } };
     if (error === "spend:price_unavailable") return { status: 403, body: { error: "Preço desta chamada não está publicado", code: "price_unavailable" } };
     if (error === "spend:credential" || error === "spend:over_cap") return { status: 503, body: { error: "Geração indisponível", code: "unavailable" } };
     return { status: status === 403 ? 403 : 502, body: avatarMissBody() };

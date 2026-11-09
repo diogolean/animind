@@ -34,6 +34,7 @@ const EN = {
   avatarFixtureStage: "Fixture · {stage}",
   avatarCoreStage: "Local core · {stage}",
   avatarCoreNote: "Local core, no provider. This is not a finished avatar.",
+  avatarSpendApproval: "The core has not approved this avatar spend. No provider was called.",
   avatarReviewRequired: "This result needs review. It is not ready.",
   avatarCoreReady: "The core marked this avatar ready.",
   avatarScenerySeparate: "Scenery is a separate control. It is not painted into this character.",
@@ -362,6 +363,7 @@ const PT: Record<keyof typeof EN, string> = {
   avatarFixtureStage: "Simulado · {stage}",
   avatarCoreStage: "Núcleo local · {stage}",
   avatarCoreNote: "Núcleo local, sem provedor. Isto não é um avatar pronto.",
+  avatarSpendApproval: "O núcleo não aprovou este gasto de avatar. Nenhum provedor foi chamado.",
   avatarReviewRequired: "Este resultado precisa de revisão. Não está pronto.",
   avatarCoreReady: "O núcleo marcou este avatar como pronto.",
   avatarScenerySeparate: "O cenário é um controle separado. Não está pintado neste personagem.",
@@ -701,6 +703,7 @@ export function fill(template: string, values: Record<string, string | number>):
 const API_ERROR_KEYS: Partial<Record<string, MessageKey>> = {
   disabled: "generationDisabled",
   unapproved: "generationUnapproved",
+  approval: "avatarSpendApproval",
   price_unavailable: "priceUnavailable",
   budget: "generationBudget",
   rate: "generationRate",

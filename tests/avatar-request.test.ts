@@ -6,7 +6,7 @@ import { avatarJobReady, cancelAvatarAttempt, decideAvatarRequest, memoryAvatarS
 import { AVATAR_PAID_CALLS_AUTHORIZED } from "../lib/avatar-provider";
 import { realAvatarCall } from "../lib/accounts/generation-policy";
 import { abortAvatarProgress, applyAvatarEvent, avatarBatchShape, avatarJobFeedback, avatarRunning, costIsReportedZero, emptyAvatarProgress, foldAvatarEvents } from "../lib/avatar-progress";
-import { avatarReconnect, avatarTransport, coreSpendMicro, labelOfflineAttempt, mapCoreAvatar, mapCoreStage, mapPuppetAvatar, presentCoreDebate, presentCorePayload, presentCoreSheet, presentCoreUsage, presentDebateCreated, presentDebateResponse, presentPlanUsage, promptForCore, rememberAvatarPoll, rememberedAvatarPoll, sanitizeAvatarError } from "../lib/avatar-core";
+import { avatarReconnect, avatarTransport, coreAvatarIdentity, coreSpendMicro, labelOfflineAttempt, mapCoreAvatar, mapCoreStage, mapPuppetAvatar, presentCoreDebate, presentCorePayload, presentCoreSheet, presentCoreUsage, presentDebateCreated, presentDebateResponse, presentPlanUsage, promptForCore, rememberAvatarPoll, rememberedAvatarPoll, sanitizeAvatarError } from "../lib/avatar-core";
 import { fill, translate } from "../lib/i18n";
 
 describe("avatar plan", () => {
@@ -431,6 +431,10 @@ describe("avatar routes", () => {
     assert.equal(route.includes("beginGeneration"), false);
     assert.ok(gateAt >= 0 && proxyAt > gateAt);
     assert.match(post, /generate:\s*true/);
+    assert.match(post, /reuse:\s*false/);
+    assert.match(post, /coreAvatarIdentity\(coreBody\)/);
+    const sent = post.slice(post.indexOf("const coreBody"), post.indexOf("Object.assign"));
+    assert.equal(sent.includes("requestedResolution"), false);
     assert.match(post, /existing\?\.transport === "core"/);
     assert.equal(post.includes("generate_character_image"), false);
     assert.equal(post.includes("create_puppet"), false);
@@ -506,6 +510,46 @@ describe("puppet v3 avatar", () => {
     assert.equal(mapped.anchors?.find((item) => item.view === "front")?.mouth, true);
     assert.equal(mapped.anchors?.find((item) => item.view === "front")?.eyes, true);
     assert.equal(mapped.anchors?.find((item) => item.view === "front")?.mouthAnchor?.x, 38);
+    const plate = (name: string, x: number, y: number) => ({ name, url: PNG, x, y, w: 8, h: 8, z: 1 });
+    const published = mapPuppetAvatar(puppetFixture({
+      status: "ready",
+      ready: true,
+      review_required: true,
+      defects: [],
+      views: {
+        front: {
+          canvas: { w: 80, h: 100 },
+          layers: [plate("head", 10, 8), plate("neck", 16, 40), plate("torso", 16, 70)],
+          visemes: { X: plate("mouth_X", 30, 48) },
+          anchors: {
+            coordinateSpace: "canvas_px",
+            mouth: [38, 52],
+            eyes: [[28, 36], [48, 36]],
+            neck: [40, 60],
+            head: [40, 20],
+            torso: [40, 80],
+          },
+        },
+      },
+    }), "usr_admin");
+    assert.equal(published?.review?.ready, false);
+    assert.equal(published?.review?.status, "review_required");
+    const front = published?.anchors?.find((item) => item.view === "front");
+    assert.equal(front?.mouth, true);
+    assert.equal(front?.eyes, true);
+    assert.deepEqual(front?.mouthAnchor && [front.mouthAnchor.x, front.mouthAnchor.y], [38, 52]);
+    assert.deepEqual(front?.neck, [40, 60]);
+    assert.deepEqual(front?.head, [40, 20]);
+    assert.deepEqual(front?.torso, [40, 80]);
+    const identity = coreAvatarIdentity('{"generate":true,"name":"Ada"}');
+    assert.match(identity["idempotency-key"], /^[A-Za-z0-9_-]{8,80}$/);
+    assert.match(identity["x-request-id"], /^[A-Za-z0-9_-]{8,80}$/);
+    assert.deepEqual(identity, coreAvatarIdentity('{"generate":true,"name":"Ada"}'));
+    assert.notEqual(identity["idempotency-key"], coreAvatarIdentity('{"generate":true,"name":"Bento"}')["idempotency-key"]);
+    const blocked = presentCorePayload(403, { error: "spend:approval" }, "usr_admin");
+    assert.equal(blocked.status, 403);
+    assert.equal("code" in blocked.body && blocked.body.code, "approval");
+    assert.equal(JSON.stringify(blocked.body).includes("\"ready\":true"), false);
     assert.equal(mapped.scenery?.embedded, false);
     assert.equal(mapped.scenery?.separate, true);
     assert.deepEqual(mapped.scenery?.states, ["on", "off"]);
@@ -545,6 +589,8 @@ describe("puppet v3 avatar", () => {
     assert.equal(JSON.stringify(honest).includes("$0"), false);
     assert.equal(translate("en", "unknownCost").includes("$0"), false);
     assert.equal(translate("pt-BR", "unknownCost"), "Custo desconhecido");
+    assert.match(translate("en", "avatarSpendApproval"), /has not approved/);
+    assert.match(translate("pt-BR", "avatarSpendApproval"), /não aprovou/);
     assert.match(translate("en", "avatarReviewRequired"), /not ready/);
     assert.match(translate("pt-BR", "avatarReviewRequired"), /Não está pronto/);
     assert.match(translate("en", "avatarScenerySeparate"), /separate control/);
