@@ -1,7 +1,7 @@
-import { VISEMES, type Character, type CharacterView, type Layer, type ViewName, type Viseme } from "../contract";
+import { reservedMouthVariations, VISEMES, type Character, type CharacterView, type Layer, type ViewName, type Viseme } from "../contract";
 import type { LibraryCharacter } from "./types";
 
-const emptyView = (): CharacterView => ({ canvas: { w: 512, h: 640 }, layers: [], visemes: {} });
+const emptyView = (): CharacterView => ({ canvas: { w: 512, h: 640 }, layers: [], visemes: {}, mouthVariations: reservedMouthVariations() });
 
 function asLayer(value: unknown): Layer | null {
   if (!value || typeof value !== "object") return null;
@@ -38,6 +38,7 @@ function asView(value: unknown): CharacterView | null {
     },
     layers,
     visemes,
+    mouthVariations: reservedMouthVariations(),
     ...(expressions ? { expressions } : {}),
     ...(eyeRig ? { eyeRig } : {}),
   };
@@ -104,6 +105,7 @@ function viewFromLayers(puppet: Record<string, unknown>): CharacterView | null {
     },
     layers,
     visemes: {},
+    mouthVariations: reservedMouthVariations(),
   };
 }
 

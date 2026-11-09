@@ -4,10 +4,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { AvatarStage } from "@/components/avatar-stage";
+import { PendingFace } from "@/components/pending-face";
 import { useI18n } from "@/components/locale";
 import { apiErrorMessage, fill, statusLabel, type MessageKey } from "@/lib/i18n";
 import { sceneryPreference, type PlateKind } from "@/lib/avatar-source";
 import type { CharacterView } from "@/lib/contract";
+import { isChargeName } from "@/lib/charge-parity";
 import { pairPlates, replaceSharedScenery, sceneryChoice, sharedBackground } from "@/lib/library-pair";
 import { Loader2 } from "lucide-react";
 import type { LibraryCharacter, PublicUser } from "@/lib/accounts/types";
@@ -105,7 +107,7 @@ export function MyCharacters() {
   }, []);
   const plates = pairPlates(characters ?? []);
   const pair = sharedBackground(plates, sceneryId, sceneryOn);
-  const pairNote: MessageKey = pair.reason === "needs-original" ? "sharedPairOriginal" : pair.mode === "on" ? "sharedPairOn" : "sharedPairOff";
+  const pairNote: MessageKey = pair.reason === "needs-original" ? "sharedPairOriginal" : pair.mode === "on" ? "sharedPairOn" : pair.reason === "ready" ? "sharedPairHeld" : "sharedPairOff";
 
   return (
     <div data-testid="my-characters" className="mx-auto flex w-full min-w-0 max-w-5xl flex-1 flex-col px-5 py-6 landscape:py-4 sm:px-8 sm:py-10">
@@ -199,7 +201,7 @@ export function MyCharacters() {
                 data-testid="character-card"
                 className="flex w-full flex-col overflow-hidden rounded-[1.5rem] border border-white/10 bg-black transition hover:border-white/25"
               >
-                <CharacterFace character={character} emptyLabel={t("noFrontView")} />
+                <CharacterFace character={character} pendingLabel={t("pendingPart")} emptyLabel={t("noFrontView")} scenery={pair.mode === "on"} sceneryId={pair.sceneryId} />
                 <div className="flex items-center justify-between gap-3 px-4 py-3">
                   <div className="min-w-0">
                     <p className="truncate font-medium">{character.name}</p>
@@ -261,9 +263,10 @@ export function MyCharacters() {
   );
 }
 
-function CharacterFace({ character, emptyLabel }: { character: LibraryCharacter; emptyLabel: string }) {
+function CharacterFace({ character, pendingLabel, emptyLabel, scenery, sceneryId }: { character: LibraryCharacter; pendingLabel: string; emptyLabel: string; scenery: boolean; sceneryId: string | null }) {
   const [view, setView] = useState<CharacterView | null>(null);
   const [kind, setKind] = useState<PlateKind | "pending" | "source">("pending");
+  const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
     let cancel = false;
@@ -271,24 +274,33 @@ function CharacterFace({ character, emptyLabel }: { character: LibraryCharacter;
       .then((response) => (response.ok ? response.json() : null))
       .then((data: { rig?: { views?: { front?: CharacterView } } } | null) => {
         if (cancel) return;
+        setLoaded(true);
         const front = data?.rig?.views?.front;
-        if (front && front.layers.length > 0) {
+        if (front && front.layers.some((layer) => layer.name === "head" || layer.name === "torso")) {
           setView(front);
+          return;
+        }
+        if (isChargeName(character.name)) {
+          setKind("pending");
           return;
         }
         setKind("source");
       })
       .catch(() => {
-        if (!cancel) setKind("source");
+        if (cancel) return;
+        setLoaded(true);
+        setKind(isChargeName(character.name) ? "pending" : "source");
       });
     return () => {
       cancel = true;
     };
-  }, [character.id]);
+  }, [character.id, character.name]);
 
   if (!view) {
+    if (!loaded) return <div data-template="face" data-ground="black" data-plate="pending" className="aspect-[4/5] bg-black" />;
+    if (kind === "pending" || isChargeName(character.name)) return <PendingFace label={pendingLabel} />;
     return (
-      <div data-template="face" data-ground="black" data-plate={kind === "source" ? "source" : "pending"} className="flex aspect-[4/5] items-center justify-center bg-black">
+      <div data-template="face" data-ground="black" data-plate="source" className="flex aspect-[4/5] items-center justify-center bg-black">
         {kind === "source" && character.views.front ? (
           <img src={character.views.front} alt="" data-testid="card-view-front" className="max-h-full max-w-full object-contain" />
         ) : kind === "source" ? (
@@ -300,7 +312,7 @@ function CharacterFace({ character, emptyLabel }: { character: LibraryCharacter;
 
   return (
     <div data-testid="card-stage" data-template="face" data-ground={kind === "baked" ? "baked" : "black"} data-plate={kind} className="aspect-[4/5] bg-black">
-      <AvatarStage view={view} emotion="neutral" lids="open" gaze="center" framing="close" scenery={false} onPlate={(plate) => setKind(plate.kind)} />
+      <AvatarStage view={view} emotion="neutral" lids="open" gaze="center" framing="close" scenery={scenery} sceneryId={sceneryId} onPlate={(plate) => setKind(plate.kind)} />
     </div>
   );
 }

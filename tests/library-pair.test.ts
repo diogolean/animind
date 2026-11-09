@@ -42,6 +42,8 @@ describe("shared background", () => {
     ]);
     assert.equal(saved[0]?.transparent, true);
     assert.equal(saved[1]?.transparent, false);
+    assert.equal(pairPlates([{ id: "empty", layers: [] }])[0]?.transparent, true);
+    assert.equal(pairPlates([{ id: "scene", layers: [{ name: "scenery", url: "studio.png" }] }])[0]?.transparent, true);
     assert.equal(sharedBackground(saved, "room", true).reason, "needs-original");
   });
 

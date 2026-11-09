@@ -47,12 +47,12 @@ export function pairPlates(characters: readonly { id: string; layers: readonly {
   }));
 }
 
-/** An avatar file, or a head/torso stack with no baked body. A body plate is the painted picture. */
+/** An avatar file, or a head/torso stack with no baked body. A body plate is the painted picture. An empty figure is not a baked plate. */
 function plateIsTransparent(layers: readonly { name: string }[]): boolean {
-  const names = new Set(layers.map((layer) => layer.name));
-  if (names.has("avatar")) return true;
-  if (names.has("body")) return false;
-  return names.has("head") || names.has("torso");
+  const figure = layers.filter((layer) => layer.name !== "scenery");
+  if (figure.some((layer) => layer.name === "body")) return false;
+  if (figure.some((layer) => layer.name === "avatar" || layer.name === "head" || layer.name === "torso")) return true;
+  return figure.length === 0;
 }
 
 const SCENERY_ID = "animindly-scenery-id";

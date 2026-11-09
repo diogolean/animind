@@ -42,12 +42,11 @@ describe("puppet controller", () => {
     const realSlots = controllerSlots({}, real);
     assert.deepEqual(chargeSlots.map((slot) => slot.id), realSlots.map((slot) => slot.id));
     assert.deepEqual(chargeSlots.map((slot) => slot.id), ["front", "three_quarter_left", "three_quarter_right", "profile"]);
-    assert.equal(chargeSlots.find((slot) => slot.id === "front")?.present, true);
-    assert.equal(chargeSlots.find((slot) => slot.id === "three_quarter_left")?.present, false);
-    assert.equal(chargeSlots.find((slot) => slot.id === "three_quarter_left")?.reason, "reused-front");
-    assert.equal(chargeSlots.find((slot) => slot.id === "three_quarter_right")?.reason, "reused-front");
+    assert.equal(chargeSlots.find((slot) => slot.id === "front")?.present, false);
+    assert.equal(chargeSlots.find((slot) => slot.id === "three_quarter_left")?.reason, "absent");
+    assert.equal(chargeSlots.find((slot) => slot.id === "three_quarter_right")?.reason, "absent");
     assert.equal(chargeSlots.find((slot) => slot.id === "profile")?.reason, "absent");
-    assert.equal(chargeSlots.some((slot) => slot.id !== "front" && slot.present), false);
+    assert.equal(chargeSlots.some((slot) => slot.reason === "reused-front"), false);
     assert.equal(realSlots.find((slot) => slot.id === "front")?.present, true);
     assert.equal(realSlots.find((slot) => slot.id === "three_quarter_left")?.present, true);
     assert.equal(realSlots.find((slot) => slot.id === "three_quarter_right")?.present, true);
@@ -57,7 +56,7 @@ describe("puppet controller", () => {
   it("normalizes mouth and eye anchors for both canvases and leaves a missing part empty", () => {
     const charge = normalizedAnchors(pack("einstein-charge").views.front);
     const real = normalizedAnchors(pack("einstein-realista").views.front);
-    inside(charge.mouth);
+    assert.equal(charge.mouth, null);
     assert.equal(charge.leftEye, null);
     assert.equal(charge.rightEye, null);
     inside(real.mouth);

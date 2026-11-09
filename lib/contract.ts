@@ -38,12 +38,34 @@ export interface Layer {
   z: number;
 }
 
+/**
+ * Three mouth sets reserved on every avatar.
+ * The art is not here yet: each slot stays empty until a future pack fills it.
+ */
+export const MOUTH_VARIATION_SLOTS = [1, 2, 3] as const;
+export type MouthVariationSlotId = (typeof MOUTH_VARIATION_SLOTS)[number];
+
+export interface MouthVariationSlot {
+  slot: MouthVariationSlotId;
+  visemes: null;
+}
+
+export function reservedMouthVariations(): [MouthVariationSlot, MouthVariationSlot, MouthVariationSlot] {
+  return [
+    { slot: 1, visemes: null },
+    { slot: 2, visemes: null },
+    { slot: 3, visemes: null },
+  ];
+}
+
 /** One camera angle of the character: its layers plus the full viseme set. */
 export interface CharacterView {
   canvas: { w: number; h: number };
   layers: Layer[];
   /** Mouth sprite per viseme, drawn at its own box (z above head). Missing -> falls back to "X". */
   visemes: Partial<Record<Viseme, Layer>>;
+  /** Reserved slots for three future mouth sets. Empty until that art exists. */
+  mouthVariations?: [MouthVariationSlot, MouthVariationSlot, MouthVariationSlot];
   /** Mouth-sized expression plates drawn on the full character. Not a parts gallery. */
   expressions?: Record<string, Layer>;
   /** Movable eyes: max iris travel (canvas px) and iris circles [cx, cy, r]. */

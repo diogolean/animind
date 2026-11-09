@@ -23,19 +23,15 @@ describe("stage template", () => {
     const headOnly: CharacterView = { canvas: { w: 100, h: 200 }, layers: [{ name: "head", url: "h.png", x: 10, y: 10, w: 40, h: 50, z: 1 }], visemes: {} };
     assert.equal(hasFullBody(headOnly), false);
 
-    const charge = await puppet("private/characters/einstein-charge/puppet.json");
+    const chargeFile = await readFile(path.join(process.cwd(), "private/characters/einstein-charge/puppet.json"), "utf8");
+    assert.equal(chargeFile.includes("body.png"), false);
+    assert.equal(chargeFile.includes("ca8386e2"), false);
     const plate = await png("private/characters/einstein-charge/layers/front/body.png");
     const eyes = recoverPaintedEyes(plate);
     assert.ok(eyes);
-    assert.equal(hasFullBody(charge.views.front), false);
-    const face = closeFrame(charge.views.front, eyes.sockets);
-    assert.ok(face.h > charge.views.front.canvas.h * 0.7, "the face window keeps the hair and the chin");
-    for (const box of eyes.sockets) {
-      assert.ok(box.x >= face.x && box.x + box.w <= face.x + face.w);
-      assert.ok(box.y >= face.y && box.y + box.h <= face.y + face.h);
-    }
-    assert.ok(face.y <= 150 && face.x <= 58, "hair stays inside the charge frame");
-    assert.ok(face.y + face.h >= 540 && face.x + face.w >= 442, "chin and side hair stay inside the charge frame");
+    const legacy: CharacterView = { canvas: { w: 480, h: 620 }, layers: [{ name: "body", url: "layers/front/body.png", x: 0, y: 0, w: 480, h: 620, z: 1 }], visemes: {} };
+    assert.equal(hasFullBody(legacy), false);
+    const face = closeFrame(legacy, eyes.sockets);
     const left = realista.views["three-quarter"];
     const right = realista.views["three-quarter-right"];
     assert.ok(left && right);
@@ -50,8 +46,6 @@ describe("stage template", () => {
       eyeLine(face, (eyes.sockets[0].y + eyes.sockets[1].y + eyes.sockets[1].h) / 2),
     ];
     for (const line of lines) assert.ok(Math.abs(line - FACE_TEMPLATE.eyeLine) < 0.04, String(line));
-    assert.equal(charge.views.left.layers[0]?.url, charge.views.front.layers[0]?.url);
-    assert.equal(charge.views.right.layers[0]?.url, charge.views.front.layers[0]?.url);
   });
 
   it("lists gaze, emotion, and lids that exist and does not invent the rest", async () => {
@@ -87,14 +81,13 @@ describe("stage template", () => {
     assert.equal(Buffer.from(charge.data).equals(before), true);
   });
 
-  it("keeps the painted charge mouth and drops the viseme that sits under the mustache", async () => {
+  it("does not keep the painted charge mouth on the character", async () => {
     const charge = await puppet("private/characters/einstein-charge/puppet.json");
+    assert.equal(charge.views.front.visemes.X, undefined);
+    assert.equal(JSON.stringify(charge).includes("mouths/"), false);
     const plate = await png("private/characters/einstein-charge/layers/front/body.png");
     const eyes = recoverPaintedEyes(plate);
     assert.ok(eyes);
-    const rest = charge.views.front.visemes.X;
-    assert.ok(rest);
-    assert.equal(visemeSitsOnMouth(rest, eyes.sockets, 0), false);
     assert.equal(visemeSitsOnMouth({ y: eyes.sockets[0].y + eyes.sockets[0].h + 4 }, eyes.sockets, 0), true);
   });
 

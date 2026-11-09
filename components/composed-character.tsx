@@ -5,18 +5,20 @@ import { useEffect, useRef, useState } from "react";
 import type { LibraryCharacter } from "@/lib/accounts/types";
 import { VISEMES, type Character, type CharacterView, type Viseme } from "@/lib/contract";
 import { AvatarStage } from "@/components/avatar-stage";
+import { PendingFace } from "@/components/pending-face";
 import { useI18n } from "@/components/locale";
 import { PackVoice } from "@/components/pack-voice";
 import { longSide, MIN_LONG_SIDE, sceneryPreference, type PlateKind, type SceneryState } from "@/lib/avatar-source";
 import { controlClass } from "@/lib/control-class";
 import type { EyeCapability, GazeDirection } from "@/lib/eye-rig";
 import { separableGaze } from "@/lib/eye-rig";
+import { isChargeName } from "@/lib/charge-parity";
 import { fill, type MessageKey } from "@/lib/i18n";
 import { packVoiceUrls, viewHasMouth } from "@/lib/pack-voice";
 import { capsFromView, emotionTags, hoverTag, initialMap, leaveMap, NEUTRAL, pinTag, shownPose, type EmotionCaps, type MapState } from "@/lib/emotion-map";
 import { sceneryChoice } from "@/lib/library-pair";
 import { controllerSlots, normalizedAnchors, poseAt, visemePresent, type ControllerSlotId } from "@/lib/puppet-controller";
-import { SHEET_CELL, SHEET_GRID, sheetGroups, type SheetCategory, type SheetGroup } from "@/lib/sheet";
+import { paritySheet, SHEET_CELL, SHEET_GRID, type ParityGroup, type SheetCategory } from "@/lib/sheet";
 import { hasFullBody, type Framing } from "@/lib/stage-frame";
 
 const SLOT_META: { id: ControllerSlotId; label: MessageKey; testId: string }[] = [
@@ -61,7 +63,7 @@ export function ComposedCharacter({ character, rig }: { character: LibraryCharac
   const slots = controllerSlots(character.views, rig);
   const [slotId, setSlotId] = useState<ControllerSlotId>("front");
   const [holding, setHolding] = useState(false);
-  const active = slots.find((slot) => slot.id === slotId && slot.present) ?? slots.find((slot) => slot.present) ?? slots[0];
+  const active = slots.find((slot) => slot.id === slotId) ?? slots[0];
   const selected = SLOT_META.find((slot) => slot.id === active?.id) ?? SLOT_META[0];
   const rigView = active?.rig ? rig?.views[active.rig] : undefined;
   const hasRig = Boolean(rigView && rigView.layers.length > 0);
@@ -87,15 +89,12 @@ export function ComposedCharacter({ character, rig }: { character: LibraryCharac
   const bodyReady = Boolean(rigView && hasFullBody(rigView));
   const missingSides = !slots.some((slot) => (slot.id === "three_quarter_left" || slot.id === "three_quarter_right") && slot.present);
   const anchors = normalizedAnchors(rigView);
-  const sheet = slots.flatMap((slot) => {
-    if (!slot.present || !slot.rig) return [];
-    const source = rig?.views[slot.rig];
-    const meta = SLOT_META.find((item) => item.id === slot.id);
-    if (!source || source.layers.length === 0 || !meta) return [];
-    const capability = separableGaze(source.layers) ? "separable" : slot.id === active?.id ? eyeCapability : "unavailable";
-    return sheetGroups(source, capability).map((group) => ({ view: { ...meta, rig: slot.rig }, group }));
+  const sheet = SLOT_META.map((meta) => {
+    const slot = slots.find((item) => item.id === meta.id);
+    const source = slot?.present && slot.rig ? rig?.views[slot.rig] ?? null : null;
+    const capability = source && separableGaze(source.layers) ? "separable" : "unavailable";
+    return { meta, source, groups: paritySheet(source, capability) };
   });
-  const waiting = hasRig && eyeCapability === "pending" && sheet.length === 0;
 
   useEffect(() => {
     setSceneryOn(sceneryPreference(window.sessionStorage).read());
@@ -132,7 +131,7 @@ export function ComposedCharacter({ character, rig }: { character: LibraryCharac
 
   function chooseSlot(id: ControllerSlotId) {
     const slot = slots.find((item) => item.id === id);
-    if (!slot?.present || !slot.rig || slot.id === slotId) return;
+    if (!slot || slot.id === slotId) return;
     setHolding(false);
     setSlotId(id);
     setMap(initialMap());
@@ -143,9 +142,11 @@ export function ComposedCharacter({ character, rig }: { character: LibraryCharac
     setFraming("close");
   }
 
-  const flatUrl = active?.id === "three_quarter_left"
-    ? character.views.three_quarter_left ?? character.views.three_quarter
-    : active ? character.views[active.id] : undefined;
+  const flatUrl = isChargeName(character.name)
+    ? undefined
+    : active?.id === "three_quarter_left"
+      ? character.views.three_quarter_left ?? character.views.three_quarter
+      : active ? character.views[active.id] : undefined;
 
   return (
     <section className="mt-6" data-testid="composed-character">
@@ -167,6 +168,10 @@ export function ComposedCharacter({ character, rig }: { character: LibraryCharac
               onScenery={setSceneryState}
               onPlate={setPlate}
             />
+          </figure>
+        ) : selected && !flatUrl ? (
+          <figure data-testid={selected.testId} data-template="face" data-state="pending" data-ground="black" className="mx-auto w-full max-w-md bg-black">
+            <PendingFace label={t("pendingPart")} />
           </figure>
         ) : selected && flatUrl ? (
           <figure data-testid={selected.testId} data-template="face" data-ground="black" data-fit="contain" className="mx-auto flex max-h-[70dvh] w-full max-w-md items-center justify-center bg-black">
@@ -191,13 +196,14 @@ export function ComposedCharacter({ character, rig }: { character: LibraryCharac
               <button
                 key={slot.id}
                 type="button"
-                aria-disabled="true"
+                aria-pressed={active?.id === slot.id}
                 data-missing={slot.reason}
+                data-state="pending"
                 data-testid={`missing-${slot.id}`}
-                className={`${controlClass(false)} opacity-60`}
-                onClick={(event) => event.preventDefault()}
+                className={`${controlClass(active?.id === slot.id)} opacity-60`}
+                onClick={() => chooseSlot(slot.id)}
               >
-                {t(meta.label)} · {t("missingView")}
+                {t(meta.label)} · {t("pendingPart")}
               </button>
             );
           }
@@ -323,43 +329,26 @@ export function ComposedCharacter({ character, rig }: { character: LibraryCharac
       </div>
       {missingSides ? <p className="mt-3 text-sm text-muted-foreground" data-testid="missing-sides">{t("missingSides")}</p> : null}
       </div>
-      {sheet.length ? (
-        <section className="mt-8 bg-black" data-testid="emotion-sheet" data-ground="black">
-          <h2 className="text-sm font-medium">{t("emotionSheet")}</h2>
-          <p className="mt-1 text-sm text-white/70" data-testid="sheet-review">{t("sheetReview")}</p>
-          {slots.filter((slot) => slot.present).map((slot) => {
-            const view = SLOT_META.find((item) => item.id === slot.id);
-            if (!view || !slot.rig) return null;
-            const groups = sheet.filter((entry) => entry.view.id === view.id);
-            if (!groups.length) return null;
-            const source = rig?.views[slot.rig];
-            if (!source) return null;
-            return (
-              <div key={view.id} className="mt-4" data-testid={`sheet-${view.testId}`}>
-                <h3 className="text-sm text-white/80">{t(view.label)}</h3>
-                {groups.map(({ group }) => (
-                  <SheetRow key={group.category} view={source} viewId={view.testId} group={group} title={t(CATEGORY_LABEL[group.category])} labelFor={(id) => stateLabel(group.category, id, locale, t)} />
-                ))}
-              </div>
-            );
-          })}
-        </section>
-      ) : waiting ? null : (
-        <section className="mt-8">
-          <h2 className="text-sm font-medium">{t("emotionSheet")}</h2>
-          <p className="mt-1 text-sm text-white/70" data-testid="sheet-review">{t("sheetReview")}</p>
-          <div data-testid="emotion-sheet" className="mt-3 overflow-hidden rounded-[1.5rem] border border-white/10 bg-black">
-            {character.emotionSheetUrl ? (
-              <button type="button" data-testid="emotion-sheet-zoom" onClick={() => setSheetOpen(true)} className="block min-h-11 w-full cursor-zoom-in text-left">
-                <img src={character.emotionSheetUrl} alt="" className="w-full bg-black" />
-                <span className="block px-4 py-3 text-sm text-muted-foreground">{t("zoom")}</span>
-              </button>
-            ) : (
-              <p className="px-4 py-10 text-sm text-muted-foreground">{t("noSheet")}</p>
-            )}
+      <section className="mt-8 bg-black" data-testid="emotion-sheet" data-ground="black">
+        <h2 className="text-sm font-medium">{t("emotionSheet")}</h2>
+        <p className="mt-1 text-sm text-white/70" data-testid="sheet-review">{t("sheetReview")}</p>
+        {sheet.map(({ meta, source, groups }) => (
+          <div key={meta.id} className="mt-4" data-testid={`sheet-${meta.testId}`}>
+            <h3 className="text-sm text-white/80">{t(meta.label)}</h3>
+            {groups.map((group) => (
+              <SheetRow
+                key={group.category}
+                view={source}
+                viewId={meta.testId}
+                group={group}
+                title={t(CATEGORY_LABEL[group.category])}
+                pendingLabel={t("pendingPart")}
+                labelFor={(id) => stateLabel(group.category, id, locale, t)}
+              />
+            ))}
           </div>
-        </section>
-      )}
+        ))}
+      </section>
       {sheetOpen && character.emotionSheetUrl ? (
         <div
           role="dialog"
@@ -446,6 +435,7 @@ function EmotionMap({
                 type="button"
                 data-testid={`tag-${tag.id}`}
                 data-supported={tag.supported ? "true" : "false"}
+                data-state={tag.supported ? "ready" : "pending"}
                 aria-disabled={!tag.supported}
                 aria-pressed={map.pinned === tag.id || (map.hover === tag.id)}
                 className={`${controlClass(map.pinned === tag.id || emotion === tag.id || map.hover === tag.id)} ${tag.supported ? "" : "opacity-60"}`}
@@ -475,7 +465,7 @@ function EmotionMap({
                   onPin(tag.id);
                 }}
               >
-                {label}{tag.supported ? "" : ` · ${t("unsupportedTag")}`}
+                {label}{tag.supported ? "" : ` · ${t("pendingPart")}`}
               </button>
             );
           })}
@@ -492,12 +482,14 @@ function SheetRow({
   viewId,
   group,
   title,
+  pendingLabel,
   labelFor,
 }: {
-  view: CharacterView;
+  view: CharacterView | null;
   viewId: string;
-  group: SheetGroup;
+  group: ParityGroup;
   title: string;
+  pendingLabel: string;
   labelFor: (id: string) => string;
 }) {
   return (
@@ -505,9 +497,13 @@ function SheetRow({
       <h4 className="text-xs uppercase tracking-wide text-white/50">{title}</h4>
       <ul className={`mt-2 ${SHEET_GRID}`}>
         {group.states.map((state) => (
-          <li key={state.id} data-testid={`sheet-${viewId}-${group.category}-${state.id}`} data-template="face" className={`${SHEET_CELL} overflow-hidden rounded-2xl bg-black`}>
+          <li key={state.id} data-testid={`sheet-${viewId}-${group.category}-${state.id}`} data-template="face" data-state={state.ready ? "ready" : "pending"} className={`${SHEET_CELL} overflow-hidden rounded-2xl bg-black`}>
             <div className="bg-black">
-              <AvatarStage view={view} emotion={state.emotion} lids={state.lids} gaze={state.gaze} framing="close" scenery={false} />
+              {state.ready && view ? (
+                <AvatarStage view={view} emotion={state.emotion} lids={state.lids} gaze={state.gaze} framing="close" scenery={false} />
+              ) : (
+                <PendingFace label={pendingLabel} />
+              )}
             </div>
             <p className="px-2 py-2 text-center text-xs text-white/70">{labelFor(state.id)}</p>
           </li>

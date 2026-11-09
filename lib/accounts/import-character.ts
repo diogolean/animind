@@ -3,6 +3,7 @@ import { newId, normalizeRel } from "./paths";
 import { findOwnedCharacter, writeImportedCharacter } from "./store";
 import { assessImportedAvatar, pointLayersAtAvatar, retainAvatarSources } from "../avatar-source";
 import { blockReadyIncompleteHead } from "../charge-approved";
+import { isChargeName } from "../charge-parity";
 import { blockReadyWithoutEyes } from "../eye-gate";
 import type { LibraryCharacter, LibraryDemo, LibraryStatus, LibraryViewName } from "./types";
 import { isLibraryStatus } from "./types";
@@ -151,6 +152,16 @@ function personaFromFiles(files: ImportFile[], urls: Map<string, string>): strin
   if (!body) return null;
   if (body.length <= 300) return body.split("\n")[0]!.trim();
   return urls.get(text.path) ?? null;
+}
+
+function chargeHasRig(puppet: Record<string, unknown>): boolean {
+  const views = puppet.views;
+  if (!views || typeof views !== "object") return false;
+  const front = (views as { front?: { layers?: { name?: string }[]; visemes?: unknown } }).front;
+  const names = new Set((front?.layers ?? []).map((layer) => layer.name));
+  const visemes = front?.visemes;
+  const mouth = Boolean(visemes && typeof visemes === "object" && "X" in visemes);
+  return names.has("iris") && names.has("eye_socket") && names.has("torso") && mouth;
 }
 
 function stringField(puppet: Record<string, unknown>, key: string): string | null {
@@ -336,6 +347,7 @@ export async function importCharacterPackage(options: {
   if (status === "ready" && blockReadyWithoutEyes(puppet, files)) status = "draft";
   if (status === "ready" && avatarPlate?.block) status = "draft";
   if (status === "ready" && blockReadyIncompleteHead(files.map((file) => file.path))) status = "draft";
+  if (status === "ready" && isChargeName(name) && !chargeHasRig(puppet)) status = "draft";
   const character: LibraryCharacter = {
     id,
     ownerId: options.ownerId,

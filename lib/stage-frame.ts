@@ -44,6 +44,27 @@ export function closeFrame(view: CharacterView, eyes?: EyeBox[]): StageFrame {
   return placeFace(view.canvas.w, view.canvas.h, subject);
 }
 
+/** Canvas that lets a tight head use the same 4/5 frame and eye line as the realistic plates. */
+export function placeHeadOnStage(head: { w: number; h: number }): { canvas: { w: number; h: number }; x: number; y: number } {
+  let frameW = head.w / FACE_TEMPLATE.fill;
+  let frameH = frameW / FACE_TEMPLATE.aspect;
+  const minH = head.h / FACE_TEMPLATE.fill;
+  if (frameH < minH) {
+    frameH = minH;
+    frameW = frameH * FACE_TEMPLATE.aspect;
+  }
+  const eyeOffset = head.h * HEAD_FROM_EYES.eyeY;
+  const y = Math.max(0, Math.ceil(frameH * FACE_TEMPLATE.eyeLine - eyeOffset));
+  return {
+    canvas: {
+      w: Math.ceil(Math.max(frameW, head.w)),
+      h: Math.ceil(Math.max(frameH, y + head.h)),
+    },
+    x: Math.max(0, Math.round((Math.ceil(Math.max(frameW, head.w)) - head.w) / 2)),
+    y,
+  };
+}
+
 export function stageFrame(view: CharacterView, framing: Framing, eyes?: EyeBox[]): StageFrame {
   if (framing === "body" && hasFullBody(view)) return fullBodyFrame(view);
   return closeFrame(view, eyes);

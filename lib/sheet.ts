@@ -1,4 +1,5 @@
 import type { CharacterView } from "./contract";
+import { EXPRESSION_ORDER, GAZE_ORDER, LID_ORDER } from "./emotion-map";
 import type { EyeCapability, GazeDirection } from "./eye-rig";
 import { GAZE_DIRECTIONS } from "./eye-rig";
 
@@ -14,6 +15,15 @@ export interface SheetState {
 export interface SheetGroup {
   category: SheetCategory;
   states: SheetState[];
+}
+
+export interface ParityState extends SheetState {
+  ready: boolean;
+}
+
+export interface ParityGroup {
+  category: SheetCategory;
+  states: ParityState[];
 }
 
 /**
@@ -45,6 +55,47 @@ export function sheetGroups(view: CharacterView, capability: EyeCapability | "pe
     });
   }
   return groups;
+}
+
+/**
+ * The same cells for every character. A missing layer stays in the grid
+ * and is marked pending. A baked body plate does not count as a finished face.
+ */
+export function paritySheet(view: CharacterView | null, capability: EyeCapability | "pending" | "unavailable"): ParityGroup[] {
+  const cutout = Boolean(view?.layers.some((layer) => layer.name === "head" || layer.name === "torso"));
+  const gazeReady = capability === "separable" || capability === "recovered";
+  return [
+    {
+      category: "gaze",
+      states: GAZE_ORDER.map((gaze) => ({
+        id: gaze,
+        emotion: "rest",
+        lids: "open" as const,
+        gaze,
+        ready: cutout && (gaze === "center" || gazeReady),
+      })),
+    },
+    {
+      category: "emotion",
+      states: EXPRESSION_ORDER.map((emotion) => ({
+        id: emotion,
+        emotion,
+        lids: "open" as const,
+        gaze: "center" as const,
+        ready: cutout && (emotion === "neutral" || Boolean(view?.expressions?.[emotion])),
+      })),
+    },
+    {
+      category: "lids",
+      states: LID_ORDER.map((lids) => ({
+        id: lids,
+        emotion: "rest",
+        lids,
+        gaze: "center" as const,
+        ready: cutout && (lids === "open" || Boolean(view?.layers.some((layer) => layer.name === (lids === "half" ? "eyes_half" : "eyes_closed")))),
+      })),
+    },
+  ];
 }
 
 export const SHEET_GRID = "flex flex-wrap gap-2";

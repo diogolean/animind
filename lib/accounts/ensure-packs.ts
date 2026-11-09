@@ -44,5 +44,5 @@ async function run(actor: PublicUser): Promise<void> {
   if (existsSync(REALISTA_DIR)) {
     await importOwnedCharacter({ email: actor.email, dir: REALISTA_DIR, name: realisticName, status: "ready" });
   }
-  await importOwnedCharacter({ email: actor.email, dir: CHARGE_DIR, name: "Einstein charge", status: "ready" });
+  await importOwnedCharacter({ email: actor.email, dir: CHARGE_DIR, name: "Einstein charge", status: "draft" });
 }

@@ -3,6 +3,7 @@ import { StoreConfigError } from "@/lib/accounts/config";
 import { isUser, requireUser } from "@/lib/accounts/http";
 import { keyFromAssetUrl, readObject } from "@/lib/accounts/object-store";
 import { puppetToRig } from "@/lib/accounts/rig";
+import { presentLibraryCharacter, presentLibraryRig } from "@/lib/charge-serve";
 import { assetsFor, characterFor, deleteCharacterFor, updateCharacterStatus } from "@/lib/accounts/store";
 import { isLibraryStatus, type LibraryAsset, type LibraryCharacter, type LibraryDemo } from "@/lib/accounts/types";
 
@@ -33,8 +34,9 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   const { id } = await params;
   const actor = await requireUser();
   if (!isUser(actor)) return actor;
-  const character = await characterFor(actor, id);
-  if (!character) return json({ error: "Personagem não encontrado", code: "character_missing" }, 404);
+  const stored = await characterFor(actor, id);
+  if (!stored) return json({ error: "Personagem não encontrado", code: "character_missing" }, 404);
+  const character = presentLibraryCharacter(stored);
   const demos = ownedDemos(character, await assetsFor(actor));
   const key = keyFromAssetUrl(character.puppetUrl);
   let bytes: Buffer | null = null;
@@ -44,14 +46,15 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     if (!(error instanceof StoreConfigError)) throw error;
     return json({ error: error.message, code: error.code }, error.status);
   }
-  let rig = null;
+  let storedRig = null;
   if (bytes) {
     try {
-      rig = puppetToRig(character, JSON.parse(bytes.toString("utf8")) as unknown);
+      storedRig = puppetToRig(stored, JSON.parse(bytes.toString("utf8")) as unknown);
     } catch {
-      rig = null;
+      storedRig = null;
     }
   }
+  const rig = presentLibraryRig(stored, storedRig);
   return json({ character: { ...character, ...(demos.length ? { demos } : {}) }, rig });
 }
 

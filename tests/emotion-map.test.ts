@@ -38,7 +38,9 @@ describe("neutral is the same home for both packs", () => {
     }
     assert.equal(stageMouth(real, "neutral", null).layer?.url.includes("neutral"), true);
     assert.equal(stageMouth(real, "neutral", null).layer?.url.includes("happy"), false);
-    assert.equal(stageMouth(charge, "neutral", null).layer?.url.endsWith("X.png"), true);
+    assert.equal(stageMouth(charge, "neutral", null).layer, undefined);
+    assert.equal(charge.mouthVariations?.length, 3);
+    assert.equal(charge.mouthVariations?.every((slot) => slot.visemes === null), true);
     assert.equal(Boolean(charge.expressions?.happy), false);
     assert.equal(tagSupported("happy", capsFromView(charge, false)), false);
     assert.equal(tagSupported("happy", capsFromView(real, false)), true);

@@ -1,4 +1,4 @@
-import { inflateSync } from "node:zlib";
+import { deflateSync, inflateSync } from "node:zlib";
 
 export interface Raster {
   width: number;
@@ -69,6 +69,76 @@ export function decodePngRgba(bytes: Uint8Array): Raster | null {
     prev = out;
   }
   return { width, height, data };
+}
+
+export function opaqueBounds(raster: Raster): { x: number; y: number; w: number; h: number } {
+  let minX = raster.width;
+  let minY = raster.height;
+  let maxX = 0;
+  let maxY = 0;
+  let found = false;
+  for (let y = 0; y < raster.height; y += 1) {
+    for (let x = 0; x < raster.width; x += 1) {
+      if (raster.data[(y * raster.width + x) * 4 + 3] <= 16) continue;
+      found = true;
+      if (x < minX) minX = x;
+      if (y < minY) minY = y;
+      if (x > maxX) maxX = x;
+      if (y > maxY) maxY = y;
+    }
+  }
+  if (!found) return { x: 0, y: 0, w: raster.width, h: raster.height };
+  return { x: minX, y: minY, w: maxX - minX + 1, h: maxY - minY + 1 };
+}
+
+export function cropRaster(raster: Raster, box: { x: number; y: number; w: number; h: number }): Raster {
+  const data = new Uint8ClampedArray(box.w * box.h * 4);
+  for (let y = 0; y < box.h; y += 1) {
+    const start = ((box.y + y) * raster.width + box.x) * 4;
+    data.set(raster.data.subarray(start, start + box.w * 4), y * box.w * 4);
+  }
+  return { width: box.w, height: box.h, data };
+}
+
+/** Encodes an 8-bit RGBA PNG. The decoder in this file reads it back. */
+export function encodePngRgba(raster: Raster): Uint8Array {
+  const stride = raster.width * 4;
+  const raw = Buffer.alloc((stride + 1) * raster.height);
+  for (let y = 0; y < raster.height; y += 1) {
+    const at = y * (stride + 1);
+    raw[at] = 0;
+    for (let i = 0; i < stride; i += 1) raw[at + 1 + i] = raster.data[y * stride + i];
+  }
+  const ihdr = Buffer.alloc(13);
+  ihdr.writeUInt32BE(raster.width, 0);
+  ihdr.writeUInt32BE(raster.height, 4);
+  ihdr[8] = 8;
+  ihdr[9] = 6;
+  const body = Buffer.concat([
+    Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]),
+    pngChunk("IHDR", ihdr),
+    pngChunk("IDAT", deflateSync(raw)),
+    pngChunk("IEND", Buffer.alloc(0)),
+  ]);
+  return body;
+}
+
+function pngChunk(type: string, data: Buffer): Buffer {
+  const head = Buffer.alloc(8);
+  head.writeUInt32BE(data.length, 0);
+  head.write(type, 4, 4, "ascii");
+  const crc = Buffer.alloc(4);
+  crc.writeUInt32BE(pngCrc(Buffer.concat([head.subarray(4), data])), 0);
+  return Buffer.concat([head, data, crc]);
+}
+
+function pngCrc(bytes: Buffer): number {
+  let crc = 0xffffffff;
+  for (const byte of bytes) {
+    crc ^= byte;
+    for (let bit = 0; bit < 8; bit += 1) crc = (crc >>> 1) ^ (crc & 1 ? 0xedb88320 : 0);
+  }
+  return (~crc) >>> 0;
 }
 
 function readUint32(bytes: Uint8Array, offset: number): number {
