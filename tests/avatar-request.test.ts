@@ -182,7 +182,8 @@ describe("avatar progress", () => {
     view = applyAvatarEvent(view, { requestId: "req_a", index: 1, stage: "ready", fixture: false });
     assert.equal(view.stages[1], undefined);
     const line = fill(translate("en", avatarJobFeedback({ name: "Ada", disposition: "blocked", stage: "image", fixture: true }).key), { stage: "image" });
-    assert.match(line, /Fixture/);
+    assert.match(line, /Preview/);
+    assert.equal(/fixture/i.test(line), false);
     assert.equal(line.includes("%"), false);
     assert.equal(line.toLowerCase().includes("generating"), false);
     assert.equal(avatarRunning({ 0: "image" }, "automatic"), true);

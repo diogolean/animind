@@ -13,9 +13,12 @@ describe("main flow copy", () => {
     assert.equal(fill(translate("pt-BR", "statusCreating"), { name: "Ada", n: 1, total: 2 }), "Criando Ada · 1/2");
     assert.equal(translate("en", "statusRendering"), "Rendering · {percent}%");
     assert.equal(translate("pt-BR", "generationOffTitle"), "Geração paga desligada");
-    assert.equal(translate("en", "fixtureSheet"), "Fixture sheet");
-    assert.match(translate("en", "generationOffBody"), /fixture/);
-    assert.match(translate("pt-BR", "generationOffBody"), /fixture/);
+    assert.equal(translate("en", "fixtureSheet"), "Sample quotes");
+    assert.equal(translate("pt-BR", "fixtureSheet"), "Citações de exemplo");
+    assert.match(translate("en", "generationOffBody"), /saved example/);
+    assert.match(translate("pt-BR", "generationOffBody"), /exemplo guardado/);
+    assert.equal(/fixture/i.test(translate("en", "generationOffBody")), false);
+    assert.equal(/fixture/i.test(translate("pt-BR", "generationOffBody")), false);
     assert.equal(apiErrorMessage("en", { code: "price_unavailable" }), translate("en", "priceUnavailable"));
     assert.equal(apiErrorMessage("pt-BR", { code: "disabled" }), translate("pt-BR", "generationDisabled"));
     assert.equal(apiErrorMessage("en", new Error("Geração desligada")), translate("en", "requestFailed"));
@@ -25,8 +28,14 @@ describe("main flow copy", () => {
     assert.equal(translate("pt-BR", "waitingForSignIn"), "Login necessário");
     assert.equal(translate("en", "avatarIncluded"), "Included in the automatic generation");
     assert.equal(translate("pt-BR", "avatarIncluded"), "Incluído na geração automática");
-    assert.equal(translate("en", "avatarFixtureStage"), "Fixture · {stage}");
-    assert.equal(translate("pt-BR", "avatarFixtureStage"), "Simulado · {stage}");
+    assert.equal(translate("en", "avatarFixtureStage"), "Preview · {stage}");
+    assert.equal(translate("pt-BR", "avatarFixtureStage"), "Prévia · {stage}");
+    assert.equal(translate("en", "coreDevMock"), "Preview · paid generation is off");
+    assert.equal(translate("pt-BR", "coreDevMock"), "Prévia · geração paga desligada");
+    assert.equal(/dev mock|mock de dev|adapter|adaptador/i.test(translate("en", "coreDevMock") + translate("en", "avatarProviderOff")), false);
+    assert.equal(translate("en", "planPrice"), "No published price. This step is not charged.");
+    assert.equal(translate("pt-BR", "planPrice"), "Não há preço publicado. Este passo não é cobrado.");
+    assert.equal(translate("en", "avatarPreviewResult"), "Preview only. No face was drawn, and nothing was charged.");
   });
 
   it("does not leave Portuguese status strings in the main flow components", () => {
