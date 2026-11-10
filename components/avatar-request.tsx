@@ -18,7 +18,7 @@ const ANALYSIS_MS = 450;
 type CoreSheet = {
   name: string;
   found: boolean;
-  source: "core-fixture" | "core";
+  source: "core-fixture" | "core" | "fixture";
   quotes: { id: string; text: string; source: string; url: string; verification?: "verified" }[];
 };
 
@@ -167,7 +167,7 @@ export function AvatarRequest({
       if (!data?.found) return null;
       const verified = data.quotes.filter((quote) => quote.verification === "verified");
       if (!verified.length) return null;
-      if (data.source !== "core-fixture" && data.source !== "core") return null;
+      if (data.source !== "core-fixture" && data.source !== "core" && data.source !== "fixture") return null;
       return { ...data, quotes: verified };
     })).then((rows) => {
       if (!controller.signal.aborted) setSheets(rows.filter((row): row is CoreSheet => Boolean(row)));
@@ -356,8 +356,8 @@ export function AvatarRequest({
       ) : null}
       {sheets.map((sheet) => (
         <article key={sheet.name} data-testid="core-persona-sheet" className="mt-3 max-w-xl rounded-2xl border border-white/10 p-4 text-sm text-white/90">
-          <p className="text-xs uppercase tracking-wide text-amber-300">{sheet.source === "core-fixture" ? t("coreFixtureSheet") : t("coreVerifiedSheet")}</p>
-          <p className="mt-1 text-white/80">{sheet.source === "core-fixture" ? t("coreFixtureSheetBody") : t("coreVerifiedSheetBody")}</p>
+          <p className="text-xs text-amber-200">{sheet.source === "core" ? t("coreVerifiedSheet") : t("fixtureSheet")}</p>
+          <p className="mt-1 text-white/80">{sheet.source === "core" ? t("coreVerifiedSheetBody") : sheet.source === "core-fixture" ? t("coreFixtureSheetBody") : t("fixtureSheetBody")}</p>
           <h3 className="mt-3 text-sm font-medium">{sheet.name}</h3>
           <ul className="mt-2 space-y-2">
             {sheet.quotes.map((quote) => (
