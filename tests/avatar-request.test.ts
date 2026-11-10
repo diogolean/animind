@@ -444,6 +444,10 @@ describe("avatar routes", () => {
     assert.match(button, /"confirm"/);
     assert.match(button, /"offline"/);
     assert.match(button, /mode === "core"/);
+    assert.match(button, /coreMode === "mock" \? "preview"/);
+    assert.match(button, /state !== "preview"/);
+    assert.match(button, /avatar-preview-result/);
+    assert.match(button, /coreMode !== "core" && coreMode !== "mock"/);
     assert.match(button, /super_admin/);
     assert.match(button, /data-state=\{state\}/);
     const spend = readFileSync(new URL("../app/api/admin/spend/route.ts", import.meta.url), "utf8");

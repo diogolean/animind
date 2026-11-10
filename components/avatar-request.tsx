@@ -66,7 +66,7 @@ export function AvatarRequest({
   const [sheets, setSheets] = useState<CoreSheet[]>([]);
   const [coreView, setCoreView] = useState("front");
   const [planUsage, setPlanUsage] = useState<CoreUsageView | null>(null);
-  const [coreLive, setCoreLive] = useState(false);
+  const [coreMode, setCoreMode] = useState<"unknown" | "core" | "mock" | "off">("unknown");
   const [tracked, setTracked] = useState(`${prompt}\n${pinnedName ?? ""}`);
   const ticket = useRef(0);
   const abortRef = useRef<AbortController | null>(null);
@@ -87,10 +87,11 @@ export function AvatarRequest({
     fetch("/api/health", { cache: "no-store" })
       .then((response) => response.json())
       .then((data: { mode?: string }) => {
-        if (!cancelled) setCoreLive(data?.mode === "core");
+        const mode = data?.mode === "core" || data?.mode === "mock" || data?.mode === "off" ? data.mode : "off";
+        if (!cancelled) setCoreMode(mode);
       })
       .catch(() => {
-        if (!cancelled) setCoreLive(false);
+        if (!cancelled) setCoreMode("off");
       });
     return () => {
       cancelled = true;
@@ -204,7 +205,7 @@ export function AvatarRequest({
   const issues = shown ? avatarIssues(shown) : [];
   const included = avatarRunning(automaticStages, "automatic");
   const mayRequest = viewer?.role === "admin" || viewer?.role === "super_admin";
-  const state = !shown ? "incomplete" : included ? "included" : issues.length ? "incomplete" : !viewer ? "sign-in" : !mayRequest ? "blocked" : !coreLive ? "offline" : "confirm";
+  const state = !shown ? "incomplete" : included ? "included" : issues.length ? "incomplete" : !viewer ? "sign-in" : !mayRequest ? "blocked" : coreMode === "core" ? "confirm" : coreMode === "mock" ? "preview" : "offline";
 
   function addName() {
     if (!shown) return;
@@ -232,7 +233,7 @@ export function AvatarRequest({
       onBlocked("unapproved");
       return;
     }
-    if (!coreLive) {
+    if (coreMode !== "core" && coreMode !== "mock") {
       track("avatar_attempt", { result: "offline" });
       onBlocked("avatar_provider_unavailable");
       return;
@@ -270,7 +271,7 @@ export function AvatarRequest({
         type="button"
         data-testid="generate-avatar"
         data-state={state}
-        aria-disabled={state !== "sign-in" && state !== "confirm"}
+        aria-disabled={state !== "sign-in" && state !== "confirm" && state !== "preview"}
         aria-describedby="avatar-note"
         onClick={() => void confirmAvatar()}
         className="inline-flex min-h-11 items-center rounded-full border border-white/45 bg-black px-4 text-sm font-medium text-white hover:bg-white/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
@@ -280,6 +281,8 @@ export function AvatarRequest({
       <p id="avatar-note" data-testid="avatar-note" className="mt-2 max-w-xl text-sm leading-relaxed text-white/85">
         {t("avatarNoVideo")}
         {state === "offline" ? ` ${t("avatarProviderOff")}` : ""}
+        {state === "preview" ? ` ${t("avatarPreviewHint")}` : ""}
+        {state === "blocked" ? ` ${t("generationUnapproved")}` : ""}
         {included ? ` ${t("avatarIncluded")}` : ""}
         {checking ? ` ${t("avatarChecking")}` : ""}
       </p>
@@ -291,6 +294,7 @@ export function AvatarRequest({
             <span>{t(INTENT_KEY[shown.intent])}</span>
           </p>
           <p className="mt-1 text-white/80">{t("avatarLocal")}</p>
+          <p data-testid="plan-price" className="mt-1 text-white/80">{t("planPrice")}</p>
           <p className="mt-1">{fill(t("avatarStyle"), { style: artStyleLabel(locale, shown.artStyle) })}</p>
           <p className="mt-1">{fill(t("avatarResolution"), { value: shown.requestedResolution.toUpperCase() })}</p>
           {shown.context ? <p className="mt-1">{fill(t("avatarContext"), { context: shown.context })}</p> : null}
@@ -372,6 +376,11 @@ export function AvatarRequest({
           theme={(shown.context || shown.prompt).slice(0, 200)}
           language={shown.language}
         />
+      ) : null}
+      {attempt?.fixture ? (
+        <p data-testid="avatar-preview-result" role="status" className="mt-3 max-w-xl rounded-2xl border border-amber-400/40 bg-amber-400/10 px-4 py-3 text-sm text-amber-100">
+          {t("avatarPreviewResult")}
+        </p>
       ) : null}
       {attempt ? (
         <ul data-testid="avatar-progress" role="status" className="mt-3 max-w-xl space-y-1 text-sm text-white/90">

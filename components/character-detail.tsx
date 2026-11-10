@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
-import { apiErrorMessage, statusLabel } from "@/lib/i18n";
+import { apiErrorMessage, fill, statusLabel } from "@/lib/i18n";
 import { LIBRARY_STATUSES, type LibraryCharacter, type LibraryDemo, type LibraryStatus } from "@/lib/accounts/types";
 import type { Character } from "@/lib/contract";
 import { ComposedCharacter } from "@/components/composed-character";
@@ -156,7 +156,7 @@ export function CharacterDetail() {
       <ComposedCharacter character={character} rig={rig} />
 
       {character.layers.length && !character.catalog ? (
-        <p className="mt-4 text-xs text-muted-foreground">{character.layers.length} camadas no armazenamento de objetos.</p>
+        <p className="mt-4 text-xs text-muted-foreground">{fill(t("layerCount"), { count: character.layers.length })}</p>
       ) : null}
       {errorCode ? <p className="mt-4 text-sm text-red-400">{apiErrorMessage(locale, { code: errorCode })}</p> : null}
 
@@ -171,7 +171,7 @@ export function CharacterDetail() {
             </Link>
           </>
         ) : (
-          <p className="text-sm text-muted-foreground">Marque o personagem como pronto para usá-lo num vídeo ou debate.</p>
+          <p className="text-sm text-muted-foreground">{t("markReady")}</p>
         )}
         {character.catalog ? null : (
           <button type="button" data-testid="delete-character" disabled={pending} onClick={remove} className="inline-flex min-h-11 items-center justify-center rounded-full px-4 text-sm text-red-400">

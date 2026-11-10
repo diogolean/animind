@@ -187,7 +187,7 @@ export function MyCharacters() {
             className="min-h-11 rounded-full border border-white/10 bg-black px-3 text-sm disabled:opacity-50"
           >
             {pair.choices.length === 0 ? <option value="">{t("sceneryOff")}</option> : pair.choices.map((id) => (
-              <option key={id} value={id}>{id.split("/").pop()}</option>
+              <option key={id} value={id}>{id.includes("shared-scenery") ? t("sharedSceneryName") : (id.split("/").pop() ?? t("sharedSceneryName")).replace(/\.(png|jpe?g|webp)$/i, "").replace(/[-_]/g, " ")}</option>
             ))}
           </select>
           <p data-testid="shared-scenery-note" className="max-w-xl text-sm leading-relaxed text-white/80">{t(pairNote)}</p>
@@ -228,7 +228,7 @@ export function MyCharacters() {
         </>
       )}
 
-      {viewer ? <form onSubmit={onImport} data-testid="import-character" className="mt-12 max-w-full rounded-[1.5rem] border border-white/10 bg-white/[0.025] p-5">
+      {viewer && (viewer.role === "admin" || viewer.role === "super_admin") ? <form onSubmit={onImport} data-testid="import-character" className="mt-12 max-w-full rounded-[1.5rem] border border-white/10 bg-white/[0.025] p-5">
         <h2 className="text-sm font-medium">{t("importFolder")}</h2>
         <p className="mt-1 text-sm text-muted-foreground">{t("importFolderHint")}</p>
         <div className="mt-4 grid gap-3 sm:grid-cols-2">

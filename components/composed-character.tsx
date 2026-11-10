@@ -178,8 +178,11 @@ export function ComposedCharacter({ character, rig }: { character: LibraryCharac
             <img src={flatUrl} alt="" className="max-h-[70dvh] w-full bg-black object-contain" />
           </figure>
         ) : (
-          <p className="px-4 py-10 text-sm text-muted-foreground">Sem vista para compor.</p>
+          <p className="px-4 py-10 text-sm text-muted-foreground">{t("nothingToStage")}</p>
         )}
+        {rigView?.layers.some((layer) => layer.name === "head") && !rigView.layers.some((layer) => layer.name === "iris") ? (
+          <p data-testid="eyes-pending" className="px-4 pb-4 text-sm leading-relaxed text-white/80">{t("eyesPending")}</p>
+        ) : null}
       </div>
       <PackVoice
         key={`${selected?.id ?? "none"}:${packVoiceUrls(character.demos, locale).join("|")}`}

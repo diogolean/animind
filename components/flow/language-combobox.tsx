@@ -3,6 +3,7 @@
 import { Check, ChevronDown, Search } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { cn } from "cn";
+import { useI18n } from "@/components/locale";
 import type { LanguageCode, VoiceLanguage } from "@/lib/contract";
 
 const SUGGESTED = ["en-US", "pt-BR", "es-ES"];
@@ -46,6 +47,7 @@ export function LanguageCombobox({
   testId = "language-selector",
   className,
 }: LanguageComboboxProps) {
+  const { t } = useI18n();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [active, setActive] = useState(0);
@@ -171,7 +173,7 @@ export function LanguageCombobox({
                 {language.id === value ? <Check className="size-4 text-[var(--accent-brand)]" /> : null}
               </button>
             ))}
-            {!filtered.length ? <p className="px-3 py-8 text-center text-sm text-muted-foreground">Nenhum idioma encontrado.</p> : null}
+            {!filtered.length ? <p className="px-3 py-8 text-center text-sm text-muted-foreground">{t("noLanguage")}</p> : null}
           </div>
         </div>
       ) : null}

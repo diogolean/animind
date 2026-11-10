@@ -124,6 +124,7 @@ export function CreationStudio() {
   const [format, setFormat] = useState<VideoFormat>("16:9");
   const [viewer, setViewer] = useState<PublicUser | null>(null);
   const [loginOpen, setLoginOpen] = useState(false);
+  const [loginReason, setLoginReason] = useState<"create" | "avatar">("create");
   const [awaitingSignIn, setAwaitingSignIn] = useState(false);
   const { locale, t } = useI18n();
 
@@ -455,6 +456,7 @@ export function CreationStudio() {
   return (
     <div className="mx-auto w-full min-w-0 max-w-5xl flex-1 px-5 pt-8 pb-16 landscape:pt-4 sm:px-8 sm:pt-[16vh]">
       <section className="mx-auto max-w-3xl">
+        <p data-testid="home-lead" className="mb-4 max-w-xl text-sm leading-relaxed text-muted-foreground">{t("homeLead")}</p>
         {libraryCharacter ? (
           <p data-testid="library-character" className="mb-4 text-sm text-muted-foreground">
             {t("using")} <span className="text-foreground">{libraryCharacter.name}</span> {t("fromYourLibrary")}
@@ -525,6 +527,7 @@ export function CreationStudio() {
                   if (!viewer) {
                     track("create_attempt", { result: "login_required" });
                     setAwaitingSignIn(true);
+                    setLoginReason("create");
                     setLoginOpen(true);
                     return;
                   }
@@ -554,6 +557,7 @@ export function CreationStudio() {
           onNeedLogin={() => {
             saveDraft(prompt, format);
             setAwaitingSignIn(true);
+            setLoginReason("avatar");
             setLoginOpen(true);
           }}
           onBlocked={(code) => {
@@ -574,11 +578,11 @@ export function CreationStudio() {
         ) : null}
         {plan?.source === "local" ? (
           <p data-testid="planner-source" className="mt-3 text-xs text-muted-foreground">
-            {t("localPlan")}
+            {t("localPlan")} {t("planPrice")}
           </p>
         ) : plan?.source === "core" ? (
           <p data-testid="planner-source" className="mt-3 text-xs text-muted-foreground">
-            {t("corePlan")}
+            {t("corePlan")} {t("planPrice")}
           </p>
         ) : null}
         {shownSheets.length ? (
@@ -593,7 +597,7 @@ export function CreationStudio() {
                 <article key={`${sheet.source}-${sheet.name}`} data-testid="persona-sheet" data-source={sheet.source} className="rounded-2xl border border-white/10 p-4">
                   <div className="flex flex-wrap items-center gap-2">
                     <h3 className="text-sm font-medium">{sheet.name}</h3>
-                    <span className="rounded-full border border-amber-400/40 px-2 py-0.5 text-[10px] uppercase tracking-wide text-amber-300">{t(copy.title)}</span>
+                    <span className="rounded-full border border-amber-400/40 px-2 py-0.5 text-[11px] text-amber-200">{t(copy.title)}</span>
                   </div>
                   <p className="mt-2 text-xs text-muted-foreground">{t(copy.body)}</p>
                   <ul className="mt-3 space-y-3">
@@ -613,8 +617,8 @@ export function CreationStudio() {
         {loginOpen ? (
           <div role="dialog" aria-modal="true" data-testid="login-gate" className="fixed inset-0 z-50 flex items-end justify-center bg-black/70 p-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:items-center">
             <div className="w-full max-w-md rounded-3xl border border-white/10 bg-neutral-950 p-6">
-              <h2 className="text-lg font-medium">{t("loginTitle")}</h2>
-              <p className="mt-2 text-sm text-muted-foreground">{t("loginBody")}</p>
+              <h2 className="text-lg font-medium">{t(loginReason === "avatar" ? "loginAvatarTitle" : "loginTitle")}</h2>
+              <p className="mt-2 text-sm text-muted-foreground">{t(loginReason === "avatar" ? "loginAvatarBody" : "loginBody")}</p>
               <a data-testid="login-gate-google" href="/api/auth/google?next=/" className="mt-5 flex min-h-11 items-center justify-center rounded-full bg-white text-sm font-medium text-black" onClick={() => {
                 saveDraft(prompt, format);
                 window.sessionStorage.setItem("animindly-login", "google");
@@ -624,7 +628,7 @@ export function CreationStudio() {
               <a href="/login?next=/" className="mt-3 flex min-h-11 items-center justify-center rounded-full border border-white/15 text-sm" onClick={() => saveDraft(prompt, format)}>
                 {t("signInPassword")}
               </a>
-              <button type="button" className="mt-3 min-h-11 text-sm text-muted-foreground" onClick={() => { setLoginOpen(false); setAwaitingSignIn(false); }}>{t("notNow")}</button>
+              <button type="button" className="mt-3 flex min-h-11 w-full items-center justify-center text-sm text-muted-foreground" onClick={() => { setLoginOpen(false); setLoginReason("create"); setAwaitingSignIn(false); }}>{t("notNow")}</button>
             </div>
           </div>
         ) : null}
