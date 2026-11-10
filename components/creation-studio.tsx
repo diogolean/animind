@@ -37,7 +37,7 @@ import type { PublicUser } from "@/lib/accounts/types";
 import { useI18n } from "@/components/locale";
 import { apiErrorMessage, fill } from "@/lib/i18n";
 import { artStyleLabel, scenarioDisplay, scenarioPresetId, translate, type Locale, type MessageKey } from "@/lib/i18n";
-import { fixturePersona, sheetForScreen, type ScreenSheet } from "@/lib/persona-sheet";
+import { fixturePersona, personaFold, sheetForScreen, type ScreenSheet } from "@/lib/persona-sheet";
 import { AvatarRequest } from "@/components/avatar-request";
 import { CharacterListEditor } from "@/components/flow/character-list-editor";
 import { CharacterVoicesEditor } from "@/components/flow/character-voices-editor";
@@ -102,7 +102,7 @@ export function CreationStudio() {
   const [prompt, setPrompt] = useState("");
   const [automatic, setAutomatic] = useState(true);
   const [plan, setPlan] = useState<CreationPlan | null>(null);
-  const [personaSheets, setPersonaSheets] = useState<{ key: string; sheets: ScreenSheet[] }>({ key: "", sheets: [] });
+  const [personaSheets, setPersonaSheets] = useState<{ key: string; sheets: ScreenSheet[]; missing: string[] }>({ key: "", sheets: [], missing: [] });
   const [planning, setPlanning] = useState(false);
   const [editing, setEditing] = useState<PlanField | null>(null);
   const [detailsOpen, setDetailsOpen] = useState(false);
@@ -173,6 +173,7 @@ export function CreationStudio() {
   const sheetLanguage = plan?.language ?? "";
   const sheetKey = `${sheetLanguage}\n${sheetNames}`;
   const shownSheets = personaSheets.key === sheetKey ? personaSheets.sheets : [];
+  const missingSheets = personaSheets.key === sheetKey ? personaSheets.missing : [];
   useEffect(() => {
     if (!sheetNames) return;
     const controller = new AbortController();
@@ -181,7 +182,8 @@ export function CreationStudio() {
       const visible = sheetForScreen(sheet);
       return visible ? [visible] : [];
     });
-    void Promise.all(sheetNames.split("\n").map(async (name) => {
+    const asked = sheetNames.split("\n");
+    void Promise.all(asked.map(async (name) => {
       const response = await fetch(`/api/personas/sheet?${new URLSearchParams({ name, lang: sheetLanguage || "en-US" })}`, {
         signal: controller.signal,
         cache: "no-store",
@@ -191,9 +193,14 @@ export function CreationStudio() {
     })).then((rows) => {
       if (controller.signal.aborted) return;
       const fetched = rows.filter((row): row is ScreenSheet => Boolean(row));
-      setPersonaSheets({ key, sheets: fetched.length ? fetched : local });
+      const sheets = fetched.length ? fetched : local;
+      const known = new Set(sheets.map((sheet) => personaFold(sheet.name)));
+      setPersonaSheets({ key, sheets, missing: asked.filter((name) => !known.has(personaFold(name))) });
     }).catch(() => {
-      if (!controller.signal.aborted) setPersonaSheets({ key, sheets: local });
+      if (!controller.signal.aborted) {
+        const known = new Set(local.map((sheet) => personaFold(sheet.name)));
+        setPersonaSheets({ key, sheets: local, missing: asked.filter((name) => !known.has(personaFold(name))) });
+      }
     });
     return () => controller.abort();
   }, [sheetNames, sheetLanguage, plan]);
@@ -585,7 +592,7 @@ export function CreationStudio() {
             {t("corePlan")} {t("planPrice")}
           </p>
         ) : null}
-        {shownSheets.length ? (
+        {shownSheets.length || missingSheets.length ? (
           <div data-testid="persona-sheets" className="mt-4 space-y-3">
             {shownSheets.map((sheet) => {
               const copy = sheet.source === "core"
@@ -612,6 +619,12 @@ export function CreationStudio() {
                 </article>
               );
             })}
+            {missingSheets.map((name) => (
+              <article key={name} data-testid="persona-missing" className="rounded-2xl border border-white/10 p-4">
+                <h3 className="text-sm font-medium">{name}</h3>
+                <p className="mt-2 text-sm text-muted-foreground">{fill(t("noSavedQuotes"), { name })}</p>
+              </article>
+            ))}
           </div>
         ) : null}
         {loginOpen ? (

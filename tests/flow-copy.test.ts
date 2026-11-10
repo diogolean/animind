@@ -39,6 +39,9 @@ describe("main flow copy", () => {
     assert.equal(translate("en", "debateFixtureLabel"), "Sample debate, not a live one");
     assert.equal(translate("pt-BR", "debateFixtureRun"), "Ver o debate de exemplo");
     assert.equal(/fixture/i.test(translate("en", "debateFixtureLabel") + translate("pt-BR", "debateFixtureBody")), false);
+    assert.equal(translate("en", "noSavedQuotes"), "No saved quotes for {name}. This preview does not look anyone up live.");
+    assert.match(studio, /persona-missing/);
+    assert.match(studio, /noSavedQuotes/);
   });
 
   it("does not leave Portuguese status strings in the main flow components", () => {
