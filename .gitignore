@@ -70,6 +70,15 @@ web_modules/
 .env.*
 !.env.example
 
+# Accounts, character metadata and object storage (puppet.json, PNG layers). Never commit.
+.data/
+# Character packages. Seed imports uploads/albert_einstein.zip when that file is present.
+*.zip
+/uploads/
+# Approved charge heads, hashes, and provenance. Not a puppet and not a commit.
+/private/characters/einstein-charge-approved/
+/private/characters/shared-scenery/
+
 # parcel-bundler cache (https://parceljs.org/)
 .cache
 .parcel-cache
@@ -147,3 +156,9 @@ vite.config.ts.timestamp-*
 
 # Turbo Repo
 .turbo
+
+# Playwright E2E artefacts (videos, screenshots, traces, reports)
+/test-results/
+/playwright-report/
+/blob-report/
+/playwright/.cache/

@@ -1,0 +1,12 @@
+{
+  "name": "Einstein charge",
+  "personaSheetRef": "https://en.wikiquote.org/wiki/Albert_Einstein",
+  "artStyle": "ghibli",
+  "views": {
+    "front": {
+      "canvas": { "w": 800, "h": 1000 },
+      "layers": [],
+      "visemes": {}
+    }
+  }
+}

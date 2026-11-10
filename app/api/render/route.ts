@@ -1,0 +1,57 @@
+import type { RenderRequest } from "@/lib/contract";
+import { guardedGeneration } from "@/lib/accounts/generation";
+import { noteNestedProviderRead } from "@/lib/spend/nested-read";
+import { coreFetch, coreMode, coreOff, json, proxyJson } from "@/lib/core";
+import { opaqueUserId } from "@/lib/accounts/opaque-user";
+import { mockCreateJob } from "@/lib/mock";
+import { spendFrame } from "@/lib/spend/context";
+import { coreToneId, normalizeToneCatalog } from "@/lib/tones";
+
+export async function POST(req: Request) {
+  return guardedGeneration(req, "render", () => perform(req));
+}
+
+const TEMPLATES = ["debate", "lesson", "solo"];
+const SCENARIOS = ["studio", "classroom", "arena", "space", "agora"];
+const TONES = ["humor", "terror", "educacional", "sabio", "serio"];
+const OBJECTIVES = ["ensinar", "debater", "entreter", "convencer"];
+
+async function perform(req: Request) {
+  let body: RenderRequest;
+  try {
+    body = (await req.json()) as RenderRequest;
+  } catch {
+    return json({ error: "JSON inválido" }, 400);
+  }
+  if (!Array.isArray(body?.characters) || body.characters.length < 1 || body.characters.length > 6)
+    return json({ error: "Envie de 1 a 6 personagens" }, 400);
+  if (!TEMPLATES.includes(body.template) || !SCENARIOS.includes(body.scenario))
+    return json({ error: "Modelo de cena ou cenário inválido" }, 400);
+  if (body.tone && !TONES.includes(body.tone)) return json({ error: "Tom inválido" }, 400);
+  if (body.objective && !OBJECTIVES.includes(body.objective)) return json({ error: "Objetivo inválido" }, 400);
+  const language = body.language ?? body.lang ?? "en-US";
+  const adaptedBody = { ...body, language, lang: language };
+  const mode = coreMode();
+  if (mode === "off") return coreOff();
+  if (mode === "core") {
+    let catalog = normalizeToneCatalog();
+    try {
+      const response = await coreFetch("/tones");
+      await noteNestedProviderRead("tone");
+      if (response.ok) catalog = normalizeToneCatalog(await response.json(), "core");
+    } catch {
+      await noteNestedProviderRead("tone");
+    }
+    const coreBody = {
+      ...adaptedBody,
+      // The core reads `duration` in seconds. `targetDurationSec` stays for the app contract.
+      duration: body.targetDurationSec,
+      requestedTone: body.tone,
+      tone: coreToneId(body.tone, catalog),
+    };
+    return proxyJson("/render", { method: "POST", body: JSON.stringify(coreBody) });
+  }
+  const userId = opaqueUserId(spendFrame()?.userId);
+  if (!userId) return json({ error: "Entre para continuar" }, 401);
+  return json(await mockCreateJob(adaptedBody, userId), 202);
+}
