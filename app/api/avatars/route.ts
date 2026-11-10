@@ -133,5 +133,7 @@ export async function POST(req: Request) {
   });
   if (!("jobs" in decision.body)) return json(decision.body, decision.status);
   const saved = decision.body as AvatarAttempt;
-  return json(labelOfflineAttempt(saved), decision.status);
+  const labeled = labelOfflineAttempt(saved);
+  // 200 means the preview was delivered. The body stays blocked, with no provider call and no ready face.
+  return json(labeled, labeled.fixture ? 200 : decision.status);
 }

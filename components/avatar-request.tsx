@@ -179,7 +179,7 @@ export function AvatarRequest({
   const usageResolution = shown?.requestedResolution ?? "1k";
 
   useEffect(() => {
-    if (!viewer || !usagePrompt || !usageLanguage) return;
+    if (!viewer || !usagePrompt || !usageLanguage || coreMode !== "core") return;
     const controller = new AbortController();
     const body = { prompt: usagePrompt, language: usageLanguage, requestedResolution: usageResolution };
     void fetch("/api/avatars/plan", {
@@ -200,7 +200,7 @@ export function AvatarRequest({
       if (!controller.signal.aborted) setPlanUsage(null);
     });
     return () => controller.abort();
-  }, [viewer, usagePrompt, usageLanguage, usageResolution]);
+  }, [viewer, usagePrompt, usageLanguage, usageResolution, coreMode]);
 
   const issues = shown ? avatarIssues(shown) : [];
   const included = avatarRunning(automaticStages, "automatic");

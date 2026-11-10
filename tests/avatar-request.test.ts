@@ -450,6 +450,8 @@ describe("avatar routes", () => {
     assert.match(button, /coreMode !== "core" && coreMode !== "mock"/);
     assert.match(button, /data.source !== "fixture"/);
     assert.match(button, /localLines=\{coreMode === "core" \? null/);
+    assert.match(button, /coreMode !== "core"/);
+    assert.match(route, /labeled\.fixture \? 200 : decision\.status/);
     assert.equal(readFileSync(new URL("../components/fixture-debate.tsx", import.meta.url), "utf8").includes("startRender"), false);
     assert.match(button, /super_admin/);
     assert.match(button, /data-state=\{state\}/);
