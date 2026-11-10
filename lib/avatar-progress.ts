@@ -90,6 +90,7 @@ export function avatarBatchShape(jobs: Pick<AvatarJobState, "disposition">[]): "
 }
 
 export function avatarJobFeedback(job: { name: string; disposition: AvatarJobState["disposition"]; stage: string; fixture: boolean }): { key: MessageKey; values: Record<string, string> } {
+  if (job.fixture && job.stage === "fail") return { key: "avatarPreviewHeld", values: {} };
   if (job.fixture) return { key: "avatarFixtureStage", values: { stage: job.stage } };
   if (job.disposition === "reused") return { key: "avatarReused", values: { name: job.name } };
   if (job.disposition === "cancelled") return { key: "avatarCancelled", values: { name: job.name } };

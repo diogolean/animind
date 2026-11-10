@@ -36,6 +36,8 @@ describe("main flow copy", () => {
     assert.equal(translate("en", "planPrice"), "No published price. This step is not charged.");
     assert.equal(translate("pt-BR", "planPrice"), "Não há preço publicado. Este passo não é cobrado.");
     assert.equal(translate("en", "avatarPreviewResult"), "Preview only. No face was drawn, and nothing was charged.");
+    assert.equal(translate("en", "avatarPreviewHeld"), "Preview held. Nothing was drawn.");
+    assert.equal(translate("pt-BR", "avatarPreviewHeld"), "Prévia retida. Nada foi desenhado.");
     assert.equal(translate("en", "debateFixtureLabel"), "Sample debate, not a live one");
     assert.equal(translate("pt-BR", "debateFixtureRun"), "Ver o debate de exemplo");
     assert.equal(/fixture/i.test(translate("en", "debateFixtureLabel") + translate("pt-BR", "debateFixtureBody")), false);

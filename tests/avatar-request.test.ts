@@ -184,6 +184,9 @@ describe("avatar progress", () => {
     const line = fill(translate("en", avatarJobFeedback({ name: "Ada", disposition: "blocked", stage: "image", fixture: true }).key), { stage: "image" });
     assert.match(line, /Preview/);
     assert.equal(/fixture/i.test(line), false);
+    const held = fill(translate("en", avatarJobFeedback({ name: "Ada", disposition: "blocked", stage: "fail", fixture: true }).key), {});
+    assert.equal(held, "Preview held. Nothing was drawn.");
+    assert.equal(held.toLowerCase().includes("fail"), false);
     assert.equal(line.includes("%"), false);
     assert.equal(line.toLowerCase().includes("generating"), false);
     assert.equal(avatarRunning({ 0: "image" }, "automatic"), true);
