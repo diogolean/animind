@@ -370,11 +370,20 @@ export function AvatarRequest({
           </ul>
         </article>
       ))}
-      {sheets[0] && sheets[1] && shown ? (
+      {sheets[0] && sheets[1] && shown && coreMode !== "unknown" ? (
         <FixtureDebate
           names={[sheets[0].name, sheets[1].name]}
           theme={(shown.context || shown.prompt).slice(0, 200)}
           language={shown.language}
+          localLines={coreMode === "core" ? null : sheets.slice(0, 2).flatMap((sheet, speaker) => sheet.quotes.slice(0, 2).map((quote) => ({
+            speaker,
+            name: sheet.name,
+            kind: "quote" as const,
+            text: quote.text,
+            source: quote.source,
+            url: quote.url,
+            verification: "verified" as const,
+          })))}
         />
       ) : null}
       {attempt?.fixture ? (

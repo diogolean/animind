@@ -449,6 +449,8 @@ describe("avatar routes", () => {
     assert.match(button, /avatar-preview-result/);
     assert.match(button, /coreMode !== "core" && coreMode !== "mock"/);
     assert.match(button, /data.source !== "fixture"/);
+    assert.match(button, /localLines=\{coreMode === "core" \? null/);
+    assert.equal(readFileSync(new URL("../components/fixture-debate.tsx", import.meta.url), "utf8").includes("startRender"), false);
     assert.match(button, /super_admin/);
     assert.match(button, /data-state=\{state\}/);
     const spend = readFileSync(new URL("../app/api/admin/spend/route.ts", import.meta.url), "utf8");

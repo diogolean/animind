@@ -31,10 +31,12 @@ export function FixtureDebate({
   names,
   theme,
   language,
+  localLines = null,
 }: {
   names: [string, string];
   theme: string;
   language: string;
+  localLines?: DebateLine[] | null;
 }) {
   const { t } = useI18n();
   const [script, setScript] = useState<FixtureScript | null>(null);
@@ -42,6 +44,11 @@ export function FixtureDebate({
   const [failed, setFailed] = useState(false);
 
   async function run() {
+    if (localLines) {
+      setFailed(false);
+      setScript({ id: "local", writer: "fixture", live: false, lines: localLines });
+      return;
+    }
     setWaiting(true);
     setFailed(false);
     setScript(null);
